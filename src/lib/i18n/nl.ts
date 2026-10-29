@@ -140,7 +140,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   lebaneseFavourites: "Libanese favorieten",
   exploreCuisines: "Ontdek keukens",
   becomeCookTitle: "Maak van je keuken een klein bedrijf",
-  becomeCookSub: "Deel de gerechten van je jeugd en verdien aan elke bestelling.",
+  becomeCookSub:
+    "Deel de gerechten van je jeugd en verdien aan elke bestelling.",
   becomeCookCta: "Word thuis kok",
   homemadeNear: "Homemade, bij jou in de buurt",
   preOrderFresh: "Vandaag bestellen · Vers ophalen",
@@ -185,19 +186,22 @@ const nl: Partial<Record<EnKeys, string>> = {
   showResults: "Toon {count} gerechten",
   resultsFound: "{count} gerechten gevonden",
   emptyExploreTitle: "Nog geen gerechten gevonden",
-  emptyExploreSub: "Probeer een andere keuken, verruim je filters of ontdek alles in de buurt.",
+  emptyExploreSub:
+    "Probeer een andere keuken, verruim je filters of ontdek alles in de buurt.",
   clearSearch: "Zoekopdracht wissen",
   allCategories: "Alle gerechten",
   sortSheetTitle: "Gerechten sorteren",
   openFilters: "Filters openen",
   searchNoResultsTitle: "Niets op tafel",
-  searchNoResultsSub: "We vonden geen gerecht voor “{query}”. Probeer iets anders.",
+  searchNoResultsSub:
+    "We vonden geen gerecht voor “{query}”. Probeer iets anders.",
   browseAll: "Bekijk alle gerechten",
 
   aboutDish: "Over dit gerecht",
   ingredientList: "Wat erin zit",
   allergenInfo: "Allergeeninformatie",
-  allergenNote: "Gemaakt in een huiskeuken waar ook andere ingrediënten worden verwerkt. Vraag de kok bij een ernstige allergie.",
+  allergenNote:
+    "Gemaakt in een huiskeuken waar ook andere ingrediënten worden verwerkt. Vraag de kok bij een ernstige allergie.",
   availablePickup: "Beschikbare ophaalmomenten",
   choosePickup: "Kies een dag en tijd om op te halen",
   quantity: "Aantal",
@@ -212,7 +216,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   contains: "Bevat",
   mayContain: "Kan sporen bevatten van",
   dietaryInfo: "Dieet",
-  pickupNote: "Alleen ophalen. Je kok deelt het exacte adres en instructies na je bestelling.",
+  pickupNote:
+    "Alleen ophalen. Je kok deelt het exacte adres en instructies na je bestelling.",
   maxPortions: "Je kunt maximaal {count} porties bestellen.",
   dishNotFound: "Dit gerecht is niet meer beschikbaar.",
   similarDishes: "Misschien vind je dit ook lekker",
@@ -258,7 +263,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   savedDishes: "Opgeslagen gerechten",
   savedCooks: "Favoriete koks",
   emptyFavTitle: "Nog niets opgeslagen",
-  emptyFavSub: "Tik op het hartje bij een gerecht of sla een kok op om ze hier terug te vinden.",
+  emptyFavSub:
+    "Tik op het hartje bij een gerecht of sla een kok op om ze hier terug te vinden.",
   exploreFood: "Ontdek eten",
   removedFavorite: "Uit favorieten verwijderd",
   addedFavorite: "Opgeslagen bij favorieten",
@@ -268,24 +274,29 @@ const nl: Partial<Record<EnKeys, string>> = {
 
   cartTitle: "Je winkelwagen",
   cartEmptyTitle: "Je winkelwagen is leeg",
-  cartEmptySub: "Homemade eten ligt een paar straten verderop op je te wachten.",
+  cartEmptySub:
+    "Homemade eten ligt een paar straten verderop op je te wachten.",
   startShopping: "Begin met shoppen",
   orderFrom: "Bestellen bij",
   oneCookNote: "Eén bestelling = één keuken. Alleen ophalen.",
   pickupDate: "Ophaaldag",
   noteForCook: "Notitie voor de kok",
-  notePlaceholder: "Allergieën, instructies voor de bel, of een vriendelijke groet…",
+  notePlaceholder:
+    "Allergieën, instructies voor de bel, of een vriendelijke groet…",
   orderSummary: "Overzicht",
   clearCart: "Winkelwagen legen",
   clearCartTitle: "Winkelwagen legen?",
-  clearCartDesc: "Dit verwijdert alle gerechten uit deze bestelling. Je kunt ze altijd opnieuw toevoegen.",
+  clearCartDesc:
+    "Dit verwijdert alle gerechten uit deze bestelling. Je kunt ze altijd opnieuw toevoegen.",
   itemRemoved: "Item verwijderd",
   differentCookTitle: "Winkelwagen vervangen?",
-  differentCookDesc: "Je winkelwagen bevat momenteel gerechten van een andere keuken. Wil je de winkelwagen legen en een nieuwe bestelling starten bij \"{cook}\"?",
+  differentCookDesc:
+    'Je winkelwagen bevat momenteel gerechten van een andere keuken. Wil je de winkelwagen legen en een nieuwe bestelling starten bij "{cook}"?',
   replaceCart: "Legen en bestellen",
   keepCart: "Annuleren",
   checkoutBtn: "Naar afrekenen",
-  cartServiceNote: "Servicekosten worden bij het afrekenen toegevoegd. Je betaalt online en haalt daarna op bij je kok.",
+  cartServiceNote:
+    "Servicekosten worden bij het afrekenen toegevoegd. Je betaalt online en haalt daarna op bij je kok.",
   addMore: "Meer gerechten toevoegen",
   cartItems: "{count} items",
   cartOneItem: "1 item",
@@ -319,7 +330,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   invalidEmail: "Vul een geldig e-mailadres in",
   invalidPhone: "Vul een geldig Nederlands telefoonnummer in",
   paymentFailed: "Betaling is niet gelukt",
-  paymentFailedDesc: "Er is geen geld afgeschreven. Controleer je gegevens of probeer een andere betaalmethode.",
+  paymentFailedDesc:
+    "Er is geen geld afgeschreven. Controleer je gegevens of probeer een andere betaalmethode.",
   tryAgain: "Opnieuw proberen",
   securePayment: "Veilig betalen · iDEAL, kaart & Bancontact",
   acceptTerms: "Ik ga akkoord met de Voorwaarden en het ophaalbeleid.",
@@ -338,11 +350,13 @@ const nl: Partial<Record<EnKeys, string>> = {
   orderPlacedToast: "Bestelling geplaatst — tot bij het ophalen!",
   feeNote: "Inclusief €1,50 servicekosten",
   paymentDetails: "Betaalgegevens",
-  billingNote: "Je betaling wordt veilig vastgehouden tot het ophalen is bevestigd.",
+  billingNote:
+    "Je betaling wordt veilig vastgehouden tot het ophalen is bevestigd.",
   editDetails: "Gegevens aanpassen",
 
   orderConfirmedTitle: "Bestelling bevestigd",
-  orderConfirmedSub: "Je kok heeft je bestelling. We sturen je een herinnering voor het ophalen.",
+  orderConfirmedSub:
+    "Je kok heeft je bestelling. We sturen je een herinnering voor het ophalen.",
   orderNumber: "Bestelnummer",
   paymentStatus: "Betaalstatus",
   viewOrder: "Bekijk bestelling",
@@ -366,13 +380,15 @@ const nl: Partial<Record<EnKeys, string>> = {
   statusCancelled: "Geannuleerd",
   cancelOrder: "Bestelling annuleren",
   cancelOrderTitle: "Deze bestelling annuleren?",
-  cancelOrderDesc: "Annuleren is gratis tot 24 uur voor het ophaalmoment. Je terugbetaling gaat naar de oorspronkelijke betaalmethode.",
+  cancelOrderDesc:
+    "Annuleren is gratis tot 24 uur voor het ophaalmoment. Je terugbetaling gaat naar de oorspronkelijke betaalmethode.",
   keepOrder: "Bestelling behouden",
   cancelConfirm: "Ja, annuleer",
   cancelWindowNote: "Gratis annuleren tot {time}",
   reportProblem: "Probleem melden",
   reportProblemTitle: "Wat ging er mis?",
-  reportProblemDesc: "Vertel ons wat er gebeurde. Ons supportteam reageert binnen één werkdag.",
+  reportProblemDesc:
+    "Vertel ons wat er gebeurde. Ons supportteam reageert binnen één werkdag.",
   reportSubmit: "Melding versturen",
   reportSent: "Melding verstuurd. We nemen snel contact op.",
   leaveReview: "Schrijf een beoordeling",
@@ -400,7 +416,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   reimbursement: "Terugbetaling",
   orderTimeline: "Tijdlijn",
   contactDetails: "Contactgegevens",
-  pickupReminderNote: "Neem je bestelnummer mee of laat dit scherm zien bij het ophalen.",
+  pickupReminderNote:
+    "Neem je bestelnummer mee of laat dit scherm zien bij het ophalen.",
   callCook: "Bellen",
   chat: "Chat",
   orderRef: "Bestelling",
@@ -435,14 +452,16 @@ const nl: Partial<Record<EnKeys, string>> = {
   privacyPolicy: "Privacybeleid",
   deleteAccountDesc: "Verwijder je Daarik-account en gegevens definitief.",
   deleteAccountTitle: "Je account verwijderen?",
-  deleteAccountWarning: "Dit verwijdert je profiel, favorieten en bestelgeschiedenis. Dit kan niet ongedaan worden gemaakt.",
+  deleteAccountWarning:
+    "Dit verwijdert je profiel, favorieten en bestelgeschiedenis. Dit kan niet ongedaan worden gemaakt.",
   keepAccount: "Mijn account behouden",
   deleteConfirm: "Account verwijderen",
   accountDeleted: "Verwijdering aangevraagd",
   becomeCookProfile: "Koken met Daarik",
   becomeCookProfileDesc: "Deel je recepten en verdien met je keuken.",
   installDaarik: "Daarik installeren",
-  installDesc: "Zet Daarik op je beginscherm voor een snellere, app-achtige ervaring.",
+  installDesc:
+    "Zet Daarik op je beginscherm voor een snellere, app-achtige ervaring.",
   installed: "Geïnstalleerd",
   appVersion: "Daarik webapp · v1.0",
   savedChanges: "Wijzigingen opgeslagen",
@@ -468,7 +487,8 @@ const nl: Partial<Record<EnKeys, string>> = {
 
   cookLandingKicker: "Koken met Daarik",
   cookHeadline: "Jouw keuken heeft een verhaal dat de moeite waard is.",
-  cookSub: "Zet je favoriete gerechten op het menu, kies je eigen ophaalmomenten en verdien aan elke bestelling. Daarik regelt bestellingen, betalingen en klanten.",
+  cookSub:
+    "Zet je favoriete gerechten op het menu, kies je eigen ophaalmomenten en verdien aan elke bestelling. Daarik regelt bestellingen, betalingen en klanten.",
   startApplication: "Start je aanmelding",
   alreadyCook: "Ik kook al met Daarik",
   howItWorks: "Zo werkt het",
@@ -476,11 +496,14 @@ const nl: Partial<Record<EnKeys, string>> = {
   cookStep1: "Meld je online aan",
   cookStep1Desc: "Vertel over jezelf, je keuken en het eten dat je maakt.",
   cookStep2: "Word geverifieerd",
-  cookStep2Desc: "Upload de documenten die in jouw regio nodig zijn. Wij beoordelen elke aanmelding.",
+  cookStep2Desc:
+    "Upload de documenten die in jouw regio nodig zijn. Wij beoordelen elke aanmelding.",
   cookStep3: "Plan je menu",
-  cookStep3Desc: "Voeg gerechten toe en stel porties, prijzen en ophaaltijden in.",
+  cookStep3Desc:
+    "Voeg gerechten toe en stel porties, prijzen en ophaaltijden in.",
   cookStep4: "Kook & verdien",
-  cookStep4Desc: "Accepteer bestellingen, kook vers en verwelkom buren bij het ophalen.",
+  cookStep4Desc:
+    "Accepteer bestellingen, kook vers en verwelkom buren bij het ophalen.",
   cookBenefitsTitle: "Gemaakt voor huiskeukens",
   benefit1: "Jij bepaalt het menu, de prijs en de ophaaltijden.",
   benefit2: "Eén duidelijke commissie — geen verborgen kosten.",
@@ -492,27 +515,36 @@ const nl: Partial<Record<EnKeys, string>> = {
   req3: "Je hebt een geldig ID en een bankrekening op jouw naam.",
   req4: "Je gaat zorgvuldig om met allergenen en duidelijke labels.",
   req5: "Je gaat akkoord met de koksvoorwaarden en communityrichtlijnen van Daarik.",
-  eligibilityNote: "Tijdens de beoordeling wordt je geschiktheid bevestigd. Daarik kan geen goedkeuring, inkomen of juridische toestemming garanderen — controleer altijd je lokale regels.",
+  eligibilityNote:
+    "Tijdens de beoordeling wordt je geschiktheid bevestigd. Daarik kan geen goedkeuring, inkomen of juridische toestemming garanderen — controleer altijd je lokale regels.",
   exampleEarnings: "Een voorbeeldmaand",
-  exampleEarningsNote: "Alleen ter illustratie, geen belofte van inkomsten. Jouw resultaat hangt af van je menu, prijzen en beschikbaarheid.",
+  exampleEarningsNote:
+    "Alleen ter illustratie, geen belofte van inkomsten. Jouw resultaat hangt af van je menu, prijzen en beschikbaarheid.",
   exampleGross: "Bruto omzet (40 bestellingen × €14)",
   exampleCommission: "Daarik-commissie (15%)",
   exampleNet: "Geschatte netto vóór kosten",
   faqTitle: "Vragen van koks",
   faq1q: "Heb ik een professionele keuken nodig?",
-  faq1a: "Nee. Veel koks beginnen in hun eigen keuken, maar je moet wel voldoen aan de registratie-, hygiëne- en voedselveiligheidsregels die bij jou gelden.",
+  faq1a:
+    "Nee. Veel koks beginnen in hun eigen keuken, maar je moet wel voldoen aan de registratie-, hygiëne- en voedselveiligheidsregels die bij jou gelden.",
   faq2q: "Wie regelt de betalingen?",
-  faq2a: "Klanten betalen via Daarik. Uitbetalingen, commissie en terugbetalingen zie je duidelijk in je inkomstenoverzicht.",
+  faq2a:
+    "Klanten betalen via Daarik. Uitbetalingen, commissie en terugbetalingen zie je duidelijk in je inkomstenoverzicht.",
   faq3q: "Kan ik zelf bepalen wanneer ik kook?",
-  faq3a: "Ja. Je stelt kookdagen, ophaaltijden, dagcapaciteit, geblokkeerde data en vakantiemodus in.",
+  faq3a:
+    "Ja. Je stelt kookdagen, ophaaltijden, dagcapaciteit, geblokkeerde data en vakantiemodus in.",
   faq4q: "Hoe lang duurt de verificatie?",
-  faq4a: "De meeste aanmeldingen worden binnen 5 werkdagen beoordeeld zodra alle documenten compleet zijn.",
+  faq4a:
+    "De meeste aanmeldingen worden binnen 5 werkdagen beoordeeld zodra alle documenten compleet zijn.",
   applyNow: "Aanmelden als kok",
-  noGuarantee: "Geen gegarandeerd inkomen of automatische juridische toestemming.",
-  cookTestimonial: "“Ik begon met één couscousrecept. Nu halen buren die ik nooit heb ontmoet elk weekend mijn eten op.”",
+  noGuarantee:
+    "Geen gegarandeerd inkomen of automatische juridische toestemming.",
+  cookTestimonial:
+    "“Ik begon met één couscousrecept. Nu halen buren die ik nooit heb ontmoet elk weekend mijn eten op.”",
   cookTestimonialName: "Rana, thuis kok in Rotterdam",
   heroBadge: "12.000+ homemade maaltijden gedeeld",
-  cookFaqNote: "Nog niet zeker? Lees de koksgids of neem contact op met ons koksteam.",
+  cookFaqNote:
+    "Nog niet zeker? Lees de koksgids of neem contact op met ons koksteam.",
   applyTitle: "Word thuis kok",
 
   applySub: "Vier korte stappen. Je kunt tussendoor opslaan.",
@@ -533,7 +565,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   verify: "Verifiëren",
   verifiedLabel: "Geverifieerd",
   personalTitle: "Vertel ons over jezelf",
-  personalSub: "Deze gegevens blijven privé en worden gebruikt voor verificatie.",
+  personalSub:
+    "Deze gegevens blijven privé en worden gebruikt voor verificatie.",
   fullName: "Volledige naam",
   dateOfBirth: "Geboortedatum",
   addressLabel: "Thuisadres",
@@ -549,8 +582,10 @@ const nl: Partial<Record<EnKeys, string>> = {
   checkHygiene: "Ik volg de lokale hygiëne- en voedselveiligheidsregels.",
   checkAllergens: "Ik vermeld de 14 belangrijkste allergenen bij elk gerecht.",
   checkRegistration: "Ik sta ingeschreven op het adres waar ik kook.",
-  checkInsurance: "Ik heb de verzekering die nodig is voor het verkopen van eten.",
-  checkTerms: "Ik accepteer de koksvoorwaarden en communityrichtlijnen van Daarik.",
+  checkInsurance:
+    "Ik heb de verzekering die nodig is voor het verkopen van eten.",
+  checkTerms:
+    "Ik accepteer de koksvoorwaarden en communityrichtlijnen van Daarik.",
   documentsTitle: "Upload je documenten",
   documentsSub: "PDF, JPG of PNG · max. 10 MB per bestand.",
   docId: "Identiteitsbewijs",
@@ -563,7 +598,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   approved: "Goedgekeurd",
   rejected: "Aandacht nodig",
   applicationSubmitted: "Aanmelding verstuurd",
-  applicationSubmittedSub: "Ons koksteam beoordeelt je documenten en mailt je binnen 5 werkdagen.",
+  applicationSubmittedSub:
+    "Ons koksteam beoordeelt je documenten en mailt je binnen 5 werkdagen.",
   goDashboard: "Naar dashboard",
   progress: "Voortgang aanmelding",
   saveAndExit: "Opslaan & afsluiten",
@@ -577,7 +613,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   kitchenPhoto: "Foto van je keuken",
   kitchenPhotoSub: "Een duidelijke foto van de plek waar je kookt.",
   idNumber: "Nummer identiteitsbewijs",
-  bsnNote: "Je BSN wordt alleen gebruikt voor identiteitscontrole en uitbetalingen.",
+  bsnNote:
+    "Je BSN wordt alleen gebruikt voor identiteitscontrole en uitbetalingen.",
   stepOfApplication: "Stap {current} van 4",
   backToCook: "Terug naar kokspagina",
   applicationStatus: "Status aanmelding",
@@ -617,7 +654,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   estNet: "Geschat netto",
   commissionRate: "15% commissie",
   nextPayoutLabel: "Volgende uitbetaling",
-  dashboardNote: "Bestellingen en inkomsten worden bijgewerkt zodra je ophaalmomenten afrondt.",
+  dashboardNote:
+    "Bestellingen en inkomsten worden bijgewerkt zodra je ophaalmomenten afrondt.",
   openKitchen: "Keuken openen",
   closeKitchen: "Keuken sluiten",
   ordersToConfirm: "{count} te bevestigen",
@@ -642,18 +680,21 @@ const nl: Partial<Record<EnKeys, string>> = {
   resumeDish: "Gerecht hervatten",
   deleteDish: "Gerecht verwijderen",
   deleteDishTitle: "Dit gerecht verwijderen?",
-  deleteDishDesc: "Dit haalt het gerecht van je menu. Eerdere bestellingen blijven bewaard.",
+  deleteDishDesc:
+    "Dit haalt het gerecht van je menu. Eerdere bestellingen blijven bewaard.",
   dishPaused: "Gerecht gepauzeerd",
   dishResumed: "Gerecht staat weer live",
   dishDeleted: "Gerecht verwijderd",
   searchDishes: "Zoek in je gerechten",
   noDishesTitle: "Je menu staat te wachten",
-  noDishesSub: "Voeg je eerste gerecht toe, kies een prijs en stel ophaaldagen in.",
+  noDishesSub:
+    "Voeg je eerste gerecht toe, kies een prijs en stel ophaaldagen in.",
   createFirstDish: "Maak je eerste gerecht",
   portionsSold: "{sold} van {total} porties verkocht",
   views: "weergaven",
   priceEach: "per portie",
-  manageDishesNote: "Gepauzeerde gerechten blijven zichtbaar, maar kunnen niet besteld worden.",
+  manageDishesNote:
+    "Gepauzeerde gerechten blijven zichtbaar, maar kunnen niet besteld worden.",
   availabilityLabel: "Beschikbaarheid",
   nextPickupLabel: "Volgend ophaalmoment: {day}",
   soldThisWeek: "{count} verkocht deze week",
@@ -665,7 +706,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   newDish: "Nieuw gerecht toevoegen",
   editDishTitle: "Bewerk je gerecht",
   photosTitle: "Foto's & naam",
-  photosSub: "Een warme, duidelijke foto verkoopt het gerecht. Gebruik natuurlijk licht.",
+  photosSub:
+    "Een warme, duidelijke foto verkoopt het gerecht. Gebruik natuurlijk licht.",
   choosePhotoHint: "Tik om een foto te kiezen",
   chooseFromLibrary: "Kies uit je foto's",
   dishName: "Naam van het gerecht",
@@ -674,7 +716,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   descriptionPh: "Wat maakt het bijzonder? Hoe bereid je het?",
   cuisineType: "Keuken",
   ingredientsLabel: "Ingrediënten",
-  ingredientsHint: "Voeg de belangrijkste ingrediënten toe, gescheiden door komma's.",
+  ingredientsHint:
+    "Voeg de belangrijkste ingrediënten toe, gescheiden door komma's.",
   ingredientsPh: "Lam, couscous, wortel, kikkererwten…",
   addIngredient: "Ingrediënt toevoegen",
   allergensTitle: "Allergenen & dieet",
@@ -698,7 +741,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   previewSub: "Zo zien klanten je gerecht.",
   publishDish: "Gerecht publiceren",
   saveDraft: "Opslaan als concept",
-  draftSavedDesc: "Je gerecht is opgeslagen als concept. Publiceer het wanneer je klaar bent.",
+  draftSavedDesc:
+    "Je gerecht is opgeslagen als concept. Publiceer het wanneer je klaar bent.",
   dishPublished: "Je gerecht staat live",
   dishPublishedDesc: "Buren kunnen het nu vinden en vooraf bestellen.",
   validationRequired: "Vul de ontbrekende gegevens in om verder te gaan.",
@@ -726,7 +770,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   portionsAvailableLabel: "Beschikbare porties",
   priceIncludes: "Prijs is inclusief verpakking",
   saveAndPreview: "Opslaan & bekijken",
-  dishDetailsNote: "Daarik beoordeelt gemelde gerechten, maar keurt niet elke wijziging vooraf goed.",
+  dishDetailsNote:
+    "Daarik beoordeelt gemelde gerechten, maar keurt niet elke wijziging vooraf goed.",
   samplePhotos: "Voorbeeldfoto's",
 
   cookOrders: "Bestellingen",
@@ -738,9 +783,11 @@ const nl: Partial<Record<EnKeys, string>> = {
   accept: "Accepteren",
   decline: "Weigeren",
   acceptOrderTitle: "Deze bestelling accepteren?",
-  acceptOrderDesc: "Je gaat {count} porties koken voor ophalen op {day} om {time}.",
+  acceptOrderDesc:
+    "Je gaat {count} porties koken voor ophalen op {day} om {time}.",
   declineOrderTitle: "Deze bestelling weigeren?",
-  declineOrderDesc: "De klant krijgt automatisch een terugbetaling. Laat ons weten waarom.",
+  declineOrderDesc:
+    "De klant krijgt automatisch een terugbetaling. Laat ons weten waarom.",
   declineReason: "Reden",
   reasonSoldOut: "Uitverkocht",
   reasonTooBusy: "Te druk om te koken",
@@ -757,7 +804,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   customerNote: "Notitie van klant",
   contactCustomer: "Contact met klant",
   noIncoming: "Geen nieuwe bestellingen",
-  noIncomingSub: "Nieuwe bestellingen verschijnen hier met een duidelijke ophaaltijd.",
+  noIncomingSub:
+    "Nieuwe bestellingen verschijnen hier met een duidelijke ophaaltijd.",
   noOrdersTab: "Hier is nu niets",
   actionNeeded: "Actie nodig",
   orderTotal: "Besteltotaal",
@@ -783,7 +831,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   blockedDates: "Geblokkeerde data",
   blockedDatesSub: "Vakanties, rustdagen of volgeboekte dagen.",
   vacationMode: "Vakantiemodus",
-  vacationDesc: "Pauzeer nieuwe bestellingen terwijl je profiel zichtbaar blijft.",
+  vacationDesc:
+    "Pauzeer nieuwe bestellingen terwijl je profiel zichtbaar blijft.",
   vacationOn: "Vakantiemodus staat aan — nieuwe bestellingen zijn gepauzeerd.",
   vacationOff: "Vakantiemodus staat uit.",
   saveAvailability: "Rooster opslaan",
@@ -830,7 +879,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   periodMonth: "Deze maand",
   periodLastMonth: "Vorige maand",
   period90: "Afgelopen 90 dagen",
-  netNote: "Netto inkomsten zijn bruto omzet min commissie en terugbetalingen. Ingrediënt- en verpakkingskosten zijn niet meegerekend. Omzet is niet hetzelfde als wat je overhoudt.",
+  netNote:
+    "Netto inkomsten zijn bruto omzet min commissie en terugbetalingen. Ingrediënt- en verpakkingskosten zijn niet meegerekend. Omzet is niet hetzelfde als wat je overhoudt.",
   downloadStatement: "Overzicht downloaden",
   payoutSettings: "Uitbetaalgegevens",
   bankAccount: "Bankrekening",
@@ -850,11 +900,14 @@ const nl: Partial<Record<EnKeys, string>> = {
   adjustmentsShort: "Correcties",
   netShort: "Netto",
   payoutSchedule: "Uitbetaalschema",
-  payoutScheduleDesc: "Afgeronde ophaalmomenten worden de volgende dinsdag uitbetaald.",
-  commissionFootnote: "Commissie wordt berekend over de gerechtprijs, exclusief servicekosten.",
+  payoutScheduleDesc:
+    "Afgeronde ophaalmomenten worden de volgende dinsdag uitbetaald.",
+  commissionFootnote:
+    "Commissie wordt berekend over de gerechtprijs, exclusief servicekosten.",
   thisMonthNet: "Netto deze maand",
   salesBreakdown: "Hoe je €{amount} omzet is opgebouwd",
-  earningsInfo: "Alleen afgeronde bestellingen worden uitbetaald. Geannuleerde bestellingen worden terugbetaald aan de klant.",
+  earningsInfo:
+    "Alleen afgeronde bestellingen worden uitbetaald. Geannuleerde bestellingen worden terugbetaald aan de klant.",
   paidLabel: "Betaald",
   pendingLabel: "In afwachting",
 
@@ -865,18 +918,21 @@ const nl: Partial<Record<EnKeys, string>> = {
   profilePhoto: "Profielfoto",
   coverPhoto: "Omslagfoto",
   pickupInstructionsLabel: "Ophaalinstructies",
-  pickupInstructionsPh: "bijv. Bel twee keer aan, ik zit op de begane grond. Bel niet na 20:00.",
+  pickupInstructionsPh:
+    "bijv. Bel twee keer aan, ik zit op de begane grond. Bel niet na 20:00.",
   notificationSettings: "Meldingsinstellingen",
   payoutSettingsShort: "Uitbetalingen",
   pauseSelling: "Verkoop pauzeren",
-  pauseSellingDesc: "Stop tijdelijk met het aannemen van bestellingen zonder je gerechten te verwijderen.",
+  pauseSellingDesc:
+    "Stop tijdelijk met het aannemen van bestellingen zonder je gerechten te verwijderen.",
   accountManagement: "Accountbeheer",
   cuisinesOffered: "Keukens die je kookt",
   languagesSpoken: "Talen die je spreekt",
   saveProfile: "Profiel opslaan",
   profileSaved: "Profiel bijgewerkt",
   kitchenAddress: "Keukenadres",
-  kitchenAddressNote: "Alleen gedeeld met klanten met een bevestigde bestelling.",
+  kitchenAddressNote:
+    "Alleen gedeeld met klanten met een bevestigde bestelling.",
   accountEmail: "E-mailadres",
   accountPhone: "Telefoonnummer",
   deactivateAccount: "Account deactiveren",
@@ -885,7 +941,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   publicPreviewNote: "Dit zien klanten. Je adres blijft privé.",
   cookNotifications: "Meldingen voor koks",
   newOrderAlert: "Nieuwe bestellingen",
-  newOrderAlertDesc: "Ontvang direct een push en e-mail bij een nieuwe bestelling.",
+  newOrderAlertDesc:
+    "Ontvang direct een push en e-mail bij een nieuwe bestelling.",
   payoutAlerts: "Uitbetalingen",
   payoutAlertsDesc: "Weet wanneer je geld onderweg is.",
   reviewAlerts: "Nieuwe beoordelingen",
@@ -938,7 +995,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   adminPeriod: "Deze maand",
   topCuisines: "Populaire keukens",
   awaitingReview: "Wacht op beoordeling",
-  cookVerificationNote: "Controleer identiteit, voedselveiligheid en adres voordat je goedkeurt.",
+  cookVerificationNote:
+    "Controleer identiteit, voedselveiligheid en adres voordat je goedkeurt.",
   lastActive: "Laatst actief",
   joined: "Lid sinds",
   totalOrders: "Bestellingen",
@@ -966,7 +1024,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   ordersPerHour: "bestellingen / uur",
 
   helpTitle: "Hoe kunnen we helpen?",
-  helpSub: "Antwoorden over bestellingen, ophalen, betalingen en koken met Daarik.",
+  helpSub:
+    "Antwoorden over bestellingen, ophalen, betalingen en koken met Daarik.",
   helpSearchPh: "Zoek in hulp artikelen",
   chatWithUs: "Chat met ons",
   emailUs: "Mail ons",
@@ -978,20 +1037,26 @@ const nl: Partial<Record<EnKeys, string>> = {
   termsTitle: "Gebruiksvoorwaarden",
   privacyTitle: "Privacybeleid",
   lastUpdated: "Laatst bijgewerkt oktober 2026",
-  legalNote: "Dit is een ontwerpprototype. De tekst hieronder toont de structuur van een echt beleid, geen juridisch advies.",
-  legalIntro: "Deze voorwaarden leggen uit hoe Daarik klanten en zelfstandige thuis koks in Nederland met elkaar verbindt. Door te bestellen ga je akkoord met ophalen op het afgesproken tijdstip en met respect voor koks en hun buren.",
-  privacyIntro: "Daarik verwerkt de persoonsgegevens die nodig zijn om de marktplaats te runnen: accountgegevens, bestellingen, betalingen en berichten. Exacte woonadressen van koks worden alleen gedeeld met klanten met een bevestigde bestelling.",
+  legalNote:
+    "Dit is een ontwerpprototype. De tekst hieronder toont de structuur van een echt beleid, geen juridisch advies.",
+  legalIntro:
+    "Deze voorwaarden leggen uit hoe Daarik klanten en zelfstandige thuis koks in Nederland met elkaar verbindt. Door te bestellen ga je akkoord met ophalen op het afgesproken tijdstip en met respect voor koks en hun buren.",
+  privacyIntro:
+    "Daarik verwerkt de persoonsgegevens die nodig zijn om de marktplaats te runnen: accountgegevens, bestellingen, betalingen en berichten. Exacte woonadressen van koks worden alleen gedeeld met klanten met een bevestigde bestelling.",
   cookieSettings: "Cookie-instellingen",
   manageCookies: "Cookies beheren",
   yourRights: "Je rechten",
   contactPrivacy: "Contact met ons privacyteam",
   backToHelp: "Terug naar helpcentrum",
   legalPrototype: "Prototype-inhoud",
-  termsSections: "De dienst,Accounts,Bestellingen en ophalen,Betalingen en terugbetalingen,Annuleringen,Verplichtingen van koks,Acceptabel gebruik,Aansprakelijkheid,Contact",
-  privacySections: "Gegevens die we verzamelen,Hoe we gegevens gebruiken,Grondslagen,Delen,Bewaartermijnen,Je rechten,Cookies,Contact",
+  termsSections:
+    "De dienst,Accounts,Bestellingen en ophalen,Betalingen en terugbetalingen,Annuleringen,Verplichtingen van koks,Acceptabel gebruik,Aansprakelijkheid,Contact",
+  privacySections:
+    "Gegevens die we verzamelen,Hoe we gegevens gebruiken,Grondslagen,Delen,Bewaartermijnen,Je rechten,Cookies,Contact",
 
   installTitle: "Daarik in je zak",
-  installSub: "Installeer de webapp voor een snellere, volledige schermervaring — zonder app store.",
+  installSub:
+    "Installeer de webapp voor een snellere, volledige schermervaring — zonder app store.",
   installButton: "Daarik installeren",
   installBannerTitle: "Zet Daarik op je beginscherm",
   installBannerSub: "Sneller laden, volledig scherm en ophaalherinneringen.",
@@ -1002,7 +1067,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   installStep2: "Tik op Deel of het browsermenu.",
   installStep3: "Kies “Zet op beginscherm”.",
   offlineTitle: "Je bent offline",
-  offlineSub: "Je laatst bekeken gerechten zijn nog beschikbaar. Maak opnieuw verbinding om te bestellen of beheren.",
+  offlineSub:
+    "Je laatst bekeken gerechten zijn nog beschikbaar. Maak opnieuw verbinding om te bestellen of beheren.",
   retry: "Opnieuw proberen",
   offlineSaved: "Opgeslagen gerechten zijn offline beschikbaar",
   splashTagline: "Een smaak van thuis, waar je ook bent.",
@@ -1114,7 +1180,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   safeAreas: "Veilig voor notches",
   rtlReady: "RTL-klaar",
   responsiveNote: "Mobile-first · tablet & desktop ontwerpen inbegrepen",
-  prototypeFooter: "Daarik is een ontwerpprototype gebouwd met Next.js. Er zijn geen echte bestellingen, betalingen of koks.",
+  prototypeFooter:
+    "Daarik is een ontwerpprototype gebouwd met Next.js. Er zijn geen echte bestellingen, betalingen of koks.",
   sampleCookName: "Rana El Amri",
   sampleCustomerName: "Sarah",
   helpCenter: "Helpcentrum",
@@ -1135,7 +1202,29 @@ const nl: Partial<Record<EnKeys, string>> = {
   citySearch: "Zoek een stad of postcode",
   useMyLocation: "Gebruik mijn locatie",
   currentCity: "Huidige stad",
-  pickupCityNote: "Daarik is alleen ophalen. Kies de stad waar je wilt ophalen.",
+  pickupCityNote:
+    "Daarik is alleen ophalen. Kies de stad waar je wilt ophalen.",
+  deliveryLocation: "Kies een bezorglocatie",
+  deliveryLocationDescription:
+    "Gebruik je huidige locatie of zoek een andere plek op de kaart.",
+  deliverToCurrentLocation: "Bezorging naar je huidige locatie",
+  deliverToAnotherLocation: "Bezorging naar een andere locatie",
+  searchOnMap: "Zoek op de kaart",
+  locationSearchPlaceholder: "Zoek een adres, buurt of postcode",
+  searchLocation: "Zoeken",
+  useThisLocation: "Deze locatie gebruiken",
+  locating: "Locatie zoeken...",
+  currentLocation: "Huidige locatie",
+  locationUnavailable: "Locatie is niet beschikbaar in deze browser.",
+  locationError:
+    "We konden je locatie niet ophalen. Controleer de browsertoestemming en probeer het opnieuw.",
+  locationSearchFailed:
+    "Deze plek is niet gevonden. Probeer een straat of stad in de buurt.",
+  mapInstructions: "Zoek een plek of tik op de kaart om de pin te verplaatsen.",
+  selectedLocation: "Gekozen locatie",
+  cooksNearLocation: "Thuiskoks in de buurt van {city}",
+  noCooksAtLocation: "Er zijn nog geen thuiskoks bij deze locatie vermeld.",
+  locationSearchResults: "Zoekresultaten voor locaties",
   postcodePlaceholder: "Postcode of stad",
   filtersApplied: "{count} filters actief",
   seeAllResults: "Alle resultaten bekijken",
@@ -1290,7 +1379,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   finance: "Financiën",
   content: "Content",
   operations: "Operaties",
-  adminFooterNote: "Beheer is desktop-first. Belangrijke acties blijven bruikbaar op tablet.",
+  adminFooterNote:
+    "Beheer is desktop-first. Belangrijke acties blijven bruikbaar op tablet.",
   totalPayouts: "Totale uitbetalingen",
   scheduled: "Gepland",
   processingPayouts: "Wordt verwerkt",
@@ -1362,21 +1452,29 @@ const nl: Partial<Record<EnKeys, string>> = {
   fullRefund: "Volledige terugbetaling",
   generous: "Gul",
   halfRefund: "Halve terugbetaling",
-  help1a: "Bekijk gerechten, voeg ze toe aan je winkelwagen, kies een ophaaltijd en betaal. Je ontvangt een bevestiging met de ophaalgegevens.",
+  help1a:
+    "Bekijk gerechten, voeg ze toe aan je winkelwagen, kies een ophaaltijd en betaal. Je ontvangt een bevestiging met de ophaalgegevens.",
   help1q: "Hoe plaats ik een bestelling?",
-  help2a: "Elke bestelling is voor één kok. Om bij een andere kok te bestellen, plaats je een aparte bestelling.",
+  help2a:
+    "Elke bestelling is voor één kok. Om bij een andere kok te bestellen, plaats je een aparte bestelling.",
   help2q: "Kan ik bij meerdere koks tegelijk bestellen?",
-  help3a: "Je kunt gratis annuleren tot 2 uur voor het ophalen. Daarna neem je contact op met de kok.",
+  help3a:
+    "Je kunt gratis annuleren tot 2 uur voor het ophalen. Daarna neem je contact op met de kok.",
   help3q: "Hoe annuleer ik een bestelling?",
-  help4a: "Betaal veilig online bij het afrekenen. Contant wordt niet geaccepteerd.",
+  help4a:
+    "Betaal veilig online bij het afrekenen. Contant wordt niet geaccepteerd.",
   help4q: "Hoe werkt betalen?",
-  help5a: "Je kaart wordt bij het afrekenen belast. Terugbetalingen volgen ons restitutiebeleid.",
+  help5a:
+    "Je kaart wordt bij het afrekenen belast. Terugbetalingen volgen ons restitutiebeleid.",
   help5q: "Wanneer word ik belast?",
-  help6a: "Meld je aan via de kok-app, upload je documenten en begin met verkopen zodra je bent geverifieerd.",
+  help6a:
+    "Meld je aan via de kok-app, upload je documenten en begin met verkopen zodra je bent geverifieerd.",
   help6q: "Hoe word ik kok?",
-  help7a: "Gebruik 'Wachtwoord vergeten' op het inlogscherm en volg de link in de e-mail.",
+  help7a:
+    "Gebruik 'Wachtwoord vergeten' op het inlogscherm en volg de link in de e-mail.",
   help7q: "Hoe reset ik mijn wachtwoord?",
-  help8a: "Neem contact op met support en we verwijderen je gegevens binnen 30 dagen.",
+  help8a:
+    "Neem contact op met support en we verwijderen je gegevens binnen 30 dagen.",
   help8q: "Hoe verwijder ik mijn account?",
   helpFaqTitle: "Veelgestelde vragen",
   helpMessagePlaceholder: "Vertel ons hoe we kunnen helpen...",
@@ -1388,7 +1486,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   hygieneCertificate: "Hygiëneverklaring",
   last30days: "Laatste 30 dagen",
   last90days: "Laatste 90 dagen",
-  maintenanceConfirmDesc: "De marktplaats is alleen-lezen totdat je dit uitschakelt.",
+  maintenanceConfirmDesc:
+    "De marktplaats is alleen-lezen totdat je dit uitschakelt.",
   maintenanceConfirmTitle: "Onderhoudsmodus inschakelen?",
   maintenanceDesc: "Toon een onderhoudsbanner aan alle gebruikers",
   maintenanceEnabled: "Onderhoudsmodus ingeschakeld",
@@ -1426,7 +1525,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   removeDishDesc: "Dit gerecht is niet meer beschikbaar voor klanten",
   removeDishTitle: "Gerecht verwijderen?",
   requireVerification: "Kokverificatie verplichten",
-  requireVerificationDesc: "Koks moeten geverifieerd zijn voordat ze kunnen verkopen",
+  requireVerificationDesc:
+    "Koks moeten geverifieerd zijn voordat ze kunnen verkopen",
   resolution: "Oplossing",
   resolutionNotePlaceholder: "Voeg een notitie toe...",
   restoreDish: "Gerecht herstellen",
@@ -1446,7 +1546,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   suspendCookTitle: "Kok schorsen?",
   thursday: "Donderdag",
   trustSafety: "Vertrouwen & veiligheid",
-  trustSafetyDesc: "Geverifieerde koks, veilige betalingen, support wanneer nodig",
+  trustSafetyDesc:
+    "Geverifieerde koks, veilige betalingen, support wanneer nodig",
   tuesday: "Dinsdag",
   updatedJustNow: "Zojuist bijgewerkt",
   verifiedCooks: "Geverifieerde koks",
@@ -1463,7 +1564,8 @@ const nl: Partial<Record<EnKeys, string>> = {
   daarikStep3Title: "Bezorging",
   daarikStep3Desc: "Je eten wordt warm verpakt en naar je deur gebracht.",
   daarikStep4Title: "Betaling",
-  daarikStep4Desc: "Betaling ontvangen, en de maaltijd is van jou. Eet smakelijk!",
+  daarikStep4Desc:
+    "Betaling ontvangen, en de maaltijd is van jou. Eet smakelijk!",
   daarikFinal: "Eet smakelijk!",
   daarikBrand: "DAARIK · TUNISIË",
 };

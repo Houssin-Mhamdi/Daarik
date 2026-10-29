@@ -5,6 +5,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function cityMatches(first: string, second: string) {
+  const normalize = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/the hague/g, "den haag")
+      .replace(/[^a-z0-9]/g, "");
+
+  return normalize(first) === normalize(second);
+}
+
 export function formatPrice(value: number, lang: string = "nl") {
   const formatted = new Intl.NumberFormat(lang === "ar" ? "en" : lang, {
     style: "currency",
