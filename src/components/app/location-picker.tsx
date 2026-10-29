@@ -285,8 +285,16 @@ export function LocationPicker({
         if (!response.ok) throw new Error("Location search failed");
         const matches = (await response.json()) as PlaceResult[];
         if (controller.signal.aborted) return;
-        setResults(matches);
-        if (matches.length === 0) setError(t("locationSearchFailed"));
+        const coordinateKey = (match: PlaceResult) =>
+          `${Number(match.lat)},${Number(match.lon)}`;
+        const uniqueMatches = matches.filter(
+          (match, index) =>
+            matches.findIndex(
+              (candidate) => coordinateKey(candidate) === coordinateKey(match),
+            ) === index,
+        );
+        setResults(uniqueMatches);
+        if (uniqueMatches.length === 0) setError(t("locationSearchFailed"));
       } catch {
         if (!controller.signal.aborted) setError(t("locationSearchFailed"));
       } finally {
