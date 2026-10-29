@@ -4,9 +4,9 @@ import dynamic from "next/dynamic";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
-  type FormEvent,
   type SetStateAction,
 } from "react";
 import {
@@ -112,6 +112,9 @@ export function LocationPicker({
   const [error, setError] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const searchTimeout = useRef<number | null>(null);
+  const searchController = useRef<AbortController | null>(null);
+  const lastSearchAt = useRef(0);
 
   const nearbyCooks = useMemo(
     () =>
@@ -192,6 +195,14 @@ export function LocationPicker({
     };
   }, [onCityChange, t]);
 
+  useEffect(
+    () => () => {
+      if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
+      searchController.current?.abort();
+    },
+    [],
+  );
+
   const closePicker = () => {
     setMode("options");
     setError("");
@@ -240,32 +251,48 @@ export function LocationPicker({
     );
   };
 
-  const searchPlaces = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!query.trim()) return;
-    setIsSearching(true);
+  const searchPlaces = (searchTerm: string) => {
+    const term = searchTerm.trim();
+    if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
+    searchController.current?.abort();
     setError("");
     setResults([]);
-    try {
-      const params = new URLSearchParams({
-        format: "jsonv2",
-        addressdetails: "1",
-        limit: "5",
-        q: query.trim(),
-      });
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?${params}`,
-        { headers: { Accept: "application/json" } },
-      );
-      if (!response.ok) throw new Error("Location search failed");
-      const matches = (await response.json()) as PlaceResult[];
-      setResults(matches);
-      if (matches.length === 0) setError(t("locationSearchFailed"));
-    } catch {
-      setError(t("locationSearchFailed"));
-    } finally {
+    if (term.length < 3) {
       setIsSearching(false);
+      return;
     }
+
+    setIsSearching(true);
+    const controller = new AbortController();
+    searchController.current = controller;
+    const delay = Math.max(450, 1000 - (Date.now() - lastSearchAt.current));
+    searchTimeout.current = window.setTimeout(async () => {
+      lastSearchAt.current = Date.now();
+      try {
+        const params = new URLSearchParams({
+          format: "jsonv2",
+          addressdetails: "1",
+          limit: "5",
+          q: term,
+        });
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?${params}`,
+          {
+            headers: { Accept: "application/json" },
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) throw new Error("Location search failed");
+        const matches = (await response.json()) as PlaceResult[];
+        if (controller.signal.aborted) return;
+        setResults(matches);
+        if (matches.length === 0) setError(t("locationSearchFailed"));
+      } catch {
+        if (!controller.signal.aborted) setError(t("locationSearchFailed"));
+      } finally {
+        if (!controller.signal.aborted) setIsSearching(false);
+      }
+    }, delay);
   };
 
   const selectMapPoint = async (point: MapPoint) => {
@@ -362,17 +389,27 @@ export function LocationPicker({
             {t("back")}
           </button>
 
-          <form onSubmit={searchPlaces} className="flex gap-2">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              searchPlaces(query);
+            }}
+            className="flex gap-2"
+          >
             <Input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                const nextQuery = event.target.value;
+                setQuery(nextQuery);
+                searchPlaces(nextQuery);
+              }}
               placeholder={t("locationSearchPlaceholder")}
               aria-label={t("locationSearchPlaceholder")}
               className="h-11 min-w-0 rounded-xl text-sm"
             />
             <Button
               type="submit"
-              disabled={isSearching || !query.trim()}
+              disabled={isSearching || query.trim().length < 3}
               className="h-11 shrink-0 gap-1.5 px-3"
             >
               {isSearching ? (
