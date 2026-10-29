@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#C85A32"/>
+  <path d="M256 122 L86 266 L150 266 L256 176 L362 266 L426 266 Z" fill="#FAF6EF"/>
+  <text x="256" y="336" font-family="Georgia, 'Times New Roman', serif" font-size="82" font-weight="700" fill="#FFFFFF" text-anchor="middle">Daarik</text>
+  <text x="256" y="418" font-family="'IBM Plex Sans Arabic', Arial, sans-serif" font-size="60" font-weight="600" fill="#F5D8C2" text-anchor="middle">دارك</text>
+</svg>

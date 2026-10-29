@@ -1,0 +1,408 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  COOK
+  ADMIN
+}
+
+enum CookStatus {
+  PENDING
+  VERIFIED
+  SUSPENDED
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+enum DishStatus {
+  LIVE
+  PAUSED
+  DRAFT
+}
+
+enum OrderStatus {
+  CONFIRMED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  IDEAL
+  CARD
+  BANCONTACT
+}
+
+enum PayoutStatus {
+  SCHEDULED
+  PROCESSING
+  PAID
+}
+
+enum DisputeStatus {
+  OPEN
+  REVIEW
+  RESOLVED
+}
+
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String
+  refreshTokenHash String?
+  role             Role     @default(CUSTOMER)
+  name             String
+  firstName        String?
+  phone            String?
+  avatar           String?  @default("/img/user-sarah.jpg")
+  address          String?
+  postcode         String?
+  city             String?
+  preferredLang    String   @default("nl")
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  cookProfile      CookProfile?
+  cookApplications CookApplication[]
+  cartItems        CartItem[]
+  favoriteDishes   FavoriteDish[]
+  favoriteCooks    FavoriteCook[]
+  orders           Order[]           @relation("CustomerOrders")
+  reviews          Review[]
+  notifications    Notification[]
+  supportTickets   SupportTicket[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model CookProfile {
+  id            String     @id @default(cuid())
+  slug          String     @unique
+  userId        String     @unique
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  kitchenName   Json?
+  avatar        String     @default("/img/cook-rana.jpg")
+  cover         String     @default("/img/couscous.jpg")
+  city          String
+  area          Json
+  cuisineIds    String[]
+  rating        Float      @default(5.0)
+  reviewCount   Int        @default(0)
+  verified      Boolean    @default(false)
+  status        CookStatus @default(PENDING)
+  languages     String[]
+  bio           Json
+  since         String     @default("2026")
+  ordersCount   Int        @default(0)
+  response      Json
+  pickupArea    Json
+  specialties   Json
+  /// Exact pickup instructions & door details — NEVER exposed on public endpoints; only returned on paid/confirmed customer orders
+  instructions  Json
+  privateAddress String?
+  yearsCooking  Int        @default(1)
+  kitchenOpen   Boolean    @default(true)
+  iban          String?
+  accountHolder String?
+  payoutDay     String     @default("tuesday")
+  stripeAccountId   String?
+  stripeOnboarded   Boolean @default(false)
+  payoutPreference  String  @default("BANK_TRANSFER")
+  walletBalance     Float   @default(0)
+  maxPortionsPerDay Int    @default(20)
+  availableDays String[]   @default(["fri-30", "sat-31", "sun-01"])
+  availableSlots String[]  @default(["17:00", "17:30", "18:00", "18:30"])
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  dishes        Dish[]
+  orders        Order[]
+  reviews       Review[]
+  payouts       Payout[]
+  favoritedBy   FavoriteCook[]
+  disputes      Dispute[]
+
+  @@index([slug])
+  @@index([city])
+  @@index([status])
+}
+
+model CookApplication {
+  id                String            @id @default(cuid())
+  userId            String?
+  user              User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name              String
+  email             String
+  phone             String
+  city              String
+  area              String?
+  cuisine           String
+  specialties       String?
+  bio               String?
+  yearsCooking      Int               @default(1)
+  documentsCount    Int               @default(3)
+  documents         Json?
+  hygieneCertificate Boolean          @default(true)
+  idVerified        Boolean           @default(true)
+  kitchenPhotos     String[]          @default([])
+  status            ApplicationStatus @default(PENDING)
+  reviewerNotes     String?
+  submittedAt       DateTime          @default(now())
+  reviewedAt        DateTime?
+
+  @@index([status])
+}
+
+model Dish {
+  id           String     @id @default(cuid())
+  slug         String     @unique
+  cookId       String
+  cook         CookProfile @relation(fields: [cookId], references: [id], onDelete: Cascade)
+  name         Json
+  desc         Json
+  image        String
+  price        Float
+  cuisineId    String
+  rating       Float      @default(5.0)
+  reviewCount  Int        @default(0)
+  serves       Int        @default(1)
+  portions     Int        @default(8)
+  portionsLeft Int        @default(8)
+  allergens    String[]
+  dietary      String[]
+  ingredients  Json
+  pickup       String[]
+  featured     Boolean    @default(false)
+  weekend      Boolean    @default(false)
+  family       Boolean    @default(false)
+  badge        Json?
+  prepTime     Json
+  status       DishStatus @default(LIVE)
+  reported     Boolean    @default(false)
+  reportReason String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  reviews      Review[]
+  favoritedBy  FavoriteDish[]
+
+  @@index([cookId])
+  @@index([cuisineId])
+  @@index([status])
+}
+
+model PickupOption {
+  id       String   @id
+  day      Json
+  shortDay Json
+  date     String
+  slots    String[]
+}
+
+model CartItem {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dishId     String
+  dish       Dish     @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  qty        Int      @default(1)
+  pickupSlot String?
+  pickupTime String?
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, dishId])
+  @@index([userId])
+}
+
+model FavoriteDish {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dishId    String
+  dish      Dish     @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dishId])
+}
+
+model FavoriteCook {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cookId    String
+  cook      CookProfile @relation(fields: [cookId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@unique([userId, cookId])
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  code          String        @unique
+  customerId    String
+  customer      User          @relation("CustomerOrders", fields: [customerId], references: [id])
+  cookId        String
+  cook          CookProfile   @relation(fields: [cookId], references: [id])
+  status        OrderStatus   @default(CONFIRMED)
+  pickup        String
+  pickupTime    String
+  subtotal      Float
+  serviceFee    Float         @default(1.5)
+  commission    Float
+  total         Float
+  note          Json?
+  customerName  String
+  customerEmail String
+  customerPhone String
+  paymentMethod PaymentMethod @default(IDEAL)
+  stripePaymentIntentId String?
+  payoutRouting String        @default("BANK_TRANSFER")
+  paid          Boolean       @default(true)
+  refunded      Boolean       @default(false)
+  reviewed      Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  items         OrderItem[]
+  reviews       Review[]
+  disputes      Dispute[]
+
+  @@index([customerId])
+  @@index([cookId])
+  @@index([status])
+  @@index([code])
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  dishId    String
+  dish      Dish   @relation(fields: [dishId], references: [id])
+  qty       Int
+  unitPrice Float
+  name      Json
+}
+
+model Review {
+  id         String      @id @default(cuid())
+  orderId    String?
+  order      Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customerId String?
+  customer   User?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  cookId     String
+  cook       CookProfile @relation(fields: [cookId], references: [id], onDelete: Cascade)
+  dishId     String?
+  dish       Dish?       @relation(fields: [dishId], references: [id], onDelete: SetNull)
+  author     String
+  initials   String
+  rating     Int
+  date       Json
+  text       Json
+  createdAt  DateTime    @default(now())
+
+  @@index([cookId])
+  @@index([dishId])
+}
+
+model Payout {
+  id         String       @id @default(cuid())
+  code       String       @unique
+  cookId     String
+  cook       CookProfile  @relation(fields: [cookId], references: [id], onDelete: Cascade)
+  period     String
+  gross      Float
+  commission Float
+  net        Float
+  ordersCount Int         @default(0)
+  method     String       @default("BANK_TRANSFER")
+  ibanSnapshot String?
+  stripeTransferId String?
+  status     PayoutStatus @default(SCHEDULED)
+  paidAt     DateTime?
+  createdAt  DateTime     @default(now())
+
+  @@index([cookId])
+  @@index([status])
+}
+
+model Dispute {
+  id             String        @id @default(cuid())
+  code           String        @unique
+  orderId        String?
+  order          Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderCode      String
+  cookId         String?
+  cook           CookProfile?  @relation(fields: [cookId], references: [id], onDelete: SetNull)
+  customerName   String
+  cookName       String
+  reason         String
+  customerNote   String?
+  resolutionNote String?
+  amount         Float
+  refundAmount   Float?
+  status         DisputeStatus @default(OPEN)
+  openedAt       DateTime      @default(now())
+  resolvedAt     DateTime?
+
+  @@index([status])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     Json
+  body      Json
+  timeLabel Json?
+  unread    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model SupportTicket {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email     String?
+  orderCode String?
+  message   String
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+}
+
+model PlatformSetting {
+  id                  String   @id @default("singleton")
+  platformName        String   @default("Darna")
+  region              String   @default("NL")
+  currency            String   @default("EUR")
+  timezone            String   @default("Europe/Amsterdam")
+  serviceFee          Float    @default(1.5)
+  commissionRate      Float    @default(0.15)
+  requireVerification Boolean  @default(true)
+  autoApproveCooks    Boolean  @default(false)
+  maintenanceMode     Boolean  @default(false)
+  supportEmail        String   @default("hello@darna.nl")
+  updatedAt           DateTime @updatedAt
+}

@@ -1,0 +1,37 @@
+services:
+  darna-db:
+    image: postgres:16-alpine
+    container_name: darna-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: darna
+    ports:
+      - "5434:5432"
+    volumes:
+      - darna_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d darna"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:latest
+    container_name: darna-adminer
+    restart: unless-stopped
+    depends_on:
+      darna-db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: darna-db
+      ADMINER_DESIGN: pepa-linha
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  darna_pgdata:
