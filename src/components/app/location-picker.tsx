@@ -22,7 +22,8 @@ import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/overlays";
 import { useApp } from "@/components/providers/app-provider";
 import { cityMatches } from "@/lib/utils";
-import type { MapPoint } from "./location-map";
+import { coordsForCity } from "@/lib/cities";
+import type { CookPin, MapPoint } from "./location-map";
 
 type DeliveryLocation = MapPoint & {
   city: string;
@@ -103,7 +104,7 @@ export function LocationPicker({
   currentCity: string;
   onCityChange: Dispatch<SetStateAction<string>>;
 }) {
-  const { t, cooks } = useApp();
+  const { t, lang, cooks } = useApp();
   const [mode, setMode] = useState<"options" | "map">("options");
   const [location, setLocation] = useState<DeliveryLocation | null>(null);
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
@@ -115,6 +116,28 @@ export function LocationPicker({
   const searchTimeout = useRef<number | null>(null);
   const searchController = useRef<AbortController | null>(null);
   const lastSearchAt = useRef(0);
+
+  const pins = useMemo<CookPin[]>(() => {
+    const byKey = new Map<string, CookPin>();
+    for (const cook of cooks) {
+      const exact =
+        typeof cook.latitude === "number" && typeof cook.longitude === "number"
+          ? { lat: cook.latitude, lng: cook.longitude }
+          : null;
+      const coords = exact ?? coordsForCity(cook.city);
+      if (!coords) continue;
+      const key = `${coords.lat.toFixed(4)},${coords.lng.toFixed(4)}`;
+      const pin = byKey.get(key) ?? { city: cook.city, ...coords, cooks: [] };
+      pin.cooks.push({
+        id: cook.id,
+        name: cook.name,
+        avatar: cook.avatar,
+        area: cook.area[lang] ?? "",
+      });
+      byKey.set(key, pin);
+    }
+    return [...byKey.values()];
+  }, [cooks, lang]);
 
   const nearbyCooks = useMemo(
     () =>
@@ -459,7 +482,7 @@ export function LocationPicker({
           ) : null}
 
           <div className="h-65 overflow-hidden rounded-2xl border border-line bg-cream-100 md:h-80">
-            <LocationMap point={mapPoint} onSelect={selectMapPoint} />
+            <LocationMap point={mapPoint} onSelect={selectMapPoint} pins={pins} />
           </div>
 
           {error ? (

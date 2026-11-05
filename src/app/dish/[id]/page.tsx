@@ -24,21 +24,15 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Rating, QuantityStepper } from "@/components/ui/controls";
+import { QuantityStepper } from "@/components/ui/controls";
 import { Sheet, EmptyState } from "@/components/ui/overlays";
 import { StickyActionBar } from "@/components/ui/misc";
 import { DishCard } from "@/components/app/dish-card";
 import { ReviewCard } from "@/components/app/review-card";
 import { PickupPicker } from "@/components/app/pickup-picker";
+import { AuthRequiredSheet } from "@/components/app/auth-required-sheet";
 import { useApp } from "@/components/providers/app-provider";
-import {
-  allergenNames,
-  dietaryNames,
-  dishesByCook,
-  getCook,
-  getCuisine,
-  loc,
-} from "@/lib/data";
+import { allergenNames, dietaryNames, loc } from "@/lib/data";
 import {
   useDishQuery,
   useReportDishMutation,
@@ -49,7 +43,7 @@ import { cn, formatPrice } from "@/lib/utils";
 export default function DishPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { data: dish } = useDishQuery(params.id);
+  const { data: dish, isLoading: dishLoading } = useDishQuery(params.id);
   const { data: allReviews = [] } = useReviewsQuery({ dishId: params.id });
   const reportMutation = useReportDishMutation();
   const {
@@ -57,15 +51,18 @@ export default function DishPage() {
     lang,
     dir,
     cooks,
+    cuisines,
     dishes,
     addToCart,
     toggleFavorite,
     isFavorite,
+    isAuthenticated,
     toast,
     pickup,
     setPickup,
   } = useApp();
   const [qty, setQty] = useState(1);
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const [qtyOpen, setQtyOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportText, setReportText] = useState("");
@@ -78,10 +75,10 @@ export default function DishPage() {
     }
   }, [dish, pickup, setPickup]);
 
-  const cook = dish
-    ? cooks.find((c) => c.id === dish.cookId) ?? getCook(dish.cookId)
+  const cook = dish ? cooks.find((c) => c.id === dish.cookId) : undefined;
+  const cuisine = dish
+    ? cuisines.find((item) => item.id === dish.cuisineId)
     : undefined;
-  const cuisine = dish ? getCuisine(dish.cuisineId) : undefined;
   const dishReviews = useMemo(
     () =>
       allReviews.filter(
@@ -91,11 +88,18 @@ export default function DishPage() {
     [allReviews, dish],
   );
   const moreDishes = dish
-    ? dishes
-        .filter((item) => item.cookId === dish.cookId && item.id !== dish.id)
-        .concat(dishesByCook(dish.cookId).filter((item) => item.id !== dish.id))
-        .filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i)
+    ? dishes.filter(
+        (item) => item.cookId === dish.cookId && item.id !== dish.id,
+      )
     : [];
+
+  if (dishLoading) {
+    return (
+      <div className="mx-auto max-w-[1240px] px-4 py-12 md:px-8">
+        <div className="h-72 animate-pulse rounded-[28px] bg-charcoal/10" />
+      </div>
+    );
+  }
 
   if (!dish || !cook) {
     return (
@@ -150,6 +154,8 @@ export default function DishPage() {
             <div className="relative -mx-0 h-[320px] overflow-hidden md:h-[440px] md:rounded-[32px]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                loading="lazy"
+                decoding="async"
                 src={dish.image}
                 alt={loc(dish.name, lang)}
                 className="size-full object-cover"
@@ -179,13 +185,19 @@ export default function DishPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      if (!isAuthenticated) {
+                        setAuthPromptOpen(true);
+                        return;
+                      }
                       const isAdded = toggleFavorite(dish.id);
                       toast(
                         isAdded ? t("toastFavAdded") : t("toastFavRemoved"),
                       );
                     }}
                     aria-pressed={favorite}
-                    aria-label={favorite ? t("toastFavRemoved") : t("toastFavAdded")}
+                    aria-label={
+                      favorite ? t("toastFavRemoved") : t("toastFavAdded")
+                    }
                     className="grid size-10 place-items-center rounded-full bg-white/90 text-charcoal shadow-sm backdrop-blur transition hover:bg-white"
                   >
                     <Heart
@@ -244,6 +256,8 @@ export default function DishPage() {
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
+                    loading="lazy"
+                    decoding="async"
                     src={cook.avatar}
                     alt={cook.name}
                     className="size-8 rounded-full object-cover"
@@ -302,12 +316,15 @@ export default function DishPage() {
                   {t("ingredientList")}
                 </h2>
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  {dish.ingredients.map((ingredient) => (
+                  {dish.ingredients
+                    .map((ingredient) => loc(ingredient, lang))
+                    .filter(Boolean)
+                    .map((label, index) => (
                     <span
-                      key={loc(ingredient, lang)}
+                      key={`${label}-${index}`}
                       className="rounded-full border border-line bg-white px-3 py-1.5 text-[13.5px] text-charcoal"
                     >
-                      {loc(ingredient, lang)}
+                      {label}
                     </span>
                   ))}
                 </div>
@@ -395,9 +412,7 @@ export default function DishPage() {
                     <span className="font-semibold">
                       {cook.rating.toFixed(1)}
                     </span>
-                    <span className="text-muted">
-                      ({cook.reviewCount})
-                    </span>
+                    <span className="text-muted">({cook.reviewCount})</span>
                   </span>
                 </div>
                 <div className="mt-3 space-y-2.5">
@@ -410,6 +425,8 @@ export default function DishPage() {
               <section className="mt-7 rounded-[24px] border border-line bg-white p-4 shadow-card md:flex md:items-center md:gap-5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src={cook.avatar}
                   alt={cook.name}
                   className="size-14 rounded-full object-cover md:size-16"
@@ -577,6 +594,8 @@ export default function DishPage() {
         <div className="flex items-center gap-4 py-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            loading="lazy"
+            decoding="async"
             src={dish.image}
             alt={loc(dish.name, lang)}
             className="size-20 rounded-2xl object-cover"
@@ -648,11 +667,7 @@ export default function DishPage() {
         }
       >
         <div className="space-y-2 pt-1">
-          {[
-            "problemQuality",
-            "problemMissing",
-            "problemOther",
-          ].map((key) => (
+          {["problemQuality", "problemMissing", "problemOther"].map((key) => (
             <button
               key={key}
               type="button"
@@ -677,6 +692,11 @@ export default function DishPage() {
           ))}
         </div>
       </Sheet>
+      <AuthRequiredSheet
+        open={authPromptOpen}
+        onClose={() => setAuthPromptOpen(false)}
+        nextPath={`/dish/${dish.id}`}
+      />
     </div>
   );
 }

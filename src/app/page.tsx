@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   BadgeCheck,
@@ -9,16 +10,17 @@ import {
   CalendarCheck,
   ChevronDown,
   ChefHat,
-  Clock3,
   MapPin,
   Search,
   Sparkles,
   Star,
   Sun,
+  UserRound,
   UtensilsCrossed,
 } from "lucide-react";
 import { SectionHeading } from "@/components/ui/misc";
 import { Badge } from "@/components/ui/badge";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import { DishCard } from "@/components/app/dish-card";
 import { CookCard } from "@/components/app/cook-card";
 import { LocationPicker } from "@/components/app/location-picker";
@@ -27,15 +29,18 @@ import { NotificationsSheet } from "@/components/app/notifications-sheet";
 import { LanguageSheet } from "@/components/app/language-sheet";
 import { InstallPrompt } from "@/components/app/install-prompt";
 import { useApp } from "@/components/providers/app-provider";
-import { cuisines, getCook, loc, notifications } from "@/lib/data";
+import { loc } from "@/lib/data";
+import { useNotificationsQuery } from "@/lib/queries";
 import { cityMatches, cn, formatPrice } from "@/lib/utils";
 
 export default function HomePage() {
-  const { t, lang, dishes, cooks } = useApp();
+  const { t, lang, dishes, cooks, cuisines, isAuthenticated, user } = useApp();
+  const { data: notifications = [] } = useNotificationsQuery();
   const [greeting, setGreeting] = useState<
     "greetingMorning" | "greetingAfternoon" | "greetingEvening"
   >("greetingAfternoon");
-  const [city, setCity] = useState("Rotterdam");
+  const [city, setCity] = useState("");
+  const [cityReady, setCityReady] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -49,11 +54,6 @@ export default function HomePage() {
     const nearbyCookIds = new Set(nearbyCooks.map((cook) => cook.id));
     return dishes.filter((dish) => nearbyCookIds.has(dish.cookId));
   }, [dishes, nearbyCooks]);
-  const featured = useMemo(
-    () =>
-      nearbyDishes.filter((dish) => dish.featured || dish.weekend).slice(0, 3),
-    [nearbyDishes],
-  );
   const family = useMemo(
     () => nearbyDishes.filter((dish) => dish.family).slice(0, 6),
     [nearbyDishes],
@@ -63,6 +63,21 @@ export default function HomePage() {
       nearbyDishes.filter((dish) => dish.weekend || dish.featured).slice(0, 4),
     [nearbyDishes],
   );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      let saved = "";
+      try {
+        const raw = window.localStorage.getItem("darna.delivery-location");
+        saved = raw ? (JSON.parse(raw) as { city?: string }).city || "" : "";
+      } catch {
+        saved = "";
+      }
+      setCity((current) => current || saved || "Rotterdam");
+      setCityReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -79,12 +94,44 @@ export default function HomePage() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const heroDish = featured[0] ?? nearbyDishes[0];
+  const heroList = useMemo(() => {
+    const seen = new Set<string>();
+    const picks = [...nearbyDishes, ...dishes].filter((dish) => {
+      if (!(dish.featured || dish.weekend) || seen.has(dish.cookId)) return false;
+      seen.add(dish.cookId);
+      return true;
+    });
+    return picks.length ? picks : nearbyDishes.slice(0, 1);
+  }, [nearbyDishes, dishes]);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [offerIndex, setOfferIndex] = useState(0);
+  const offers = useMemo(() => heroList.slice(0, 8), [heroList]);
+  const [heroPaused, setHeroPaused] = useState(false);
+
+  useEffect(() => {
+    if (heroPaused || heroList.length < 2) return;
+    const timer = window.setInterval(
+      () => setHeroIndex((index) => index + 1),
+      5000,
+    );
+    return () => window.clearInterval(timer);
+  }, [heroPaused, heroList.length]);
+
+  const heroDish = heroList.length
+    ? heroList[heroIndex % heroList.length]
+    : undefined;
   const heroCook = heroDish
-    ? (nearbyCooks.find((cook) => cook.id === heroDish.cookId) ??
-      getCook(heroDish.cookId))
+    ? cooks.find((cook) => cook.id === heroDish.cookId)
     : undefined;
   const favouriteCooks = nearbyCooks.slice(0, 4);
+
+  if (!cityReady) {
+    return (
+      <div className="mx-auto w-full max-w-[1240px] px-4 py-6 md:px-8 md:py-10">
+        <PageSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className="pb-6 md:pb-0">
@@ -120,25 +167,32 @@ export default function HomePage() {
                 <span className="absolute end-2.5 top-2.5 size-1.5 rounded-full bg-terracotta ring-2 ring-white" />
               ) : null}
             </button>
-            <Link
-              href="/profile"
-              aria-label={t("profile")}
-              className="block size-10 overflow-hidden rounded-full border-2 border-white shadow-sm"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/img/user-sarah.jpg"
-                alt="Sarah"
-                className="size-full object-cover"
-              />
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                href="/profile"
+                aria-label={t("profile")}
+                className="grid size-10 place-items-center overflow-hidden rounded-full border-2 border-white bg-terracotta text-[14px] font-bold text-white shadow-sm"
+              >
+                {(user.firstName || user.name || "U").slice(0, 1).toUpperCase()}
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                aria-label={t("signIn")}
+                className="grid size-10 place-items-center rounded-full border border-line bg-white/80 text-charcoal shadow-sm backdrop-blur"
+              >
+                <UserRound className="size-[18px]" />
+              </Link>
+            )}
           </div>
         </div>
 
         <div className="px-4">
           <div className="mt-4 flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.16em] text-terracotta">
             <Sun className="size-3.5" />
-            {t(greeting)}, Sarah
+            {isAuthenticated && user.firstName
+              ? `${t(greeting)}, ${user.firstName}`
+              : t(greeting)}
           </div>
           <h1 className="mt-1.5 max-w-[300px] font-display text-[32px] leading-[1.1] text-charcoal">
             {t("homeTitle")}
@@ -166,27 +220,40 @@ export default function HomePage() {
               <ArrowRight className="size-3 rtl:rotate-180" />
             </Link>
           </div>
-          <div className="-mx-0 mt-2.5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 no-scrollbar">
-            {featured.length > 0 ? (
-              featured.map((dish, index) => {
-                const cook = getCook(dish.cookId);
+          <div
+            onScroll={(event) => {
+              const el = event.currentTarget;
+              const first = el.firstElementChild as HTMLElement | null;
+              if (!first) return;
+              const step = first.offsetWidth + 12;
+              const raw = Math.abs(el.scrollLeft) / step;
+              setOfferIndex(Math.round(raw));
+            }}
+            className="-mx-0 mt-2.5 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-2 no-scrollbar"
+          >
+            {offers.length > 0 ? (
+              offers.map((dish, index) => {
+                const cook = cooks.find((item) => item.id === dish.cookId);
                 return (
                   <Link
                     key={dish.id}
                     href={`/dish/${dish.id}`}
-                    className="group relative block h-[204px] w-[286px] shrink-0 snap-start overflow-hidden rounded-[24px] bg-charcoal shadow-card"
+                    className="group relative block h-[236px] w-[82%] max-w-[340px] shrink-0 snap-center overflow-hidden rounded-[26px] bg-charcoal shadow-card"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={dish.image}
+                    <Image
+                      src={dish.image || "/img/daarik-logo.png"}
                       alt={loc(dish.name, lang)}
-                      className="absolute inset-0 size-full object-cover transition duration-700 group-hover:scale-105"
+                      fill
+                      sizes="82vw"
+                      loading={index === 0 ? "eager" : "lazy"}
+                      unoptimized
+                      className="object-cover transition duration-700 group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/35 to-transparent" />
                     <div className="absolute inset-x-3 top-3 flex items-center justify-between">
                       <Badge variant="glass" size="sm">
                         <Sparkles className="size-2.5 text-terracotta" />
-                        {index === 0 ? t("weekendSpecial") : t("liveNow")}
+                        {dish.weekend ? t("weekendSpecial") : t("liveNow")}
                       </Badge>
                       <span className="flex items-center gap-0.5 rounded-full bg-charcoal/50 px-2 py-1 text-[12px] font-semibold text-white backdrop-blur">
                         <Star className="size-2.5 fill-saffron text-saffron" />
@@ -194,12 +261,22 @@ export default function HomePage() {
                       </span>
                     </div>
                     <div className="absolute inset-x-3 bottom-3">
-                      <p className="line-clamp-1 font-display text-[21px] leading-tight text-white">
+                      <p className="line-clamp-1 font-display text-[22px] leading-tight text-white">
                         {loc(dish.name, lang)}
                       </p>
-                      <p className="mt-0.5 flex items-center gap-1 text-[12.5px] text-white/75">
-                        {cook?.name} · {cook?.area[lang]}
-                      </p>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <Image
+                          src={cook?.avatar || "/img/daarik-logo.png"}
+                          alt={cook?.name ?? ""}
+                          width={22}
+                          height={22}
+                          unoptimized
+                          className="size-[22px] rounded-full border border-white/70 object-cover"
+                        />
+                        <p className="line-clamp-1 text-[12.5px] text-white/80">
+                          {cook?.name} · {cook?.city}
+                        </p>
+                      </div>
                       <div className="mt-2 flex items-center justify-between">
                         <span className="text-[17px] font-semibold text-white">
                           {formatPrice(dish.price, lang)}
@@ -224,6 +301,21 @@ export default function HomePage() {
               </p>
             )}
           </div>
+          {offers.length > 1 ? (
+            <div className="mt-1 flex justify-center gap-1.5">
+              {offers.map((dish, index) => (
+                <span
+                  key={dish.id}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    index === Math.min(offerIndex, offers.length - 1)
+                      ? "w-5 bg-terracotta"
+                      : "w-1.5 bg-line",
+                  )}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-4 flex gap-2 overflow-x-auto px-4 pb-1 no-scrollbar">
@@ -418,11 +510,14 @@ export default function HomePage() {
               <div className="mt-5 flex items-center gap-3">
                 <div className="flex -space-x-2 rtl:space-x-reverse">
                   {nearbyCooks.map((cook) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       key={cook.id}
-                      src={cook.avatar}
+                      src={cook.avatar || "/img/daarik-logo.png"}
                       alt={cook.name}
+                      width={32}
+                      height={32}
+                      loading="lazy"
+                      unoptimized
                       className="size-8 rounded-full border-2 border-cream object-cover"
                     />
                   ))}
@@ -446,17 +541,25 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="relative">
+            <div
+              className="relative"
+              onMouseEnter={() => setHeroPaused(true)}
+              onMouseLeave={() => setHeroPaused(false)}
+            >
               {heroDish && heroCook ? (
                 <>
                   <Link
+                    key={heroDish.id}
                     href={`/dish/${heroDish.id}`}
-                    className="group relative block overflow-hidden rounded-[32px] bg-charcoal shadow-lift"
+                    className="group relative block animate-fade-in overflow-hidden rounded-[32px] bg-charcoal shadow-lift"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/img/couscous.jpg"
+                    <Image
+                      src={heroDish.image || "/img/couscous.jpg"}
                       alt={loc(heroDish.name, lang)}
+                      width={1200}
+                      height={420}
+                      priority
+                      unoptimized
                       className="h-[420px] w-full object-cover transition duration-700 group-hover:scale-[1.03]"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-charcoal/85 via-charcoal/10 to-transparent" />
@@ -482,10 +585,13 @@ export default function HomePage() {
                       </p>
                       <div className="mt-3 flex items-center justify-between">
                         <span className="flex items-center gap-2">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={heroCook?.avatar}
-                            alt={heroCook?.name}
+                          <Image
+                            src={heroCook?.avatar || "/img/daarik-logo.png"}
+                            alt={heroCook?.name ?? ""}
+                            width={36}
+                            height={36}
+                            loading="lazy"
+                            unoptimized
                             className="size-9 rounded-full border-2 border-white/80 object-cover"
                           />
                           <span className="text-[14px] text-white/85">
@@ -506,28 +612,6 @@ export default function HomePage() {
                       </div>
                     </div>
                   </Link>
-                  <div className="absolute -start-5 top-8 rounded-2xl border border-line bg-white/95 px-3.5 py-2.5 shadow-pop backdrop-blur">
-                    <p className="flex items-center gap-1.5 text-[13px] font-semibold text-charcoal">
-                      <BadgeCheck className="size-4 fill-olive text-white" />
-                      {t("verifiedCook")}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-muted">
-                      {heroCook?.response[lang]} · {t("pickupOnly")}
-                    </p>
-                  </div>
-                  <div className="absolute -bottom-4 start-10 flex items-center gap-2 rounded-2xl border border-line bg-white px-3.5 py-2.5 shadow-pop">
-                    <span className="grid size-8 place-items-center rounded-full bg-olive-50 text-olive">
-                      <Clock3 className="size-4" />
-                    </span>
-                    <span>
-                      <span className="block text-[13px] font-semibold text-charcoal">
-                        {t("nextAvailable")}
-                      </span>
-                      <span className="block text-[12px] text-muted">
-                        {t("today")} · 18:00
-                      </span>
-                    </span>
-                  </div>
                 </>
               ) : (
                 <div className="grid min-h-105 place-items-center rounded-4xl border border-line bg-white px-8 text-center text-sm text-muted shadow-card">
@@ -621,10 +705,13 @@ export default function HomePage() {
                       href={`/cook/${cook.id}`}
                       className="group flex items-center gap-3 rounded-2xl border border-line bg-white p-3 shadow-card transition hover:border-line-strong"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={cook.avatar}
+                      <Image
+                        src={cook.avatar || "/img/daarik-logo.png"}
                         alt={cook.name}
+                        width={48}
+                        height={48}
+                        loading="lazy"
+                        unoptimized
                         className="size-12 rounded-full object-cover"
                       />
                       <span className="min-w-0 flex-1">
@@ -718,11 +805,14 @@ export default function HomePage() {
                 <div className="flex flex-col items-center gap-1">
                   <div className="flex -space-x-2 rtl:space-x-reverse">
                     {nearbyCooks.slice(0, 3).map((cook) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         key={cook.id}
-                        src={cook.avatar}
+                        src={cook.avatar || "/img/daarik-logo.png"}
                         alt={cook.name}
+                        width={36}
+                        height={36}
+                        loading="lazy"
+                        unoptimized
                         className="size-9 rounded-full border-2 border-olive object-cover"
                       />
                     ))}

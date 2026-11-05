@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Bell, CheckCheck, Megaphone, Sparkles, Truck } from "lucide-react";
 import { Sheet } from "@/components/ui/overlays";
 import { Button } from "@/components/ui/button";
 import { useApp } from "@/components/providers/app-provider";
-import { notifications } from "@/lib/data";
 import { loc } from "@/lib/data";
+import {
+  useMarkNotificationsReadMutation,
+  useNotificationsQuery,
+} from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const icons = [Truck, Sparkles, Megaphone];
@@ -20,8 +22,9 @@ export function NotificationsSheet({
   onClose: () => void;
 }) {
   const { lang, t } = useApp();
-  const [read, setRead] = useState<string[]>([]);
-  const unread = notifications.filter((n) => n.unread && !read.includes(n.id));
+  const { data: notifications = [] } = useNotificationsQuery();
+  const markReadMutation = useMarkNotificationsReadMutation();
+  const unread = notifications.filter((n) => n.unread);
 
   return (
     <Sheet
@@ -33,7 +36,8 @@ export function NotificationsSheet({
         <Button
           variant="secondary"
           className="w-full"
-          onClick={() => setRead(notifications.map((n) => n.id))}
+          loading={markReadMutation.isPending}
+          onClick={() => markReadMutation.mutate()}
           disabled={unread.length === 0}
         >
           <CheckCheck className="size-4" />
@@ -49,17 +53,12 @@ export function NotificationsSheet({
         <ul className="space-y-2 pb-1">
           {notifications.map((item, index) => {
             const Icon = icons[index % icons.length];
-            const isUnread = item.unread && !read.includes(item.id);
+            const isUnread = Boolean(item.unread);
             return (
               <li key={item.id}>
                 <Link
                   href="/orders"
-                  onClick={() => {
-                    setRead((prev) =>
-                      prev.includes(item.id) ? prev : [...prev, item.id],
-                    );
-                    onClose();
-                  }}
+                  onClick={onClose}
                   className={cn(
                     "flex items-start gap-3 rounded-2xl border p-3.5 transition",
                     isUnread
@@ -80,14 +79,18 @@ export function NotificationsSheet({
                   <span className="min-w-0 flex-1">
                     <span className="flex items-start justify-between gap-2">
                       <span className="text-[15px] font-semibold leading-snug text-charcoal">
-                        {loc(item.title, lang)}
+                        {typeof item.title === "string"
+                          ? item.title
+                          : loc(item.title, lang)}
                       </span>
                       <span className="shrink-0 pt-0.5 text-[12px] text-muted-soft">
-                        {loc(item.time, lang)}
+                        {item.timeLabel ? loc(item.timeLabel, lang) : ""}
                       </span>
                     </span>
                     <span className="mt-1 block text-[13.5px] leading-relaxed text-muted">
-                      {loc(item.body, lang)}
+                      {typeof item.body === "string"
+                        ? item.body
+                        : loc(item.body, lang)}
                     </span>
                   </span>
                   {isUnread ? (

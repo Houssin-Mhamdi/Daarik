@@ -1,21 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
-  BadgeCheck,
   Check,
   CheckCircle2,
+  ChefHat,
   ChevronLeft,
   FileCheck2,
   FileText,
   Fingerprint,
   Home,
   Loader2,
+  LogOut,
   MapPin,
+  Plus,
   ShieldCheck,
   Sparkles,
   Upload,
@@ -27,40 +29,71 @@ import { Input, Textarea, Field, Select } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/controls";
 import { Card } from "@/components/ui/misc";
 import { useApp } from "@/components/providers/app-provider";
-import { useApplyCookMutation } from "@/lib/queries";
+import { useApplyCookMutation, useMyCookApplicationQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 type Doc = { id: string; label: string; hint: string; icon: typeof FileText };
 
 const docs: Doc[] = [
-  { id: "docId", label: "docId", hint: "Passport or ID card", icon: Fingerprint },
-  { id: "docHealth", label: "docHealth", hint: "PDF, JPG or PNG · max 10 MB", icon: FileCheck2 },
-  { id: "docAddress", label: "docAddress", hint: "Utility bill or registration", icon: Home },
+  {
+    id: "docId",
+    label: "docId",
+    hint: "Passport or ID card",
+    icon: Fingerprint,
+  },
+  {
+    id: "docHealth",
+    label: "docHealth",
+    hint: "PDF, JPG or PNG · max 10 MB",
+    icon: FileCheck2,
+  },
+  {
+    id: "docAddress",
+    label: "docAddress",
+    hint: "Utility bill or registration",
+    icon: Home,
+  },
 ];
 
 export default function CookApplyPage() {
-  const { t, toast } = useApp();
-  const applyCookMutation = useApplyCookMutation();
+  const { t, toast, user, isAuthenticated, logout, cuisines } = useApp();
   const router = useRouter();
+  const applyCookMutation = useApplyCookMutation();
+  const { data: existingApplication, isPending: applicationPending } =
+    useMyCookApplicationQuery(true, user.email);
+
+  const handleSignOut = async () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("darna.cookApplicationEmail");
+    }
+    await logout();
+    toast(t("signOut"), { variant: "info" });
+    router.push("/login");
+  };
   const [step, setStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
-  const [saved, setSaved] = useState(false);
 
-  const [email, setEmail] = useState("rana@example.nl");
-  const [phone, setPhone] = useState("+31 6 24 18 33 90");
-  const [password, setPassword] = useState("");
-  const [emailVerified, setEmailVerified] = useState(false);
-  const [phoneVerified, setPhoneVerified] = useState(false);
-  const [code, setCode] = useState("");
-  const [codeSent, setCodeSent] = useState<"email" | "phone" | null>(null);
-
-  const [fullName, setFullName] = useState("Rana El Amri");
-  const [dob, setDob] = useState("1988-04-12");
-  const [address, setAddress] = useState("Westzeedijk 112");
+  const [email, setEmail] = useState(user.email);
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [fullName, setFullName] = useState(user.name);
   const [postcode, setPostcode] = useState("3016 AH");
-  const [city, setCity] = useState("Rotterdam");
-  const [kitchen, setKitchen] = useState("home");
+  const [city, setCity] = useState(user.city || "");
+  const [cuisineId, setCuisineId] = useState("");
   const [about, setAbout] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setEmail((current) => current || user.email || "");
+      setPhone((current) => current || user.phone || "");
+      setFullName((current) => current || user.name || "");
+      setCity((current) => current || user.city || "");
+    });
+    return () => {
+      active = false;
+    };
+  }, [user.email, user.phone, user.name, user.city]);
 
   const [checks, setChecks] = useState<Record<string, boolean>>({
     hygiene: true,
@@ -87,9 +120,7 @@ export default function CookApplyPage() {
     if (step === 0) {
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
         next.email = t("invalidEmail");
-      if (!emailVerified) next.email = t("verifyEmail");
-      if (!phoneVerified) next.phone = t("verifyPhone");
-      if (password.length < 8) next.password = t("requiredField");
+      if (phone.replace(/\D/g, "").length < 7) next.phone = t("requiredField");
     }
     if (step === 1) {
       if (!fullName.trim()) next.fullName = t("requiredField");
@@ -97,11 +128,17 @@ export default function CookApplyPage() {
       else if (!/^\d{4}\s?[A-Za-z]{2}$/.test(postcode.trim()))
         next.postcode = t("invalidPostcode");
       if (!city.trim()) next.city = t("requiredField");
+      if (!cuisineId) next.cuisine = t("requiredField");
     }
     if (step === 2) {
-      const required = ["hygiene", "allergens", "registration", "insurance", "terms"];
-      if (required.some((key) => !checks[key]))
-        next.checks = t("selectOption");
+      const required = [
+        "hygiene",
+        "allergens",
+        "registration",
+        "insurance",
+        "terms",
+      ];
+      if (required.some((key) => !checks[key])) next.checks = t("selectOption");
     }
     if (step === 3) {
       if (docs.some((doc) => !uploaded[doc.id])) next.docs = t("docRequired");
@@ -110,25 +147,33 @@ export default function CookApplyPage() {
     return Object.keys(next).length === 0;
   }
 
-  function next() {
+  async function next() {
     if (!validate()) return;
     if (step < 3) {
       setStep(step + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
-      applyCookMutation.mutate({
-        name: fullName,
-        email,
-        phone,
-        city,
-        area: postcode,
-        cuisine: kitchen,
-        bio: about,
-        hygieneCertificate: Boolean(checks.hygiene),
-        idVerified: Boolean(uploaded.docId),
-      });
-      setSubmitted(true);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      try {
+        await applyCookMutation.mutateAsync({
+          name: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          city: city.trim(),
+          area: city.trim(),
+          cuisine: cuisineId,
+          bio: about.trim(),
+          hygieneCertificate: Boolean(checks.hygiene),
+          idVerified: false,
+        });
+        setSubmitted(true);
+        toast(t("applicationSubmitted"));
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : t("paymentFailed");
+        setErrors({ application: message });
+        toast(message, { variant: "error" });
+      }
     }
   }
 
@@ -141,43 +186,53 @@ export default function CookApplyPage() {
     }, 850);
   }
 
-  function sendCode(kind: "email" | "phone") {
-    setCodeSent(kind);
-    toast(t("codeSent"), {
-      description: kind === "email" ? email : phone,
-    });
+  const isApproved = existingApplication?.status === "APPROVED";
+  const isChangesRequested =
+    existingApplication?.status === "CHANGES_REQUESTED";
+  const applicationSubmitted =
+    submitted ||
+    existingApplication?.status === "PENDING" ||
+    isApproved;
+
+  if (applicationPending) {
+    return (
+      <div className="grid min-h-dvh place-items-center text-sm text-muted">
+        {t("loading")}
+      </div>
+    );
   }
 
-  function verifyCode() {
-    if (code.replace(/\D/g, "").length < 4) {
-      toast(t("validationErrors"), { variant: "error" });
-      return;
-    }
-    if (codeSent === "email") setEmailVerified(true);
-    if (codeSent === "phone") setPhoneVerified(true);
-    setCodeSent(null);
-    setCode("");
-    toast(t("verifiedLabel"));
-  }
-
-  if (submitted) {
+  if (applicationSubmitted) {
     return (
       <div className="min-h-dvh bg-cream pb-12">
         <div className="mx-auto w-full max-w-[520px] px-4 pt-10 md:max-w-[720px] md:pt-20">
           <div className="text-center">
             <div className="mx-auto grid size-[76px] place-items-center rounded-full bg-olive text-white shadow-[0_16px_36px_-16px_rgba(105,118,83,0.8)] animate-pop">
-              <FileCheck2 className="size-9" />
+              {isApproved ? (
+                <CheckCircle2 className="size-9" />
+              ) : (
+                <FileCheck2 className="size-9" />
+              )}
             </div>
             <h1 className="mt-5 font-display text-[31px] font-semibold leading-tight text-charcoal md:text-[38px]">
-              {t("applicationSubmitted")}
+              {isApproved ? t("cookDashboard") : t("applicationSubmitted")}
             </h1>
             <p className="mx-auto mt-2 max-w-[380px] text-[14.5px] leading-relaxed text-muted">
-              {t("applicationSubmittedSub")}
+              {isApproved
+                ? t("dashboardNote")
+                : t("applicationSubmittedSub")}
             </p>
-            <Badge variant="saffron" size="lg" className="mt-4">
-              <Loader2 className="size-3.5 animate-spin" />
-              {t("verificationPending")}
-            </Badge>
+            {isApproved ? (
+              <Badge variant="olive" size="lg" className="mt-4">
+                <Check className="size-3.5" strokeWidth={3} />
+                {t("verified")}
+              </Badge>
+            ) : (
+              <Badge variant="saffron" size="lg" className="mt-4">
+                <Loader2 className="size-3.5 animate-spin" />
+                {t("verificationPending")}
+              </Badge>
+            )}
           </div>
 
           <Card className="mt-7 overflow-hidden">
@@ -196,8 +251,8 @@ export default function CookApplyPage() {
                 {[
                   { label: t("applicationSubmitted"), done: true },
                   { label: t("verificationDocuments"), done: true },
-                  { label: t("verificationPending"), done: false },
-                  { label: t("accountTitle"), done: false },
+                  { label: t("verificationPending"), done: isApproved },
+                  { label: t("cookDashboard"), done: isApproved },
                 ].map((item, index) => (
                   <div key={item.label} className="flex items-start gap-3">
                     <span
@@ -230,29 +285,42 @@ export default function CookApplyPage() {
             </div>
           </Card>
 
-          <div className="mt-4 rounded-2xl bg-terracotta-50 p-4">
-            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-terracotta-700">
-              <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
-              {t("verificationNote")}
-            </p>
-          </div>
+          {isApproved ? (
+            <div className="mt-6 grid gap-2.5 sm:grid-cols-2">
+              <Link href="/cook/dashboard">
+                <Button className="h-12 w-full">
+                  <ChefHat className="size-4" />
+                  {t("cookDashboard")}
+                  <ArrowRight className="size-4 rtl:rotate-180" />
+                </Button>
+              </Link>
+              <Link href="/cook/dishes/new">
+                <Button variant="outline" className="h-12 w-full">
+                  <Plus className="size-4" />
+                  {t("addNewDish")}
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-2xl bg-terracotta-50 p-4">
+              <p className="flex items-start gap-2 text-[13px] leading-relaxed text-terracotta-700">
+                <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
+                {t("verificationNote")}
+              </p>
+            </div>
+          )}
 
-          <div className="mt-5 grid gap-2 sm:grid-cols-2">
-            <Button
-              className="h-12"
-              onClick={() => router.push("/cook/dashboard")}
-            >
-              {t("goDashboard")}
-              <ArrowRight className="size-4 rtl:rotate-180" />
-            </Button>
+          <div className="mt-5 flex justify-center">
             <Button
               variant="outline"
-              className="h-12"
-              onClick={() => router.push("/cook")}
+              size="sm"
+              onClick={() => void handleSignOut()}
             >
-              {t("backToCook")}
+              <LogOut className="size-3.5" />
+              {t("signOut")}
             </Button>
           </div>
+
           <p className="mt-4 text-center text-[12.5px] text-muted">
             {t("applicationNote")}
           </p>
@@ -267,9 +335,10 @@ export default function CookApplyPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => router.push("/cook")}
+            onClick={() => setStep((current) => Math.max(0, current - 1))}
+            disabled={step === 0}
             aria-label={t("back")}
-            className="-ms-2 grid size-10 place-items-center rounded-full text-charcoal hover:bg-cream-100"
+            className="-ms-2 grid size-10 place-items-center rounded-full text-charcoal transition hover:bg-cream-100 disabled:opacity-40"
           >
             <ChevronLeft className="size-5 rtl:rotate-180" />
           </button>
@@ -281,20 +350,31 @@ export default function CookApplyPage() {
               {t("applySub")}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setSaved(true);
-              toast(t("draftSaved"));
-            }}
-            className="ms-auto flex h-9 items-center gap-1 rounded-full border border-line bg-white px-3 text-[12.5px] font-semibold text-muted md:text-[13.5px]"
-          >
-            {saved ? <Check className="size-3.5 text-olive" /> : null}
-            {t("saveAndExit")}
-          </button>
+          {isAuthenticated ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ms-auto"
+              onClick={() => void handleSignOut()}
+            >
+              <LogOut className="size-3.5" />
+              {t("signOut")}
+            </Button>
+          ) : null}
         </div>
 
         {/* Stepper */}
+        {isChangesRequested ? (
+          <div className="mt-4 rounded-2xl border border-saffron/40 bg-saffron-50/70 p-4 text-[13.5px] text-[#8a5d13]">
+            <p className="font-semibold">
+              Changes requested by Daarik Admin:
+            </p>
+            <p className="mt-1">
+              {existingApplication?.reviewerNotes ||
+                "Please review your details and resubmit your application."}
+            </p>
+          </div>
+        ) : null}
         <div className="mt-5 md:mt-8">
           <div className="flex items-center gap-1.5">
             {steps.map((item, index) => (
@@ -359,112 +439,48 @@ export default function CookApplyPage() {
           <div>
             {step === 0 ? (
               <Card className="space-y-4 p-4 md:p-5">
-                <Field label={t("emailLabel")} htmlFor="apply-email" error={errors.email} required>
-                  <div className="flex gap-2">
-                    <Input
-                      id="apply-email"
-                      type="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      autoComplete="email"
-                      className={cn(emailVerified && "border-olive/50 bg-olive-50/30")}
-                    />
-                    {emailVerified ? (
-                      <span className="flex shrink-0 items-center gap-1 rounded-2xl bg-olive-50 px-3 text-[12.5px] font-semibold text-olive-600">
-                        <BadgeCheck className="size-3.5" />
-                        {t("verifiedLabel")}
-                      </span>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-12 shrink-0 px-3 text-[13.5px]"
-                        onClick={() => sendCode("email")}
-                      >
-                        {t("sendCode")}
-                      </Button>
-                    )}
-                  </div>
-                </Field>
-                <Field label={t("phoneLabel")} htmlFor="apply-phone" error={errors.phone} required>
-                  <div className="flex gap-2">
-                    <Input
-                      id="apply-phone"
-                      type="tel"
-                      value={phone}
-                      onChange={(event) => setPhone(event.target.value)}
-                      autoComplete="tel"
-                      className={cn(phoneVerified && "border-olive/50 bg-olive-50/30")}
-                    />
-                    {phoneVerified ? (
-                      <span className="flex shrink-0 items-center gap-1 rounded-2xl bg-olive-50 px-3 text-[12.5px] font-semibold text-olive-600">
-                        <BadgeCheck className="size-3.5" />
-                        {t("verifiedLabel")}
-                      </span>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-12 shrink-0 px-3 text-[13.5px]"
-                        onClick={() => sendCode("phone")}
-                      >
-                        {t("sendCode")}
-                      </Button>
-                    )}
-                  </div>
-                </Field>
-                {codeSent ? (
-                  <div className="rounded-2xl border border-terracotta/25 bg-terracotta-50/50 p-3 animate-fade-in">
-                    <p className="text-[13px] font-semibold text-charcoal">
-                      {t("codeSent")} ·{" "}
-                      {codeSent === "email" ? email : phone}
-                    </p>
-                    <div className="mt-2 flex gap-2">
-                      <Input
-                        value={code}
-                        onChange={(event) =>
-                          setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                        }
-                        inputMode="numeric"
-                        placeholder="123456"
-                        className="h-11 tracking-[0.3em]"
-                        aria-label={t("codeLabel")}
-                      />
-                      <Button
-                        type="button"
-                        className="h-11 shrink-0 px-4"
-                        onClick={verifyCode}
-                      >
-                        {t("verify")}
-                      </Button>
-                    </div>
-                    <p className="mt-1.5 text-[11.5px] text-muted">
-                      {t("demoNotice")}
-                    </p>
-                  </div>
-                ) : null}
                 <Field
-                  label={t("passwordLabel")}
-                  htmlFor="apply-password"
-                  error={errors.password}
-                  hint={t("securityNote")}
+                  label={t("emailLabel")}
+                  htmlFor="apply-email"
+                  error={errors.email}
                   required
                 >
                   <Input
-                    id="apply-password"
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    autoComplete="new-password"
-                    placeholder="••••••••"
+                    id="apply-email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    autoComplete="email"
                   />
                 </Field>
+                <Field
+                  label={t("phoneLabel")}
+                  htmlFor="apply-phone"
+                  error={errors.phone}
+                  required
+                >
+                  <Input
+                    id="apply-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    autoComplete="tel"
+                  />
+                </Field>
+                <p className="text-[12.5px] leading-relaxed text-muted">
+                  {t("accountSub")}
+                </p>
               </Card>
             ) : null}
 
             {step === 1 ? (
               <Card className="space-y-4 p-4 md:p-5">
-                <Field label={t("fullName")} htmlFor="apply-name" error={errors.fullName} required>
+                <Field
+                  label={t("fullName")}
+                  htmlFor="apply-name"
+                  error={errors.fullName}
+                  required
+                >
                   <Input
                     id="apply-name"
                     value={fullName}
@@ -472,33 +488,24 @@ export default function CookApplyPage() {
                     autoComplete="name"
                   />
                 </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label={t("dateOfBirth")} htmlFor="apply-dob">
-                    <Input
-                      id="apply-dob"
-                      type="date"
-                      value={dob}
-                      onChange={(event) => setDob(event.target.value)}
-                    />
-                  </Field>
-                  <Field label={t("kitchenType")} htmlFor="apply-kitchen">
-                    <Select
-                      id="apply-kitchen"
-                      value={kitchen}
-                      onChange={(event) => setKitchen(event.target.value)}
-                    >
-                      <option value="home">{t("homeKitchen")}</option>
-                      <option value="shared">{t("sharedKitchen")}</option>
-                    </Select>
-                  </Field>
-                </div>
-                <Field label={t("addressLabel")} htmlFor="apply-address">
-                  <Input
-                    id="apply-address"
-                    value={address}
-                    onChange={(event) => setAddress(event.target.value)}
-                    autoComplete="street-address"
-                  />
+                <Field
+                  label={t("filterCuisine")}
+                  htmlFor="apply-cuisine"
+                  error={errors.cuisine}
+                  required
+                >
+                  <Select
+                    id="apply-cuisine"
+                    value={cuisineId}
+                    onChange={(event) => setCuisineId(event.target.value)}
+                  >
+                    <option value="">{t("filterCuisine")}</option>
+                    {cuisines.map((cuisine) => (
+                      <option key={cuisine.id} value={cuisine.id}>
+                        {cuisine.label.en}
+                      </option>
+                    ))}
+                  </Select>
                 </Field>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field
@@ -510,12 +517,19 @@ export default function CookApplyPage() {
                     <Input
                       id="apply-postcode"
                       value={postcode}
-                      onChange={(event) => setPostcode(event.target.value.toUpperCase())}
+                      onChange={(event) =>
+                        setPostcode(event.target.value.toUpperCase())
+                      }
                       autoComplete="postal-code"
                       placeholder="1234 AB"
                     />
                   </Field>
-                  <Field label={t("cityLabel")} htmlFor="apply-city" error={errors.city} required>
+                  <Field
+                    label={t("cityLabel")}
+                    htmlFor="apply-city"
+                    error={errors.city}
+                    required
+                  >
                     <Input
                       id="apply-city"
                       value={city}
@@ -524,7 +538,11 @@ export default function CookApplyPage() {
                     />
                   </Field>
                 </div>
-                <Field label={t("aboutKitchen")} htmlFor="apply-about" hint={t("kitchenPhotoSub")}>
+                <Field
+                  label={t("aboutKitchen")}
+                  htmlFor="apply-about"
+                  hint={t("kitchenPhotoSub")}
+                >
                   <Textarea
                     id="apply-about"
                     value={about}
@@ -605,7 +623,9 @@ export default function CookApplyPage() {
                           {t(doc.label)}
                         </p>
                         <p className="mt-0.5 text-[12.5px] text-muted">
-                          {done ? `${doc.id === "docId" ? "id-scan.pdf" : doc.id === "docHealth" ? "food-safety.pdf" : "address.pdf"} · 1.2 MB` : doc.hint}
+                          {done
+                            ? `${doc.id === "docId" ? "id-scan.pdf" : doc.id === "docHealth" ? "food-safety.pdf" : "address.pdf"} · 1.2 MB`
+                            : doc.hint}
                         </p>
                       </div>
                       <button
@@ -665,8 +685,11 @@ export default function CookApplyPage() {
                     <button
                       key={item.key}
                       type="button"
-                      onClick={() => setStep(index)}
-                      className="flex w-full items-center gap-2.5 text-start"
+                      onClick={() => {
+                        if (index <= step) setStep(index);
+                      }}
+                      disabled={index > step}
+                      className="flex w-full items-center gap-2.5 text-start disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <span
                         className={cn(
@@ -742,7 +765,14 @@ export default function CookApplyPage() {
       </div>
 
       <div className="mx-auto mt-4 hidden max-w-[960px] px-8 md:flex md:justify-end">
-        <Button variant="ghost" onClick={() => { setStep(Math.max(0, step - 1)); setErrors({}); }} disabled={step === 0}>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setStep(Math.max(0, step - 1));
+            setErrors({});
+          }}
+          disabled={step === 0}
+        >
           <ArrowLeft className="size-4 rtl:rotate-180" />
           {t("prevStep")}
         </Button>

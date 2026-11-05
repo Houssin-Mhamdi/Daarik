@@ -34,8 +34,12 @@ import {
   VerificationSheet,
   type Applicant,
 } from "@/components/admin/verification-sheet";
-import { adminKpis, cooks, verificationQueue } from "@/lib/data";
-
+import {
+  useAdminApproveVerificationMutation,
+  useAdminCooksQuery,
+  useAdminRequestVerificationChangesMutation,
+  useAdminUpdateCookStatusMutation,
+} from "@/lib/queries";
 
 type Verification = "verified" | "pending" | "suspended";
 
@@ -49,87 +53,13 @@ type CookRow = {
   joined: string;
   status: Verification;
   avatar?: string;
+  email?: string;
   initials: string;
+  phone?: string;
+  application?: Applicant & { email: string; phone: string };
   submitted?: string;
   documents?: number;
 };
-
-const extraCooks: CookRow[] = [
-  {
-    id: "c-1",
-    name: "Yasmin Al-Sayed",
-    city: "Rotterdam",
-    cuisine: "Syrian",
-    orders: 0,
-    rating: 0,
-    joined: "28 Oct 2026",
-    status: "pending",
-    initials: "YA",
-    submitted: "2 days ago",
-    documents: 3,
-  },
-  {
-    id: "c-2",
-    name: "Hicham Idrissi",
-    city: "Utrecht",
-    cuisine: "Moroccan",
-    orders: 0,
-    rating: 0,
-    joined: "27 Oct 2026",
-    status: "pending",
-    initials: "HI",
-    submitted: "3 days ago",
-    documents: 3,
-  },
-  {
-    id: "c-3",
-    name: "Lina Haddad",
-    city: "Eindhoven",
-    cuisine: "Lebanese",
-    orders: 0,
-    rating: 0,
-    joined: "26 Oct 2026",
-    status: "pending",
-    initials: "LH",
-    submitted: "4 days ago",
-    documents: 2,
-  },
-  {
-    id: "c-4",
-    name: "Nour El Din",
-    city: "Amsterdam",
-    cuisine: "Egyptian",
-    orders: 0,
-    rating: 0,
-    joined: "25 Oct 2026",
-    status: "pending",
-    initials: "NE",
-    submitted: "5 days ago",
-    documents: 3,
-  },
-  {
-    id: "c-5",
-    name: "Karim Ouahbi",
-    city: "Den Haag",
-    cuisine: "Tunisian",
-    orders: 118,
-    rating: 4.4,
-    joined: "12 Feb 2026",
-    status: "suspended",
-    initials: "KO",
-  },
-  {
-    id: "c-6",
-    name: "Hala Nassar",
-    city: "Rotterdam",
-    cuisine: "Syrian",
-    orders: 64,
-    rating: 4.6,
-    joined: "3 Jun 2026",
-    status: "suspended",
-    initials: "HN",
-  },
-];
 
 type Filter = "all" | Verification;
 
@@ -140,28 +70,58 @@ export default function AdminCooksPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [applicant, setApplicant] = useState<Applicant | null>(null);
   const [suspendId, setSuspendId] = useState<string | null>(null);
+  const { data: adminCooks, isPending, isError } = useAdminCooksQuery();
+  const approveVerification = useAdminApproveVerificationMutation();
+  const requestVerificationChanges =
+    useAdminRequestVerificationChangesMutation();
+  const updateCookStatus = useAdminUpdateCookStatusMutation();
 
-  const [rows, setRows] = useState<CookRow[]>(() => [
-    ...cooks.map((cook) => ({
+  const rows = useMemo<CookRow[]>(() => {
+    const profileRows = (adminCooks?.cooks ?? []).map((cook) => ({
       id: cook.id,
       name: cook.name,
       city: cook.city,
-      cuisine: cook.cuisineIds[0]
-        ? cook.cuisineIds[0].charAt(0).toUpperCase() + cook.cuisineIds[0].slice(1)
-        : "",
-      orders: cook.orders,
+      cuisine: cook.cuisineIds[0] ?? "",
+      orders: cook.ordersCount,
       rating: cook.rating,
-      joined: cook.since,
-      status: "verified" as const,
-      avatar: cook.avatar,
+      joined: new Date(cook.createdAt).toLocaleDateString(),
+      status: cook.status.toLowerCase() as Verification,
+      avatar: cook.avatar ?? undefined,
       initials: cook.name
         .split(" ")
         .map((part) => part[0])
         .slice(0, 2)
         .join(""),
-    })),
-    ...extraCooks,
-  ]);
+    }));
+    const applicationRows = (adminCooks?.verificationQueue ?? []).map(
+      (item) => {
+        const application = {
+          id: item.id,
+          name: item.name,
+          city: item.city,
+          cuisine: item.cuisine,
+          email: item.email,
+          phone: item.phone,
+          submitted: new Date(item.submittedAt).toLocaleDateString(),
+          documents: item.documentsCount,
+          initials: item.name
+            .split(" ")
+            .map((part) => part[0])
+            .slice(0, 2)
+            .join(""),
+        };
+        return {
+          ...application,
+          application,
+          orders: 0,
+          rating: 0,
+          joined: application.submitted,
+          status: "pending" as const,
+        };
+      },
+    );
+    return [...profileRows, ...applicationRows];
+  }, [adminCooks]);
 
   const counts = useMemo(
     () => ({
@@ -190,18 +150,7 @@ export default function AdminCooksPage() {
   const suspendTarget = rows.find((row) => row.id === suspendId) ?? null;
 
   const openApplicant = (row: CookRow) => {
-    const match = verificationQueue.find((item) => item.name === row.name);
-    setApplicant(
-      match ?? {
-        id: row.id,
-        name: row.name,
-        city: row.city,
-        cuisine: row.cuisine,
-        submitted: row.submitted ?? "Just now",
-        documents: row.documents ?? 3,
-        initials: row.initials,
-      },
-    );
+    if (row.application) setApplicant(row.application);
   };
 
   return (
@@ -224,29 +173,24 @@ export default function AdminCooksPage() {
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <KpiCard
           label={t("activeCooks")}
-          value={adminKpis.activeCooks}
-          delta="+18"
-          deltaLabel={t("thisMonthLabel").toLowerCase()}
+          value={counts.verified}
           icon={<ChefHat className="size-4" />}
         />
         <KpiCard
           label={t("verified")}
-          value={counts.verified + 227}
+          value={counts.verified}
           icon={<BadgeCheck className="size-4" />}
           accent="#697653"
-          foot="93.1%"
         />
         <KpiCard
           label={t("pendingVerifications")}
-          value={counts.pending + 8}
+          value={counts.pending}
           icon={<UserCheck className="size-4" />}
           accent="#d9a441"
-          delta="+3"
-          deltaLabel={t("today").toLowerCase()}
         />
         <KpiCard
           label={t("suspended")}
-          value={counts.suspended + 2}
+          value={counts.suspended}
           icon={<ShieldAlert className="size-4" />}
           accent="#b3402f"
           foot={t("underReviewStatus")}
@@ -281,93 +225,129 @@ export default function AdminCooksPage() {
             onChange={setFilter}
             tabs={[
               { value: "all", label: t("all"), count: counts.all },
-              { value: "verified", label: t("verifiedFilter"), count: counts.verified },
-              { value: "pending", label: t("pendingFilter"), count: counts.pending },
-              { value: "suspended", label: t("suspendedFilter"), count: counts.suspended },
+              {
+                value: "verified",
+                label: t("verifiedFilter"),
+                count: counts.verified,
+              },
+              {
+                value: "pending",
+                label: t("pendingFilter"),
+                count: counts.pending,
+              },
+              {
+                value: "suspended",
+                label: t("suspendedFilter"),
+                count: counts.suspended,
+              },
             ]}
             className="min-w-max md:ms-auto"
           />
         </div>
 
-        <AdminTable>
-          <thead>
-            <tr>
-              <Th>{t("cookCol")}</Th>
-              <Th className="hidden md:table-cell">{t("cuisine")}</Th>
-              <Th className="hidden lg:table-cell">{t("totalOrders")}</Th>
-              <Th className="hidden sm:table-cell">{t("ratingCol")}</Th>
-              <Th className="hidden xl:table-cell">{t("joined")}</Th>
-              <Th>{t("verificationCol")}</Th>
-              <Th className="text-end">{t("actionCol")}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((row) => (
-              <tr key={row.id} className="transition hover:bg-cream/40">
-                <Td>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(row.id)}
-                    className="flex items-center gap-2.5 text-start"
-                  >
-                    {row.avatar ? (
-                      <Avatar src={row.avatar} alt={row.name} size={30} />
-                    ) : (
-                      <span className="grid size-[30px] shrink-0 place-items-center rounded-full bg-cream-100 text-[12px] font-bold text-charcoal">
-                        {row.initials}
-                      </span>
-                    )}
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold">{row.name}</span>
-                      <span className="block truncate text-[12px] text-muted">{row.city}</span>
-                    </span>
-                  </button>
-                </Td>
-                <Td className="hidden text-muted md:table-cell">{row.cuisine}</Td>
-                <Td className="hidden tabular-nums lg:table-cell">{row.orders || "—"}</Td>
-                <Td className="hidden sm:table-cell">
-                  {row.rating ? (
-                    <span className="inline-flex items-center gap-1 font-semibold">
-                      <Star className="size-3 fill-saffron text-saffron" />
-                      {row.rating.toFixed(1)}
-                    </span>
-                  ) : (
-                    <span className="text-muted-soft">—</span>
-                  )}
-                </Td>
-                <Td className="hidden text-muted xl:table-cell">{row.joined}</Td>
-                <Td>
-                  <StatusPill status={row.status} />
-                </Td>
-                <Td className="text-end">
-                  {row.status === "pending" ? (
-                    <button
-                      type="button"
-                      onClick={() => openApplicant(row)}
-                      className="rounded-full bg-terracotta-50 px-2.5 py-1 text-[12.5px] font-semibold text-terracotta-700 transition hover:bg-terracotta-100"
-                    >
-                      {t("reviewDocs")}
-                    </button>
-                  ) : (
+        {isError ? (
+          <p role="alert" className="px-5 py-8 text-center text-sm text-danger">
+            {t("loadError")}
+          </p>
+        ) : isPending ? (
+          <p className="px-5 py-8 text-center text-sm text-muted">
+            {t("loading")}
+          </p>
+        ) : (
+          <AdminTable>
+            <thead>
+              <tr>
+                <Th>{t("cookCol")}</Th>
+                <Th className="hidden md:table-cell">{t("cuisine")}</Th>
+                <Th className="hidden lg:table-cell">{t("totalOrders")}</Th>
+                <Th className="hidden sm:table-cell">{t("ratingCol")}</Th>
+                <Th className="hidden xl:table-cell">{t("joined")}</Th>
+                <Th>{t("verificationCol")}</Th>
+                <Th className="text-end">{t("actionCol")}</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((row) => (
+                <tr key={row.id} className="transition hover:bg-cream/40">
+                  <Td>
                     <button
                       type="button"
                       onClick={() => setSelectedId(row.id)}
-                      className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-charcoal transition hover:bg-cream-100"
+                      className="flex items-center gap-2.5 text-start"
                     >
-                      {t("viewApplication")}
+                      {row.avatar ? (
+                        <Avatar src={row.avatar} alt={row.name} size={30} />
+                      ) : (
+                        <span className="grid size-[30px] shrink-0 place-items-center rounded-full bg-cream-100 text-[12px] font-bold text-charcoal">
+                          {row.initials}
+                        </span>
+                      )}
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">
+                          {row.name}
+                        </span>
+                        <span className="block truncate text-[12px] text-muted">
+                          {row.city}
+                        </span>
+                      </span>
                     </button>
-                  )}
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </AdminTable>
+                  </Td>
+                  <Td className="hidden text-muted md:table-cell">
+                    {row.cuisine}
+                  </Td>
+                  <Td className="hidden tabular-nums lg:table-cell">
+                    {row.orders || "—"}
+                  </Td>
+                  <Td className="hidden sm:table-cell">
+                    {row.rating ? (
+                      <span className="inline-flex items-center gap-1 font-semibold">
+                        <Star className="size-3 fill-saffron text-saffron" />
+                        {row.rating.toFixed(1)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-soft">—</span>
+                    )}
+                  </Td>
+                  <Td className="hidden text-muted xl:table-cell">
+                    {row.joined}
+                  </Td>
+                  <Td>
+                    <StatusPill status={row.status} />
+                  </Td>
+                  <Td className="text-end">
+                    {row.status === "pending" ? (
+                      <button
+                        type="button"
+                        onClick={() => openApplicant(row)}
+                        className="rounded-full bg-terracotta-50 px-2.5 py-1 text-[12.5px] font-semibold text-terracotta-700 transition hover:bg-terracotta-100"
+                      >
+                        {t("reviewDocs")}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(row.id)}
+                        className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-charcoal transition hover:bg-cream-100"
+                      >
+                        {t("viewApplication")}
+                      </button>
+                    )}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </AdminTable>
+        )}
 
         {filtered.length === 0 ? (
           <div className="px-5 py-14 text-center">
             <ChefHat className="mx-auto size-7 text-muted-soft" />
-            <p className="mt-3 text-[15.5px] font-semibold text-charcoal">{t("noResults")}</p>
-            <p className="mt-1 text-[13.5px] text-muted">{t("noResultsFilters")}</p>
+            <p className="mt-3 text-[15.5px] font-semibold text-charcoal">
+              {t("noResults")}
+            </p>
+            <p className="mt-1 text-[13.5px] text-muted">
+              {t("noResultsFilters")}
+            </p>
             <Button
               variant="secondary"
               size="sm"
@@ -387,31 +367,34 @@ export default function AdminCooksPage() {
         </div>
       </AdminCard>
 
-      <p className="mt-3 px-1 text-[12.5px] text-muted-soft">{t("cookVerificationNote")}</p>
+      <p className="mt-3 px-1 text-[12.5px] text-muted-soft">
+        {t("cookVerificationNote")}
+      </p>
 
       <VerificationSheet
         applicant={applicant}
         open={Boolean(applicant)}
         onClose={() => setApplicant(null)}
-        onApprove={(item) => {
-          setRows((prev) =>
-            prev.map((row) =>
-              row.name === item.name
-                ? { ...row, status: "verified", joined: t("today") }
-                : row,
-            ),
-          );
-          setApplicant(null);
-          toast(t("approvedToast"), { description: item.name });
+        onApprove={async (item) => {
+          try {
+            await approveVerification.mutateAsync({ id: item.id });
+            setApplicant(null);
+            toast(t("approvedToast"), { description: item.name });
+          } catch {
+            toast(t("loadError"), { variant: "error" });
+          }
         }}
-        onReject={(item) => {
-          setRows((prev) =>
-            prev.map((row) =>
-              row.name === item.name ? { ...row, status: "pending" } : row,
-            ),
-          );
-          setApplicant(null);
-          toast(t("rejectedToast"), { description: item.name, variant: "info" });
+        onReject={async (item) => {
+          try {
+            await requestVerificationChanges.mutateAsync({ id: item.id });
+            setApplicant(null);
+            toast(t("rejectedToast"), {
+              description: item.name,
+              variant: "info",
+            });
+          } catch {
+            toast(t("loadError"), { variant: "error" });
+          }
         }}
       />
 
@@ -419,23 +402,34 @@ export default function AdminCooksPage() {
         open={Boolean(selected)}
         onClose={() => setSelectedId(null)}
         title={selected?.name}
-        description={selected ? `${selected.cuisine} · ${selected.city}` : undefined}
+        description={
+          selected ? `${selected.cuisine} · ${selected.city}` : undefined
+        }
         footer={
           selected ? (
             <div className="flex gap-2">
-              <Button variant="secondary" className="flex-1" onClick={() => setSelectedId(null)}>
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setSelectedId(null)}
+              >
                 {t("close")}
               </Button>
               {selected.status === "suspended" ? (
                 <Button
                   className="flex-1"
-                  onClick={() => {
-                    setRows((prev) =>
-                      prev.map((row) =>
-                        row.id === selected.id ? { ...row, status: "verified" } : row,
-                      ),
-                    );
-                    toast(t("cookApprovedToast"), { description: selected.name });
+                  onClick={async () => {
+                    try {
+                      await updateCookStatus.mutateAsync({
+                        id: selected.id,
+                        status: "VERIFIED",
+                      });
+                      toast(t("cookApprovedToast"), {
+                        description: selected.name,
+                      });
+                    } catch {
+                      toast(t("loadError"), { variant: "error" });
+                    }
                     setSelectedId(null);
                   }}
                 >
@@ -466,7 +460,9 @@ export default function AdminCooksPage() {
                 </span>
               )}
               <div className="min-w-0 flex-1">
-                <p className="text-[16px] font-semibold text-charcoal">{selected.name}</p>
+                <p className="text-[16px] font-semibold text-charcoal">
+                  {selected.name}
+                </p>
                 <p className="mt-0.5 flex items-center gap-1 text-[13px] text-muted">
                   <MapPin className="size-3" />
                   {selected.city} · {t("joined")} {selected.joined}
@@ -484,11 +480,21 @@ export default function AdminCooksPage() {
                   label: t("ratingCol"),
                   value: selected.rating ? selected.rating.toFixed(1) : "—",
                 },
-                { label: t("documents"), value: `${selected.documents ?? 3}/3` },
+                {
+                  label: t("documents"),
+                  value: `${selected.documents ?? 3}/3`,
+                },
               ].map((stat) => (
-                <div key={stat.label} className="rounded-xl border border-line bg-white p-3 text-center">
-                  <p className="text-[18px] font-semibold leading-none text-charcoal">{stat.value}</p>
-                  <p className="mt-1 text-[11.5px] text-muted-soft">{stat.label}</p>
+                <div
+                  key={stat.label}
+                  className="rounded-xl border border-line bg-white p-3 text-center"
+                >
+                  <p className="text-[18px] font-semibold leading-none text-charcoal">
+                    {stat.value}
+                  </p>
+                  <p className="mt-1 text-[11.5px] text-muted-soft">
+                    {stat.label}
+                  </p>
                 </div>
               ))}
             </div>
@@ -500,7 +506,7 @@ export default function AdminCooksPage() {
                   {t("email")}
                 </span>
                 <span className="font-medium text-charcoal">
-                  {selected.name.toLowerCase().replaceAll(" ", ".")}@darna.nl
+                  {selected.email ?? "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -508,14 +514,18 @@ export default function AdminCooksPage() {
                   <Phone className="size-3.5" />
                   {t("phone")}
                 </span>
-                <span className="font-medium text-charcoal">+31 6 ···· ····</span>
+                <span className="font-medium text-charcoal">
+                  {selected.phone ?? "—"}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 text-muted">
                   <UtensilsCrossed className="size-3.5" />
                   {t("cuisine")}
                 </span>
-                <span className="font-medium text-charcoal">{selected.cuisine}</span>
+                <span className="font-medium text-charcoal">
+                  {selected.cuisine}
+                </span>
               </div>
             </div>
 
@@ -524,17 +534,21 @@ export default function AdminCooksPage() {
                 {t("verificationDocuments")}
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {[t("verificationDocuments"), t("hygieneCertificate"), t("address")].map(
-                  (doc, index) => (
-                    <Badge
-                      key={doc}
-                      variant={index < (selected.documents ?? 3) ? "success" : "outline"}
-                    >
-                      {index < (selected.documents ?? 3) ? "✓ " : ""}
-                      {doc}
-                    </Badge>
-                  ),
-                )}
+                {[
+                  t("verificationDocuments"),
+                  t("hygieneCertificate"),
+                  t("address"),
+                ].map((doc, index) => (
+                  <Badge
+                    key={doc}
+                    variant={
+                      index < (selected.documents ?? 3) ? "success" : "outline"
+                    }
+                  >
+                    {index < (selected.documents ?? 3) ? "✓ " : ""}
+                    {doc}
+                  </Badge>
+                ))}
               </div>
             </div>
 
@@ -548,17 +562,20 @@ export default function AdminCooksPage() {
       <ConfirmDialog
         open={Boolean(suspendTarget)}
         onClose={() => setSuspendId(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (suspendTarget) {
-            setRows((prev) =>
-              prev.map((row) =>
-                row.id === suspendTarget.id ? { ...row, status: "suspended" } : row,
-              ),
-            );
-            toast(t("cookSuspendedToast"), {
-              description: suspendTarget.name,
-              variant: "info",
-            });
+            try {
+              await updateCookStatus.mutateAsync({
+                id: suspendTarget.id,
+                status: "SUSPENDED",
+              });
+              toast(t("cookSuspendedToast"), {
+                description: suspendTarget.name,
+                variant: "info",
+              });
+            } catch {
+              toast(t("loadError"), { variant: "error" });
+            }
           }
           setSuspendId(null);
           setSelectedId(null);

@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -19,19 +20,20 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/misc";
 import { useApp } from "@/components/providers/app-provider";
-import {
-  cookName,
-  customerOrders,
-  getDish,
-  loc,
-  orderSubtotal,
-  pickupOptions,
-  type OrderItem,
-} from "@/lib/data";
+import { loc } from "@/lib/data";
 import { cn, formatPrice } from "@/lib/utils";
 
 export default function OrderConfirmationPage() {
-  const { t, lang, lastOrder, toast, serviceFee } = useApp();
+  const {
+    t,
+    lang,
+    lastOrder,
+    toast,
+    serviceFee,
+    dishes,
+    cooks,
+    pickupOptions,
+  } = useApp();
   const router = useRouter();
   const [show, setShow] = useState(false);
   const [added, setAdded] = useState(false);
@@ -41,26 +43,42 @@ export default function OrderConfirmationPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  const fallback = customerOrders[0];
-
-  const items: OrderItem[] = lastOrder?.items ?? fallback.items;
-  const cookId = lastOrder?.cookId ?? fallback.cookId;
-  const pickupId = lastOrder?.pickup ?? fallback.pickup;
-  const pickupTime = lastOrder?.pickupTime ?? fallback.pickupTime;
-  const code = lastOrder?.code ?? fallback.code;
-  const email = lastOrder?.email ?? "sarah.devries@example.nl";
-
-  const pickup = pickupOptions.find((option) => option.id === pickupId);
-  const subtotal = orderSubtotal(items);
-  const total = lastOrder?.total ?? subtotal + serviceFee;
+  const cook = lastOrder
+    ? cooks.find((item) => item.id === lastOrder.cookId)
+    : undefined;
+  const pickup = pickupOptions.find(
+    (option) => option.id === lastOrder?.pickup,
+  );
+  const pickupTime = lastOrder?.pickupTime ?? "";
+  const code = lastOrder?.code ?? "";
+  const email = lastOrder?.email ?? "";
 
   const lines = useMemo(
     () =>
-      items
-        .map((item) => ({ item, dish: getDish(item.dishId) }))
+      (lastOrder?.items ?? [])
+        .map((item) => ({
+          item,
+          dish: dishes.find((dish) => dish.id === item.dishId),
+        }))
         .filter((line) => line.dish),
-    [items],
+    [lastOrder?.items, dishes],
   );
+  const subtotal = lines.reduce(
+    (sum, line) => sum + (line.dish?.price ?? 0) * line.item.qty,
+    0,
+  );
+  const total = lastOrder?.total ?? subtotal + serviceFee;
+
+  if (!lastOrder) {
+    return (
+      <div className="mx-auto max-w-[480px] px-4 py-16 text-center">
+        <p className="text-lg font-semibold text-charcoal">{t("noOrders")}</p>
+        <Button className="mt-4" onClick={() => router.push("/orders")}>
+          {t("myOrders")}
+        </Button>
+      </div>
+    );
+  }
 
   function addReminder() {
     if (!pickup) return;
@@ -80,7 +98,7 @@ export default function OrderConfirmationPage() {
       `DTSTART:${start}`,
       `DTEND:${end}`,
       `SUMMARY:Darna pickup ${code}`,
-      `DESCRIPTION:Pickup from ${cookName(cookId)}. Order ${code}.`,
+      `DESCRIPTION:Pickup from ${cook?.name ?? ""}. Order ${code}.`,
       `LOCATION:${pickup.shortDay[lang]} ${pickupTime} - ${t(
         "exactAddressNote",
       )}`,
@@ -112,7 +130,7 @@ export default function OrderConfirmationPage() {
             href="/"
             className="font-display text-[28px] font-semibold tracking-[-0.03em] text-charcoal"
           >
-            Darna
+            Daarik
           </Link>
         </div>
 
@@ -172,22 +190,27 @@ export default function OrderConfirmationPage() {
 
               <div className="space-y-3 p-4">
                 <div className="flex items-center gap-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/img/cook-${cookId}.jpg`}
-                    alt={cookName(cookId)}
-                    className="size-11 rounded-full object-cover"
-                  />
+                  {cook?.avatar ? (
+                    <Image
+                      src={cook.avatar || "/img/daarik-logo.png"}
+                      alt={cook.name}
+                      width={44}
+                      height={44}
+                      loading="lazy"
+                      unoptimized
+                      className="size-11 rounded-full object-cover"
+                    />
+                  ) : null}
                   <div className="min-w-0 flex-1">
                     <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
                       {t("yourCook")}
                     </p>
                     <p className="truncate text-[15.5px] font-semibold text-charcoal">
-                      {cookName(cookId)}
+                      {cook?.name ?? t("yourCook")}
                     </p>
                   </div>
                   <Link
-                    href={`/cook/${cookId}`}
+                    href={`/cook/${lastOrder.cookId}`}
                     className="flex h-9 items-center gap-1.5 rounded-full border border-line px-3 text-[13.5px] font-semibold text-charcoal transition hover:bg-cream"
                   >
                     <MessageCircle className="size-3.5 text-terracotta" />
@@ -224,7 +247,7 @@ export default function OrderConfirmationPage() {
                   <Button
                     size="sm"
                     className="h-10 flex-1"
-                    onClick={() => router.push(`/orders/${fallback.id}`)}
+                    onClick={() => router.push(`/orders/${code}`)}
                   >
                     {t("viewOrder")}
                     <ArrowRight className="size-3.5 rtl:rotate-180" />
@@ -260,6 +283,8 @@ export default function OrderConfirmationPage() {
                   <div className="relative size-12 shrink-0 overflow-hidden rounded-xl">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
+                      loading="lazy"
+                      decoding="async"
                       src={dish!.image}
                       alt={loc(dish!.name, lang)}
                       className="size-full object-cover"
@@ -297,7 +322,9 @@ export default function OrderConfirmationPage() {
                 </span>
               </div>
               <div className="flex items-center justify-between border-t border-line pt-2.5 text-[16px]">
-                <span className="font-semibold text-charcoal">{t("total")}</span>
+                <span className="font-semibold text-charcoal">
+                  {t("total")}
+                </span>
                 <span className="font-semibold text-terracotta">
                   {formatPrice(total, lang)}
                 </span>

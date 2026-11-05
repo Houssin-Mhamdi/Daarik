@@ -41,48 +41,75 @@ import {
   type Applicant,
 } from "@/components/admin/verification-sheet";
 import {
-  adminDisputes,
-  adminKpis,
-  adminOrders,
-  adminPayouts,
-  cooks,
-  revenueSeries,
-  topCuisines,
-  verificationQueue,
-} from "@/lib/data";
-import { useAdminOverviewQuery } from "@/lib/queries";
+  useAdminApproveVerificationMutation,
+  useAdminDisputesQuery,
+  useAdminOverviewQuery,
+  useAdminRequestVerificationChangesMutation,
+} from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
 
 const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function AdminDashboardPage() {
-  const { t, lang, toast } = useApp();
+  const { t, lang, toast, cooks } = useApp();
   const [range, setRange] = useState<"30d" | "90d">("30d");
   const { data: overview, refetch } = useAdminOverviewQuery(range);
-  const [queue, setQueue] = useState(verificationQueue);
+  const { data: disputes = [] } = useAdminDisputesQuery();
+  const approveVerification = useAdminApproveVerificationMutation();
+  const requestChanges = useAdminRequestVerificationChangesMutation();
   const [selected, setSelected] = useState<Applicant | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const kpis = overview?.kpis ?? {
+    gmv: 0,
+    commission: 0,
+    activeCooks: cooks.length,
+    activeCustomers: 0,
+    ordersToday: 0,
+    disputes: disputes.length,
+    avgOrder: 0,
+  };
+  const recentOrders = overview?.recentOrders ?? [];
+  const topCuisines = (overview?.topCuisines ?? []) as {
+    name: string;
+    orders: number;
+    share: number;
+  }[];
+  const queue: Applicant[] = useMemo(
+    () =>
+      (overview?.verificationQueue ?? []).map((app) => ({
+        id: app.id,
+        name: app.name,
+        city: app.city,
+        cuisine: app.cuisine,
+        submitted: app.submittedAt
+          ? new Date(app.submittedAt).toLocaleDateString("en-GB")
+          : "Recently",
+        documents: app.documentsCount ?? 3,
+        initials: String(app.name || "C")
+          .split(/\s+/)
+          .map((p: string) => p[0])
+          .slice(0, 2)
+          .join("")
+          .toUpperCase(),
+      })),
+    [overview?.verificationQueue],
+  );
 
   const revenue = useMemo(() => {
     if (Array.isArray(overview?.revenueSeries) && overview.revenueSeries.length) {
       return overview.revenueSeries as number[];
     }
-    if (range === "30d") return revenueSeries;
-    return Array.from({ length: 30 }, (_, index) => {
-      const base = revenueSeries[index] ?? 2600;
-      return Math.round(base * 2.85 + Math.sin(index / 2) * 180);
-    });
-  }, [overview, range]);
+    return [0, 0, 0, 0, 0, 0, 0];
+  }, [overview]);
 
   const totalRevenue = revenue.reduce((sum, value) => sum + value, 0);
-  const payoutsDue = adminPayouts
-    .filter((payout) => payout.status !== "paid")
-    .reduce((sum, payout) => sum + payout.net, 0);
-  const pendingCount = adminPayouts.filter((p) => p.status !== "paid").length;
+  const payoutsDue = overview?.payoutsSummary?.due ?? 0;
+  const pendingCount = overview?.payoutsSummary?.pendingCount ?? 0;
 
   const exportCsv = () => {
     const header = ["Order", "Customer", "Cook", "Amount", "Status", "Pickup"];
-    const lines = adminOrders.map((order) =>
+    const lines = recentOrders.map((order) =>
       [order.code, order.customer, order.cook, order.amount, order.status, order.pickup]
         .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
         .join(","),
@@ -93,7 +120,7 @@ export default function AdminDashboardPage() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "darna-orders.csv";
+    anchor.download = "daarik-orders.csv";
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -163,7 +190,7 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <KpiCard
           label={t("gmv")}
-          value={<MoneyText value={adminKpis.gmv} compact />}
+          value={<MoneyText value={kpis.gmv ?? 0} compact />}
           delta="+12.4%"
           deltaLabel={t("vsLastMonth")}
           icon={<Euro className="size-4" />}
@@ -171,7 +198,7 @@ export default function AdminDashboardPage() {
         />
         <KpiCard
           label={t("commissionRevenue")}
-          value={<MoneyText value={adminKpis.commission} compact />}
+          value={<MoneyText value={kpis.commission ?? 0} compact />}
           delta="+9.8%"
           deltaLabel={t("vsLastMonth")}
           icon={<TrendingUp className="size-4" />}
@@ -180,16 +207,15 @@ export default function AdminDashboardPage() {
         />
         <KpiCard
           label={t("activeCooks")}
-          value={adminKpis.activeCooks}
-          delta="+18"
-          deltaLabel={t("newCooksThisMonth", { count: adminKpis.newCooks })}
+          value={kpis.activeCooks ?? cooks.length}
+          deltaLabel={t("liveKitchens")}
           icon={<Store className="size-4" />}
           series={[190, 198, 204, 210, 208, 221, 228, 235, 240, 247]}
           accent="#d9a441"
         />
         <KpiCard
           label={t("ordersToday")}
-          value={adminKpis.ordersToday}
+          value={kpis.ordersToday ?? 0}
           delta="+6.2%"
           deltaLabel={t("vsLastMonth")}
           icon={<ShoppingBag className="size-4" />}
@@ -309,7 +335,7 @@ export default function AdminDashboardPage() {
         <AdminCard className="lg:col-span-8">
           <SectionHead
             title={t("recentOrders")}
-            subtitle={t("ordersThisMonth", { count: adminKpis.ordersToday })}
+            subtitle={t("ordersThisMonth", { count: recentOrders.length })}
             action={
               <Link
                 href="/admin/orders"
@@ -333,15 +359,15 @@ export default function AdminDashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {adminOrders.map((order) => (
+              {recentOrders.map((order) => (
                 <tr key={order.code} className="group transition hover:bg-cream/40">
                   <Td className="font-semibold">{order.code}</Td>
                   <Td>
                     <div className="flex items-center gap-2">
                       <span className="grid size-6 shrink-0 place-items-center rounded-full bg-cream-100 text-[11px] font-bold text-charcoal">
-                        {order.customer
+                        {String(order.customer || "C")
                           .split(" ")
-                          .map((part) => part[0])
+                          .map((part: string) => part[0])
                           .slice(0, 2)
                           .join("")}
                       </span>
@@ -461,11 +487,11 @@ export default function AdminDashboardPage() {
                 {t("openDisputes")}
               </p>
               <p className="mt-2 text-[26px] font-semibold leading-none text-charcoal">
-                {adminKpis.disputes}
+                {kpis.disputes ?? disputes.length}
               </p>
               <p className="mt-1.5 text-[13px] text-muted">
                 {formatPrice(
-                  adminDisputes.reduce((sum, dispute) => sum + dispute.amount, 0),
+                  disputes.reduce((sum, dispute) => sum + (dispute.amount ?? 0), 0),
                   lang,
                 )}{" "}
                 · {t("refundAmount").toLowerCase()}
@@ -476,7 +502,7 @@ export default function AdminDashboardPage() {
             </span>
           </div>
           <div className="mt-3 space-y-1">
-            {adminDisputes.slice(0, 2).map((dispute) => (
+            {disputes.slice(0, 2).map((dispute) => (
               <div key={dispute.id} className="flex items-center justify-between gap-2 text-[12.5px]">
                 <span className="truncate text-muted">
                   {dispute.code} · {dispute.reason}
@@ -512,9 +538,9 @@ export default function AdminDashboardPage() {
           <div className="mt-4 space-y-2 text-[13px]">
             {[
               { label: t("uptime"), value: "99.98%" },
-              { label: t("failedPayments"), value: "0.4%" },
-              { label: t("ordersPerHour"), value: "28" },
-              { label: t("avgOrder"), value: formatPrice(adminKpis.avgOrder, lang) },
+              { label: t("failedPayments"), value: "0%" },
+              { label: t("ordersPerHour"), value: String(kpis.ordersToday ?? 0) },
+              { label: t("avgOrder"), value: formatPrice(kpis.avgOrder ?? 0, lang) },
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between">
                 <span className="text-muted">{row.label}</span>
@@ -629,7 +655,7 @@ export default function AdminDashboardPage() {
         </span>
         <span className="hidden items-center gap-1.5 md:inline-flex">
           <Users className="size-3.5" />
-          {t("activeCustomers")}: {adminKpis.activeCustomers.toLocaleString("nl-NL")}
+          {t("activeCustomers")}: {(kpis.activeCustomers ?? 0).toLocaleString("nl-NL")}
         </span>
       </div>
 
@@ -638,12 +664,12 @@ export default function AdminDashboardPage() {
         open={Boolean(selected)}
         onClose={() => setSelected(null)}
         onApprove={(applicant) => {
-          setQueue((prev) => prev.filter((item) => item.id !== applicant.id));
+          approveVerification.mutate({ id: applicant.id });
           setSelected(null);
           toast(t("approvedToast"), { description: applicant.name });
         }}
         onReject={(applicant) => {
-          setQueue((prev) => prev.filter((item) => item.id !== applicant.id));
+          requestChanges.mutate({ id: applicant.id });
           setSelected(null);
           toast(t("rejectedToast"), { description: applicant.name, variant: "info" });
         }}

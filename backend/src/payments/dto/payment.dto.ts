@@ -1,76 +1,69 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
-  IsArray,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
+  Max,
+  MaxLength,
   Min,
 } from "class-validator";
 
-export class CreatePaymentIntentDto {
-  @ApiProperty({ example: 27.8, description: "Total amount in EUR" })
-  @IsNumber()
-  @Min(1)
-  amount!: number;
-
-  @ApiProperty({ example: "rana", description: "Cook ID or slug" })
+/**
+ * The client may only reference an existing order. Amounts are always
+ * recomputed server-side; there is deliberately no `amount` field here.
+ */
+export class CreateCheckoutSessionDto {
+  @ApiProperty({ example: "ORD-2481", description: "Order code to pay for" })
   @IsString()
-  cookId!: string;
+  @MaxLength(40)
+  orderCode!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: "ideal",
     enum: ["ideal", "card", "bancontact"],
-    description: "Selected payment method (Dutch iDEAL, Card, or Bancontact)",
+    description: "Preferred method. Omit to let Stripe decide.",
   })
+  @IsOptional()
   @IsIn(["ideal", "card", "bancontact"])
-  paymentMethod!: "ideal" | "card" | "bancontact";
-
-  @ApiPropertyOptional({
-    example: "ing",
-    description: "Optional iDEAL Dutch bank code (e.g. abn_amro, ing, rabobank, sns_bank)",
-  })
-  @IsOptional()
-  @IsString()
-  idealBank?: string;
-
-  @ApiPropertyOptional({ description: "Cart items snapshot" })
-  @IsOptional()
-  @IsArray()
-  items?: { dishId: string; qty: number }[];
+  paymentMethod?: "ideal" | "card" | "bancontact";
 }
 
-export class ConnectCookStripeDto {
+export class UpdatePayoutScheduleDto {
+  @ApiProperty({ enum: ["DAILY", "WEEKLY", "MONTHLY", "MANUAL"] })
+  @IsIn(["DAILY", "WEEKLY", "MONTHLY", "MANUAL"])
+  interval!: "DAILY" | "WEEKLY" | "MONTHLY" | "MANUAL";
+
   @ApiPropertyOptional({
-    example: "acct_1QN0ATC00EGdQssf",
-    description: "Existing Stripe Account ID (optional — if omitted, creates or generates onboarding)",
+    enum: ["monday", "tuesday", "wednesday", "thursday", "friday"],
   })
   @IsOptional()
-  @IsString()
-  stripeAccountId?: string;
+  @IsIn(["monday", "tuesday", "wednesday", "thursday", "friday"])
+  weeklyAnchor?: "monday" | "tuesday" | "wednesday" | "thursday" | "friday";
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 28 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(28)
+  monthlyAnchor?: number;
 }
 
-export class UpdateCookPayoutPreferenceDto {
-  @ApiProperty({
-    enum: ["STRIPE", "BANK_TRANSFER"],
-    example: "BANK_TRANSFER",
-    description: "STRIPE for direct Stripe Connect payouts, or BANK_TRANSFER to store balance in Daarik app and transfer via IBAN",
+export class RefundOrderDto {
+  @ApiPropertyOptional({
+    example: 12.5,
+    description:
+      "Amount in EUR. Omit to refund the remaining refundable balance.",
   })
-  @IsIn(["STRIPE", "BANK_TRANSFER"])
-  payoutPreference!: "STRIPE" | "BANK_TRANSFER";
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount?: number;
 
-  @ApiPropertyOptional({ example: "NL91 ABNA 0417 1643 00" })
+  @ApiPropertyOptional({ example: "Order never picked up" })
   @IsOptional()
   @IsString()
-  iban?: string;
-
-  @ApiPropertyOptional({ example: "Rana El Amri" })
-  @IsOptional()
-  @IsString()
-  accountHolder?: string;
-
-  @ApiPropertyOptional({ example: "acct_1QN0ATC00EGdQssf" })
-  @IsOptional()
-  @IsString()
-  stripeAccountId?: string;
+  @MaxLength(300)
+  reason?: string;
 }

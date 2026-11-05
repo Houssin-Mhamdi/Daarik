@@ -5,14 +5,22 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { DishWizard } from "@/components/cook/dish-wizard";
 import { useApp } from "@/components/providers/app-provider";
-import { getDish } from "@/lib/data";
+import { useDishQuery } from "@/lib/queries";
 
 export default function EditDishPage() {
   const params = useParams<{ id: string }>();
   const { t } = useApp();
-  const dish = getDish(params.id);
+  const { data: dish, isLoading } = useDishQuery(params.id);
 
-  if (!dish || dish.cookId !== "rana") {
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-[680px] px-4 py-12">
+        <div className="h-64 animate-pulse rounded-[24px] bg-charcoal/10" />
+      </div>
+    );
+  }
+
+  if (!dish) {
     return (
       <div className="mx-auto flex min-h-[60vh] w-full max-w-[480px] flex-col items-center justify-center px-6 text-center">
         <p className="font-display text-[26px] font-semibold text-charcoal">

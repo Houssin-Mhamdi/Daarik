@@ -1,13 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   BadgeCheck,
   CalendarDays,
-  ChevronRight,
   Heart,
   Languages,
   MapPin,
@@ -16,7 +14,6 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
-  Users,
   UtensilsCrossed,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,30 +23,42 @@ import { Sheet, EmptyState } from "@/components/ui/overlays";
 import { StickyActionBar } from "@/components/ui/misc";
 import { DishCard } from "@/components/app/dish-card";
 import { ReviewCard } from "@/components/app/review-card";
+import { AuthRequiredSheet } from "@/components/app/auth-required-sheet";
 import { useApp } from "@/components/providers/app-provider";
-import {
-  cuisines,
-  dishesByCook,
-  getCook,
-  loc,
-  pickupOptions,
-  reviews,
-  type Dish,
-} from "@/lib/data";
+import { loc, type Dish } from "@/lib/data";
 import { useCookQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 export default function CookProfilePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { data: cookData } = useCookQuery(params.id);
-  const cook = cookData?.cook ?? getCook(params.id);
-  const { t, lang, dir, toast, toggleFavoriteCook, isFavoriteCook } = useApp();
-  const [tab, setTab] = useState<"dishesTab" | "reviewsTab" | "availabilityTab">(
-    "dishesTab",
-  );
+  const { data: cookData, isLoading: cookLoading } = useCookQuery(params.id);
+  const cook = cookData?.cook;
+  const {
+    t,
+    lang,
+    dir,
+    toast,
+    toggleFavoriteCook,
+    isFavoriteCook,
+    isAuthenticated,
+    pickupOptions,
+    cuisines,
+  } = useApp();
+  const [tab, setTab] = useState<
+    "dishesTab" | "reviewsTab" | "availabilityTab"
+  >("dishesTab");
   const [messageOpen, setMessageOpen] = useState(false);
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const [message, setMessage] = useState("");
+
+  if (cookLoading) {
+    return (
+      <div className="mx-auto max-w-[1240px] px-4 py-12 md:px-8">
+        <div className="h-72 animate-pulse rounded-[28px] bg-charcoal/10" />
+      </div>
+    );
+  }
 
   if (!cook) {
     return (
@@ -58,15 +67,18 @@ export default function CookProfilePage() {
           icon={<UtensilsCrossed className="size-7" />}
           title={t("cookNotFound")}
           description={t("emptyExploreSub")}
-          action={<Button onClick={() => router.push("/explore")}>{t("explore")}</Button>}
+          action={
+            <Button onClick={() => router.push("/explore")}>
+              {t("explore")}
+            </Button>
+          }
         />
       </div>
     );
   }
 
-  const dishes: Dish[] = cookData?.dishes ?? dishesByCook(cook.id);
-  const cookReviews =
-    cookData?.reviews ?? reviews.filter((review) => review.cookId === cook.id);
+  const dishes: Dish[] = cookData?.dishes ?? [];
+  const cookReviews = cookData?.reviews ?? [];
   const saved = isFavoriteCook(cook.id);
   const cuisineLabels = cook.cuisineIds
     .map((id) => cuisines.find((cuisine) => cuisine.id === id))
@@ -76,6 +88,10 @@ export default function CookProfilePage() {
   );
 
   const save = () => {
+    if (!isAuthenticated) {
+      setAuthPromptOpen(true);
+      return;
+    }
     const added = toggleFavoriteCook(cook.id);
     toast(added ? t("favoriteCookToast") : t("unfavoriteCookToast"));
   };
@@ -99,11 +115,7 @@ export default function CookProfilePage() {
         {/* Cover */}
         <div className="relative h-[220px] overflow-hidden md:h-[300px] md:rounded-[32px]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={cook.cover}
-            alt=""
-            className="size-full object-cover"
-          />
+          <img src={cook.cover} alt="" className="size-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-charcoal/75 via-charcoal/10 to-charcoal/30" />
           <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4 pt-[max(12px,env(safe-area-inset-top,0px))] md:pt-4">
             <button
@@ -112,7 +124,9 @@ export default function CookProfilePage() {
               aria-label={t("back")}
               className="grid size-10 place-items-center rounded-full bg-white/90 text-charcoal shadow-sm backdrop-blur"
             >
-              <ArrowLeft className={cn("size-5", dir === "rtl" && "rotate-180")} />
+              <ArrowLeft
+                className={cn("size-5", dir === "rtl" && "rotate-180")}
+              />
             </button>
             <div className="flex items-center gap-2">
               <button
@@ -162,6 +176,8 @@ export default function CookProfilePage() {
               <div className="flex items-end gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src={cook.avatar}
                   alt={cook.name}
                   className="-mt-8 size-[76px] rounded-full border-4 border-cream object-cover shadow-card md:mt-5 md:size-[92px]"
@@ -245,7 +261,12 @@ export default function CookProfilePage() {
 
               <div className="mt-4 flex items-center gap-2 md:hidden">
                 <Button variant="secondary" className="flex-1" onClick={save}>
-                  <Heart className={cn("size-4", saved && "fill-terracotta text-terracotta")} />
+                  <Heart
+                    className={cn(
+                      "size-4",
+                      saved && "fill-terracotta text-terracotta",
+                    )}
+                  />
                   {saved ? t("saved") : t("saveCook")}
                 </Button>
                 <Button className="flex-1" onClick={() => setMessageOpen(true)}>
@@ -258,8 +279,16 @@ export default function CookProfilePage() {
               <div className="mt-5">
                 <SegmentedTabs
                   tabs={[
-                    { value: "dishesTab", label: t("dishesTab"), count: dishes.length },
-                    { value: "reviewsTab", label: t("reviewsTab"), count: cookReviews.length },
+                    {
+                      value: "dishesTab",
+                      label: t("dishesTab"),
+                      count: dishes.length,
+                    },
+                    {
+                      value: "reviewsTab",
+                      label: t("reviewsTab"),
+                      count: cookReviews.length,
+                    },
                     { value: "availabilityTab", label: t("availabilityTab") },
                   ]}
                   value={tab}
@@ -398,7 +427,9 @@ export default function CookProfilePage() {
                     </span>
                   </p>
                   <p className="flex items-center justify-between">
-                    <span className="text-muted">{t("responseTime", { time: "" }).replace("{time}", "")}</span>
+                    <span className="text-muted">
+                      {t("responseTime", { time: "" }).replace("{time}", "")}
+                    </span>
                     <span className="font-medium text-charcoal">
                       {cook.response[lang]}
                     </span>
@@ -426,7 +457,10 @@ export default function CookProfilePage() {
                     />
                     {saved ? t("saved") : t("saveCook")}
                   </Button>
-                  <Button className="flex-1" onClick={() => setMessageOpen(true)}>
+                  <Button
+                    className="flex-1"
+                    onClick={() => setMessageOpen(true)}
+                  >
                     <MessageCircle className="size-4" />
                     {t("messageCook")}
                   </Button>
@@ -441,7 +475,10 @@ export default function CookProfilePage() {
         <StickyActionBar>
           <Button variant="secondary" className="flex-1" onClick={save}>
             <Heart
-              className={cn("size-4", saved && "fill-terracotta text-terracotta")}
+              className={cn(
+                "size-4",
+                saved && "fill-terracotta text-terracotta",
+              )}
             />
             {saved ? t("saved") : t("saveCook")}
           </Button>
@@ -484,6 +521,11 @@ export default function CookProfilePage() {
           </p>
         </div>
       </Sheet>
+      <AuthRequiredSheet
+        open={authPromptOpen}
+        onClose={() => setAuthPromptOpen(false)}
+        nextPath={`/cook/${cook.id}`}
+      />
     </div>
   );
 }

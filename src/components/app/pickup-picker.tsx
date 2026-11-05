@@ -1,26 +1,57 @@
 "use client";
 
+import { useEffect } from "react";
 import { CalendarDays, Clock } from "lucide-react";
 import { useApp } from "@/components/providers/app-provider";
-import { pickupOptions } from "@/lib/data";
+import type { Dish } from "@/lib/data";
+import { slotsForOption } from "@/lib/pickup";
 import { cn } from "@/lib/utils";
 
 export function PickupPicker({
   available,
+  dishes,
   compact,
   className,
   onChange,
 }: {
   available?: string[];
+  dishes?: Dish[];
   compact?: boolean;
   className?: string;
   onChange?: () => void;
 }) {
-  const { t, lang, pickup, setPickup, pickupTime, setPickupTime } = useApp();
-  const options = available
-    ? pickupOptions.filter((option) => available.includes(option.id))
-    : pickupOptions;
+  const {
+    t,
+    lang,
+    pickup,
+    setPickup,
+    pickupTime,
+    setPickupTime,
+    pickupOptions,
+  } = useApp();
+  const slotsFor = (option: (typeof pickupOptions)[number]) => {
+    const isToday = option.id === pickupOptions[0]?.id;
+    const lists = (dishes ?? [])
+      .filter((dish) => dish.schedule)
+      .map((dish) => slotsForOption(dish.schedule, option, isToday));
+    if (!lists.length) return slotsForOption(undefined, option, isToday);
+    return lists.reduce((a, b) => a.filter((slot) => b.includes(slot)));
+  };
+  const options = (
+    available
+      ? pickupOptions.filter((option) => available.includes(option.id))
+      : pickupOptions
+  ).filter((option) => slotsFor(option).length > 0);
   const active = options.find((option) => option.id === pickup) ?? options[0];
+  const activeSlots = active ? slotsFor(active) : [];
+
+  useEffect(() => {
+    if (!active) return;
+    if (active.id !== pickup) setPickup(active.id);
+    if (activeSlots.length && !activeSlots.includes(pickupTime)) {
+      setPickupTime(activeSlots[0]);
+    }
+  });
 
   if (!active) return null;
 
@@ -65,7 +96,8 @@ export function PickupPicker({
                 <span className="text-[15px] font-semibold">
                   {option.shortDay[lang].split(" ").slice(1).join(" ")}
                 </span>
-                {option.id === "sat-31" ? (
+                {option.id === pickupOptions[0]?.id ||
+                option.id === pickupOptions[1]?.id ? (
                   <span
                     className={cn(
                       "mt-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em]",
@@ -74,7 +106,9 @@ export function PickupPicker({
                         : "bg-terracotta-50 text-terracotta",
                     )}
                   >
-                    {t("weekendSpecial")}
+                    {option.id === pickupOptions[0]?.id
+                      ? t("today")
+                      : t("tomorrow")}
                   </span>
                 ) : null}
               </button>
@@ -83,13 +117,21 @@ export function PickupPicker({
         </div>
       </div>
 
+      {dishes?.length === 1 &&
+      dishes[0].schedule?.sameDay &&
+      active.id === pickupOptions[0]?.id ? (
+        <p className="text-[12.5px] text-muted">
+          {t("sameDayWithin", { km: dishes[0].schedule.sameDayRadiusKm })}
+        </p>
+      ) : null}
+
       <div>
         <p className="mb-2 flex items-center gap-1.5 text-[14px] font-semibold text-charcoal">
           <Clock className="size-3.5 text-terracotta" />
           {t("pickupTime")}
         </p>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {active.slots.map((slot) => {
+          {activeSlots.map((slot) => {
             const selected = slot === pickupTime;
             return (
               <button
@@ -118,7 +160,7 @@ export function PickupPicker({
 }
 
 export function SelectedPickup({ compact }: { compact?: boolean }) {
-  const { lang, pickup, pickupTime } = useApp();
+  const { lang, pickup, pickupTime, pickupOptions } = useApp();
   const option = pickupOptions.find((p) => p.id === pickup);
   if (!option) return null;
   return (

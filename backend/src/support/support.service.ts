@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateSupportTicketDto } from "./dto/support.dto";
+import { toEuros } from "../payments/money";
 
 @Injectable()
 export class SupportService {
@@ -13,7 +14,9 @@ export class SupportService {
     ]);
 
     return {
-      serviceFee: settings?.serviceFee ?? 1.5,
+      serviceFee: toEuros(settings?.serviceFeeCents ?? 150),
+      serviceFeeCents: settings?.serviceFeeCents ?? 150,
+      minOrderCents: settings?.minOrderCents ?? 800,
       cuisines: [
         {
           id: "tunisian",

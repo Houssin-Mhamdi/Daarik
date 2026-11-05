@@ -1,15 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   Bell,
+  ChefHat,
   ChevronDown,
   Globe2,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Plus,
   Search,
+  ShieldCheck,
   ShoppingBag,
   Sparkles,
+  UserRound,
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { useApp } from "@/components/providers/app-provider";
@@ -26,9 +33,26 @@ const links = [
 
 export function DesktopHeader() {
   const pathname = usePathname();
-  const { t, cartCount, lang } = useApp();
+  const router = useRouter();
+  const { t, cartCount, lang, isAuthenticated, user, logout } = useApp();
   const [langOpen, setLangOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node)
+      ) {
+        setUserMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
+  }, [userMenuOpen]);
 
   return (
     <>
@@ -112,18 +136,116 @@ export function DesktopHeader() {
               {t("becomeCookCta")}
             </Link>
 
-            <Link
-              href="/profile"
-              className="ms-1 flex items-center gap-2 rounded-full border border-line bg-white py-1 pe-2.5 ps-1 transition hover:border-line-strong"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/img/user-sarah.jpg"
-                alt="Sarah"
-                className="size-8 rounded-full object-cover"
-              />
-              <ChevronDown className="size-3.5 text-muted" />
-            </Link>
+            {isAuthenticated ? (
+              <div ref={menuRef} className="relative ms-1">
+                <button
+                  type="button"
+                  onClick={() => setUserMenuOpen((prev) => !prev)}
+                  aria-expanded={userMenuOpen}
+                  className="flex items-center gap-2 rounded-full border border-line bg-white py-1 pe-3 ps-1.5 transition hover:border-line-strong"
+                >
+                  <span className="grid size-8 place-items-center rounded-full bg-terracotta text-[13px] font-bold text-white">
+                    {(user.firstName || user.name || "U")
+                      .slice(0, 1)
+                      .toUpperCase()}
+                  </span>
+                  <span className="max-w-[130px] truncate text-[13.5px] font-semibold text-charcoal">
+                    {user.firstName || user.name}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "size-3.5 text-muted transition-transform",
+                      userMenuOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+
+                {userMenuOpen ? (
+                  <div className="absolute end-0 top-[calc(100%+8px)] z-50 w-64 overflow-hidden rounded-2xl border border-line bg-white p-1.5 shadow-lift">
+                    <div className="border-b border-line/70 px-3 py-2.5">
+                      <p className="truncate text-[14px] font-semibold text-charcoal">
+                        {user.name || user.firstName}
+                      </p>
+                      <p className="truncate text-[12px] text-muted">
+                        {user.email}
+                      </p>
+                    </div>
+
+                    <div className="py-1">
+                      <Link
+                        href="/cook/dashboard"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-semibold text-terracotta transition hover:bg-terracotta-50/70"
+                      >
+                        <ChefHat className="size-4" />
+                        {t("cookDashboard")}
+                      </Link>
+                      <Link
+                        href="/cook/dishes/new"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-charcoal transition hover:bg-cream"
+                      >
+                        <Plus className="size-4 text-muted" />
+                        {t("addNewDish")}
+                      </Link>
+                      {user.role === "ADMIN" ? (
+                        <Link
+                          href="/admin"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-semibold text-olive-700 transition hover:bg-olive-50"
+                        >
+                          <ShieldCheck className="size-4" />
+                          {t("adminApp")}
+                        </Link>
+                      ) : null}
+                      <Link
+                        href="/orders"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-charcoal transition hover:bg-cream"
+                      >
+                        <Package className="size-4 text-muted" />
+                        {t("myOrders")}
+                      </Link>
+                      <Link
+                        href="/profile"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-charcoal transition hover:bg-cream"
+                      >
+                        <LayoutDashboard className="size-4 text-muted" />
+                        {t("profile")}
+                      </Link>
+                    </div>
+
+                    <div className="border-t border-line/70 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          if (typeof window !== "undefined") {
+                            window.localStorage.removeItem(
+                              "darna.cookApplicationEmail",
+                            );
+                          }
+                          void logout().then(() => router.push("/login"));
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-start text-[13.5px] font-semibold text-[#a13a28] transition hover:bg-[#fdf1ec]"
+                      >
+                        <LogOut className="size-4" />
+                        {t("signOut")}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="ms-1 flex h-10 items-center gap-1.5 rounded-full bg-terracotta px-4 text-[14px] font-semibold text-white transition hover:bg-terracotta-600"
+              >
+                <UserRound className="size-4" />
+                {t("signIn")}
+              </Link>
+            )}
           </div>
         </div>
       </header>

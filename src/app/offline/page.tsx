@@ -1,14 +1,16 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { ArrowRight, Bookmark, RefreshCw, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApp } from "@/components/providers/app-provider";
-import { dishes, getCook, loc } from "@/lib/data";
+import { loc } from "@/lib/data";
 
 export default function OfflinePage() {
-  const { t, lang, favorites } = useApp();
-  const saved = dishes.filter((dish) => favorites.includes(dish.id)).slice(0, 3);
+  const { t, lang, favorites, dishes, cooks } = useApp();
+  const saved = dishes
+    .filter((dish) => favorites.includes(dish.id))
+    .slice(0, 3);
 
   return (
     <div className="flex min-h-dvh flex-col bg-cream">
@@ -17,6 +19,8 @@ export default function OfflinePage() {
           <span className="grid size-9 place-items-center overflow-hidden rounded-[12px] bg-terracotta">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              loading="lazy"
+              decoding="async"
               src="/img/daarik-logo.png"
               alt="Daarik"
               className="size-full object-cover"
@@ -71,7 +75,7 @@ export default function OfflinePage() {
             </div>
             <div className="mt-2.5 space-y-2">
               {saved.map((dish) => {
-                const cook = getCook(dish.cookId);
+                const cook = cooks.find((item) => item.id === dish.cookId);
                 return (
                   <div
                     key={dish.id}
@@ -79,6 +83,8 @@ export default function OfflinePage() {
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
+                      loading="lazy"
+                      decoding="async"
                       src={dish.image}
                       alt={loc(dish.name, lang)}
                       className="size-12 shrink-0 rounded-xl object-cover"
@@ -103,7 +109,10 @@ export default function OfflinePage() {
 
         <div className="mt-8 flex items-center justify-between gap-3 border-t border-line pt-4 text-[12px] text-muted-soft">
           <span>{t("pwaWorksEverywhere")}</span>
-          <Link href="/" className="inline-flex items-center gap-1 font-semibold text-charcoal">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1 font-semibold text-charcoal"
+          >
             {t("home")}
             <ArrowRight className="size-3 rtl:rotate-180" />
           </Link>

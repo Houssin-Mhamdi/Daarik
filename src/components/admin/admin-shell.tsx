@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Globe2,
   LayoutDashboard,
+  LogOut,
   Menu,
   Search,
   Settings,
@@ -22,8 +23,8 @@ import {
 import { LanguageSheet } from "@/components/app/language-sheet";
 import { Avatar } from "@/components/ui/controls";
 import { useApp } from "@/components/providers/app-provider";
-import { adminKpis } from "@/lib/data";
 import { cn } from "@/lib/utils";
+import { SignOutDialog } from "@/components/shell/sign-out-dialog";
 import type { LucideIcon } from "lucide-react";
 
 const navGroups = [
@@ -43,15 +44,12 @@ const navGroups = [
         href: "/admin/disputes",
         key: "adminNavDisputes",
         icon: ShieldAlert,
-        count: adminKpis.disputes,
       },
     ],
   },
   {
     label: "finance",
-    items: [
-      { href: "/admin/payouts", key: "adminNavPayouts", icon: Wallet },
-    ],
+    items: [{ href: "/admin/payouts", key: "adminNavPayouts", icon: Wallet }],
   },
   {
     label: "operations",
@@ -67,7 +65,7 @@ const navGroups = [
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { t, lang } = useApp();
+  const { t, lang, user, isAuthenticated } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -120,7 +118,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <X className="size-4.5" />
             </button>
           </div>
-          <SidebarNav pathname={pathname} onNavigate={() => setMenuOpen(false)} />
+          <SidebarNav
+            pathname={pathname}
+            onNavigate={() => setMenuOpen(false)}
+          />
         </div>
       </div>
 
@@ -157,7 +158,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               onSubmit={(event) => {
                 event.preventDefault();
                 if (!query.trim()) return;
-                router.push(`/admin/orders?q=${encodeURIComponent(query.trim())}`);
+                router.push(
+                  `/admin/orders?q=${encodeURIComponent(query.trim())}`,
+                );
               }}
               className="relative hidden w-[300px] xl:block"
             >
@@ -202,7 +205,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <div className="ms-1 flex items-center gap-2 border-s border-[#e4dbc9] ps-2">
                 <Avatar src="/img/user-sarah.jpg" alt="Admin" size={32} />
                 <div className="hidden leading-tight xl:block">
-                  <p className="text-[13.5px] font-semibold text-charcoal">Sarah de Vries</p>
+                  <p className="text-[13.5px] font-semibold text-charcoal">
+                    {isAuthenticated && user.name ? user.name : "Daarik Admin"}
+                  </p>
                   <p className="text-[12px] text-muted">{t("adminApp")}</p>
                 </div>
               </div>
@@ -210,7 +215,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="px-4 pb-10 pt-5 md:px-6 md:pt-7 lg:px-8">{children}</main>
+        <main className="px-4 pb-10 pt-5 md:px-6 md:pt-7 lg:px-8">
+          {children}
+        </main>
 
         <footer className="flex flex-col gap-1 px-4 pb-8 text-[12.5px] text-muted-soft md:flex-row md:items-center md:justify-between md:px-8">
           <span>{t("adminFooterNote")}</span>
@@ -232,6 +239,8 @@ function AdminLogo() {
       <span className="relative grid size-9 place-items-center overflow-hidden rounded-[12px] bg-terracotta">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          loading="lazy"
+          decoding="async"
           src="/img/daarik-logo.png"
           alt="Daarik"
           className="size-full object-cover"
@@ -256,7 +265,8 @@ function SidebarNav({
   pathname: string;
   onNavigate?: () => void;
 }) {
-  const { t } = useApp();
+  const { t, user, isAuthenticated } = useApp();
+  const [signOutOpen, setSignOutOpen] = useState(false);
   return (
     <>
       <nav className="mt-1 flex-1 overflow-y-auto px-3 pb-4 no-scrollbar">
@@ -269,7 +279,8 @@ function SidebarNav({
               {group.items.map((item) => {
                 const active =
                   pathname === item.href ||
-                  (item.href !== "/admin" && pathname.startsWith(`${item.href}/`));
+                  (item.href !== "/admin" &&
+                    pathname.startsWith(`${item.href}/`));
                 const Icon = item.icon;
                 return (
                   <Link
@@ -286,7 +297,9 @@ function SidebarNav({
                     <Icon
                       className={cn(
                         "size-[17px]",
-                        active ? "text-terracotta" : "text-cream/40 group-hover:text-cream/70",
+                        active
+                          ? "text-terracotta"
+                          : "text-cream/40 group-hover:text-cream/70",
                       )}
                       strokeWidth={active ? 2.2 : 1.8}
                     />
@@ -307,7 +320,9 @@ function SidebarNav({
       <div className="mx-3 mb-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
         <div className="flex items-center gap-2">
           <span className="size-1.5 rounded-full bg-[#9db879]" />
-          <p className="text-[12.5px] font-semibold text-cream/80">{t("allSystemsOk")}</p>
+          <p className="text-[12.5px] font-semibold text-cream/80">
+            {t("allSystemsOk")}
+          </p>
         </div>
         <p className="mt-1 text-[12px] text-cream/40">
           {t("liveKitchens")}: 184 · 99.98% {t("uptime").toLowerCase()}
@@ -316,10 +331,14 @@ function SidebarNav({
 
       <div className="border-t border-white/10 p-3">
         <div className="flex items-center gap-2.5 rounded-xl px-2 py-2">
-          <Avatar src="/img/user-sarah.jpg" alt="Sarah" size={30} />
+          <Avatar src="/img/user-sarah.jpg" alt="Admin" size={30} />
           <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-[13.5px] font-semibold text-cream">Sarah de Vries</p>
-            <p className="text-[11.5px] text-cream/40">sarah@darna.nl</p>
+            <p className="truncate text-[13.5px] font-semibold text-cream">
+              {isAuthenticated && user.name ? user.name : "Daarik Admin"}
+            </p>
+            <p className="text-[11.5px] text-cream/40">
+              {isAuthenticated && user.email ? user.email : "admin@darna.nl"}
+            </p>
           </div>
           <Link
             href="/profile"
@@ -329,8 +348,21 @@ function SidebarNav({
           >
             <Settings className="size-4" />
           </Link>
+          <button
+            type="button"
+            onClick={() => setSignOutOpen(true)}
+            aria-label={t("signOut")}
+            title={t("signOut")}
+            className="grid size-8 place-items-center rounded-lg text-cream/50 transition hover:bg-white/10 hover:text-cream"
+          >
+            <LogOut className="size-4" />
+          </button>
         </div>
       </div>
+      <SignOutDialog
+        open={signOutOpen}
+        onClose={() => setSignOutOpen(false)}
+      />
     </>
   );
 }

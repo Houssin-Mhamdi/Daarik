@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -27,6 +27,8 @@ export default function SplashPage() {
       <div className="absolute inset-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          loading="lazy"
+          decoding="async"
           src="/img/splash-tajine.jpg"
           alt=""
           className="size-full object-cover opacity-[0.14]"
@@ -40,6 +42,8 @@ export default function SplashPage() {
           <span className="relative grid size-24 place-items-center overflow-hidden rounded-[26px] bg-terracotta shadow-[0_20px_40px_-18px_rgba(198,93,58,0.8)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              loading="lazy"
+              decoding="async"
               src="/img/daarik-logo.png"
               alt="Daarik"
               className="size-full object-cover"

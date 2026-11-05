@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { BadgeCheck, MapPin, Star } from "lucide-react";
 import { useApp } from "@/components/providers/app-provider";
-import { dishesByCook, loc, type Cook } from "@/lib/data";
+import { loc, type Cook } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 export function CookCard({
@@ -15,8 +16,8 @@ export function CookCard({
   variant?: "grid" | "compact" | "spotlight";
   className?: string;
 }) {
-  const { t, lang } = useApp();
-  const dishes = dishesByCook(cook.id);
+  const { t, lang, dishes: allDishes } = useApp();
+  const dishes = allDishes.filter((d) => d.cookId === cook.id);
 
   if (variant === "compact") {
     return (
@@ -28,10 +29,13 @@ export function CookCard({
         )}
       >
         <span className="relative">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={cook.avatar}
+          <Image
+            src={cook.avatar || "/img/daarik-logo.png"}
             alt={cook.name}
+            width={68}
+            height={68}
+            loading="lazy"
+            unoptimized
             className="size-[68px] rounded-full object-cover p-[3px] ring-2 ring-terracotta/40 ring-offset-2 ring-offset-cream transition group-hover:ring-terracotta"
           />
           {cook.verified ? (
@@ -59,19 +63,25 @@ export function CookCard({
           className,
         )}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={cook.cover}
+        <Image
+          src={cook.cover || "/img/daarik-logo.png"}
           alt=""
-          className="absolute inset-0 size-full object-cover opacity-80 transition duration-700 group-hover:scale-105"
+          fill
+          sizes="(max-width: 768px) 100vw, 420px"
+          loading="lazy"
+          unoptimized
+          className="object-cover opacity-80 transition duration-700 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/45 to-transparent" />
         <div className="relative flex min-h-[264px] flex-col justify-end p-4">
           <div className="flex items-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={cook.avatar}
+            <Image
+              src={cook.avatar || "/img/daarik-logo.png"}
               alt={cook.name}
+              width={44}
+              height={44}
+              loading="lazy"
+              unoptimized
               className="size-11 rounded-full border-2 border-white/90 object-cover"
             />
             <div className="min-w-0">
@@ -117,11 +127,14 @@ export function CookCard({
       )}
     >
       <div className="relative h-[98px] overflow-hidden">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={cook.cover}
+        <Image
+          src={cook.cover || "/img/daarik-logo.png"}
           alt=""
-          className="size-full object-cover transition duration-700 group-hover:scale-105"
+          fill
+          sizes="(max-width: 768px) 50vw, 320px"
+          loading="lazy"
+          unoptimized
+          className="object-cover transition duration-700 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-charcoal/50 to-transparent" />
         <span className="absolute end-2.5 top-2.5 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11.5px] font-bold text-charcoal backdrop-blur">
@@ -131,10 +144,13 @@ export function CookCard({
       </div>
       <div className="relative px-3 pb-3">
         <div className="-mt-6 flex items-end justify-between">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={cook.avatar}
+          <Image
+            src={cook.avatar || "/img/daarik-logo.png"}
             alt={cook.name}
+            width={48}
+            height={48}
+            loading="lazy"
+            unoptimized
             className="size-12 rounded-full border-[3px] border-white object-cover"
           />
           <span className="mb-0.5 rounded-full bg-olive-50 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-olive-600">

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { Bell, ChevronDown } from "lucide-react";
@@ -31,6 +31,8 @@ export function CookMobileHeader({
         <Link href="/cook/profile" className="relative shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            loading="lazy"
+            decoding="async"
             src="/img/cook-rana.jpg"
             alt="Rana"
             className="size-10 rounded-full object-cover ring-2 ring-white"

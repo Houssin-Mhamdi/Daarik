@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Ban,
   CalendarDays,
@@ -18,6 +18,10 @@ import { Switch } from "@/components/ui/controls";
 import { Card } from "@/components/ui/misc";
 import { CookMobileHeader } from "@/components/cook/cook-mobile-header";
 import { useApp } from "@/components/providers/app-provider";
+import {
+  useCookAvailabilityQuery,
+  useUpdateCookAvailabilityMutation,
+} from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const weekKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -37,12 +41,44 @@ type Day = { iso: string; label: string; dayName: string; month: string; weekend
 
 export default function CookAvailabilityPage() {
   const { t, lang, toast } = useApp();
+  const { data: availability } = useCookAvailabilityQuery();
+  const updateAvailability = useUpdateCookAvailabilityMutation();
+
   const [days, setDays] = useState<string[]>(["fri", "sat", "sun"]);
   const [slots, setSlots] = useState<string[]>(["12:00", "17:30", "18:00", "18:30"]);
   const [capacity, setCapacity] = useState(12);
   const [vacation, setVacation] = useState(false);
   const [blocked, setBlocked] = useState<string[]>(["2026-11-06", "2026-11-14"]);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!availability) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (
+        Array.isArray(availability.availableDays) &&
+        availability.availableDays.length
+      ) {
+        setDays(availability.availableDays);
+      }
+      if (
+        Array.isArray(availability.availableSlots) &&
+        availability.availableSlots.length
+      ) {
+        setSlots(availability.availableSlots);
+      }
+      if (typeof availability.maxPortionsPerDay === "number") {
+        setCapacity(availability.maxPortionsPerDay);
+      }
+      if (typeof availability.kitchenOpen === "boolean") {
+        setVacation(!availability.kitchenOpen);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [availability]);
 
   const weekDays = useMemo(
     () => (lang === "nl" ? ["ma", "di", "wo", "do", "vr", "za", "zo"] : lang === "ar" ? ["إث", "ثل", "أر", "خم", "جم", "سب", "أح"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]),
@@ -70,6 +106,12 @@ export default function CookAvailabilityPage() {
   }
 
   function save() {
+    updateAvailability.mutate({
+      kitchenOpen: !vacation,
+      maxPortionsPerDay: capacity,
+      availableDays: days,
+      availableSlots: slots,
+    });
     setSaved(true);
     toast(t("availabilitySaved"));
   }

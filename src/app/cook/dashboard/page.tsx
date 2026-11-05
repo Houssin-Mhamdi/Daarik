@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -23,65 +23,122 @@ import { Switch } from "@/components/ui/controls";
 import { Card, Money } from "@/components/ui/misc";
 import { CookMobileHeader } from "@/components/cook/cook-mobile-header";
 import { useApp } from "@/components/providers/app-provider";
+import { loc } from "@/lib/data";
 import {
-  cookEarnings,
-  cookOrders,
-  dishesByCook,
-  loc,
-  cookUser,
-} from "@/lib/data";
-import { cn } from "@/lib/utils";
-
-const series = cookEarnings.salesSeries;
-const max = Math.max(...series);
+  useCookAvailabilityQuery,
+  useCookDashboardQuery,
+  useCookOrdersQuery,
+  useMyCookApplicationQuery,
+  useUpdateCookAvailabilityMutation,
+  useUpdateCookOrderStatusMutation,
+} from "@/lib/queries";
+import { cn, formatPrice } from "@/lib/utils";
 
 export default function CookDashboardPage() {
-  const { t, lang, toast } = useApp();
-  const [open, setOpen] = useState(true);
+  const { t, lang, toast, user } = useApp();
+  const { data: dashboard, isPending: dashboardLoading } =
+    useCookDashboardQuery();
+  const { data: application } = useMyCookApplicationQuery(true, user.email);
+  const { data: cookOrders = [] } = useCookOrdersQuery();
+  const { data: availability } = useCookAvailabilityQuery();
+  const updateAvailability = useUpdateCookAvailabilityMutation();
+  const updateOrderStatus = useUpdateCookOrderStatusMutation();
+
+  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
+  const open = openOverride ?? availability?.kitchenOpen ?? true;
+  const setOpen = setOpenOverride;
+
+  const cookFirstName =
+    dashboard?.cook?.name?.split(" ")[0] ||
+    user.firstName ||
+    user.name?.split(" ")[0] ||
+    "Chef";
 
   const incoming = cookOrders.filter((order) => order.status === "incoming");
   const preparing = cookOrders.filter((order) => order.status === "preparing");
-  const myDishes = dishesByCook("rana");
+  const myDishes = dashboard?.dishes ?? [];
+  const series = dashboard?.stats.weeklySales ?? [];
+  const max = Math.max(...series, 1);
+  const todayIndex = (new Date().getDay() + 6) % 7;
   const pickups = cookOrders
     .filter((order) => order.status !== "completed")
     .sort((a, b) => a.pickupTime.localeCompare(b.pickupTime));
 
+  const grossSales = dashboard?.stats?.gross ?? 0;
+  const netEarnings = dashboard?.stats?.net ?? 0;
+
   const kpis = [
     {
       label: t("todayOrders"),
-      value: "3",
+      value: String(incoming.length + preparing.length),
       hint: t("ordersToConfirm", { count: incoming.length }),
       icon: ClipboardList,
       tone: "bg-terracotta-50 text-terracotta",
     },
     {
       label: t("upcomingPickups"),
-      value: "4",
-      hint: t("nextPickupLabel", { day: "18:00" }),
+      value: String(pickups.length),
+      hint: t("nextPickupLabel", { day: pickups[0]?.pickupTime || "18:00" }),
       icon: Clock3,
       tone: "bg-olive-50 text-olive-600",
     },
     {
       label: t("monthSales"),
-      value: "€ 612",
+      value: formatPrice(grossSales, lang),
       hint: t("commissionRate"),
       icon: TrendingUp,
       tone: "bg-saffron-50 text-[#8a5d13]",
     },
     {
       label: t("netEarnings"),
-      value: "€ 520",
+      value: formatPrice(netEarnings, lang),
       hint: t("earningsNote"),
       icon: Wallet,
       tone: "bg-cream-100 text-charcoal",
     },
   ];
 
+  if (!dashboardLoading && !dashboard?.cook) {
+    const isPendingApproval = application?.status === "PENDING";
+    return (
+      <div className="mx-auto max-w-[540px] px-4 py-14 text-center md:py-20">
+        <Card className="p-6 md:p-8">
+          <div className="mx-auto grid size-16 place-items-center rounded-full bg-saffron-50 text-[#8a5d13]">
+            <Clock3 className="size-8" />
+          </div>
+          <h1 className="mt-4 font-display text-[28px] font-semibold text-charcoal">
+            {isPendingApproval
+              ? t("applicationSubmitted")
+              : t("applyTitle")}
+          </h1>
+          <p className="mt-2 text-[14.5px] leading-relaxed text-muted">
+            {isPendingApproval
+              ? t("applicationSubmittedSub")
+              : t("applySub")}
+          </p>
+          {isPendingApproval ? (
+            <Badge variant="saffron" size="lg" className="mt-4">
+              {t("verificationPending")}
+            </Badge>
+          ) : null}
+          <div className="mt-6">
+            <Link href="/cook/apply">
+              <Button className="w-full sm:w-auto">
+                {isPendingApproval ? t("viewDetails") : t("startApplication")}
+                <ArrowRight className="size-4 rtl:rotate-180" />
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="pb-6 md:pb-12">
       <div className="mx-auto w-full max-w-[480px] px-4 md:max-w-[1240px] md:px-8 md:pt-10">
         <CookMobileHeader
-          title={t("goodMorningCook", { name: cookUser.name.split(" ")[0] })}
+          title={t("goodMorningCook", { name: cookFirstName })}
           subtitle={t("todayOverview")}
           action={
             <Link
@@ -104,7 +161,7 @@ export default function CookDashboardPage() {
               {t("cookDashboard")}
             </p>
             <h1 className="mt-1.5 font-display text-[34px] font-semibold leading-tight text-charcoal">
-              {t("goodMorningCook", { name: cookUser.name.split(" ")[0] })}
+              {t("goodMorningCook", { name: cookFirstName })}
             </h1>
             <p className="mt-1 text-[14.5px] text-muted">
               {t("dashboardNote")}
@@ -154,6 +211,7 @@ export default function CookDashboardPage() {
             checked={open}
             onCheckedChange={(value) => {
               setOpen(value);
+              updateAvailability.mutate({ kitchenOpen: value });
               toast(value ? t("kitchenOpen") : t("kitchenClosed"), {
                 variant: value ? "success" : "info",
               });
@@ -172,7 +230,12 @@ export default function CookDashboardPage() {
                 className="rounded-[20px] border border-line bg-white p-3.5 shadow-card"
               >
                 <div className="flex items-center justify-between">
-                  <span className={cn("grid size-8 place-items-center rounded-xl", kpi.tone)}>
+                  <span
+                    className={cn(
+                      "grid size-8 place-items-center rounded-xl",
+                      kpi.tone,
+                    )}
+                  >
                     <Icon className="size-4" />
                   </span>
                   <ArrowUpRight className="size-3.5 text-muted-soft" />
@@ -212,39 +275,51 @@ export default function CookDashboardPage() {
                 </Link>
               </div>
               <div className="divide-y divide-line/60">
-                {[...incoming.slice(0, 2), ...preparing.slice(0, 1)].map((order) => (
-                  <div key={order.id} className="flex items-center gap-3 p-3.5">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-cream-100 text-[12.5px] font-bold text-charcoal">
-                      {order.initials}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <Link
-                        href="/cook/orders"
-                        className="block truncate text-[14px] font-semibold text-charcoal"
-                      >
-                        {order.customer}
-                      </Link>
-                      <p className="mt-0.5 truncate text-[12px] text-muted">
-                        {order.code} · {order.items.reduce((n, i) => n + i.qty, 0)}{" "}
-                        {t("portions").toLowerCase()} · {order.pickupTime}
-                      </p>
+                {[...incoming.slice(0, 2), ...preparing.slice(0, 1)].map(
+                  (order) => (
+                    <div
+                      key={order.id}
+                      className="flex items-center gap-3 p-3.5"
+                    >
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-cream-100 text-[12.5px] font-bold text-charcoal">
+                        {order.initials}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href="/cook/orders"
+                          className="block truncate text-[14px] font-semibold text-charcoal"
+                        >
+                          {order.customer}
+                        </Link>
+                        <p className="mt-0.5 truncate text-[12px] text-muted">
+                          {order.code} ·{" "}
+                          {order.items.reduce((n, i) => n + i.qty, 0)}{" "}
+                          {t("portions").toLowerCase()} · {order.pickupTime}
+                        </p>
+                      </div>
+                      {order.status === "incoming" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateOrderStatus.mutate({
+                              id: order.id,
+                              status: "PREPARING",
+                            });
+                            toast(t("orderAccepted"));
+                          }}
+                          className="flex h-8 shrink-0 items-center gap-1 rounded-full bg-terracotta px-3 text-[12px] font-semibold text-white"
+                        >
+                          <Check className="size-3" />
+                          {t("accept")}
+                        </button>
+                      ) : (
+                        <Badge variant="saffron" size="sm">
+                          {t("beingPrepared")}
+                        </Badge>
+                      )}
                     </div>
-                    {order.status === "incoming" ? (
-                      <button
-                        type="button"
-                        onClick={() => toast(t("orderAccepted"))}
-                        className="flex h-8 shrink-0 items-center gap-1 rounded-full bg-terracotta px-3 text-[12px] font-semibold text-white"
-                      >
-                        <Check className="size-3" />
-                        {t("accept")}
-                      </button>
-                    ) : (
-                      <Badge variant="saffron" size="sm">
-                        {t("beingPrepared")}
-                      </Badge>
-                    )}
-                  </div>
-                ))}
+                  ),
+                )}
               </div>
             </Card>
 
@@ -261,24 +336,26 @@ export default function CookDashboardPage() {
                 </div>
                 <div className="text-end">
                   <p className="text-[19px] font-semibold text-charcoal">
-                    <Money value={cookEarnings.gross} />
+                    <Money value={grossSales} />
                   </p>
-                  <p className="text-[11.5px] text-olive-600">+12.4%</p>
                 </div>
               </div>
               <div className="mt-4 flex h-28 items-end gap-2 md:h-36">
                 {series.map((value, index) => (
-                  <div key={index} className="flex flex-1 flex-col items-center gap-1.5">
+                  <div
+                    key={index}
+                    className="flex flex-1 flex-col items-center gap-1.5"
+                  >
                     <div className="flex w-full flex-1 items-end rounded-t-md bg-cream-100">
                       <div
                         className={cn(
                           "w-full rounded-t-md transition-all",
-                          index === series.length - 1
+                          index === todayIndex
                             ? "bg-terracotta"
                             : "bg-terracotta/35",
                         )}
                         style={{
-                          height: `${Math.max(12, (value / max) * 100)}%`,
+                          height: `${(value / max) * 100}%`,
                         }}
                       />
                     </div>
@@ -296,7 +373,9 @@ export default function CookDashboardPage() {
                 <h2 className="text-[16px] font-semibold text-charcoal">
                   {t("todaysPickups")}
                 </h2>
-                <span className="text-[12.5px] text-muted">4 {t("orders")}</span>
+                <span className="text-[12.5px] text-muted">
+                  4 {t("orders")}
+                </span>
               </div>
               <div className="divide-y divide-line/60">
                 {pickups.slice(0, 3).map((order) => (
@@ -335,10 +414,10 @@ export default function CookDashboardPage() {
                 <Wallet className="size-4 text-saffron" />
               </div>
               <p className="mt-2 font-display text-[30px] font-semibold leading-none text-white">
-                <Money value={cookEarnings.pending} />
+                <Money value={netEarnings} />
               </p>
               <p className="mt-1 text-[12.5px] text-cream/55">
-                {loc(cookEarnings.nextPayoutDate, lang)} · {t("payoutScheduleDesc")}
+                {t("payoutScheduleDesc")}
               </p>
               <Link
                 href="/cook/earnings"
@@ -357,9 +436,21 @@ export default function CookDashboardPage() {
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {[
                   { href: "/cook/dishes/new", key: "addDish", icon: Plus },
-                  { href: "/cook/orders", key: "manageOrders", icon: ClipboardList },
-                  { href: "/cook/availability", key: "updateAvailability", icon: CalendarDays },
-                  { href: "/cook/earnings", key: "earningsTitle", icon: Wallet },
+                  {
+                    href: "/cook/orders",
+                    key: "manageOrders",
+                    icon: ClipboardList,
+                  },
+                  {
+                    href: "/cook/availability",
+                    key: "updateAvailability",
+                    icon: CalendarDays,
+                  },
+                  {
+                    href: "/cook/earnings",
+                    key: "earningsTitle",
+                    icon: Wallet,
+                  },
                 ].map((action) => {
                   const Icon = action.icon;
                   return (
@@ -398,6 +489,8 @@ export default function CookDashboardPage() {
                   <div key={dish.id} className="flex items-center gap-2.5">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
+                      loading="lazy"
+                      decoding="async"
                       src={dish.image}
                       alt={loc(dish.name, lang)}
                       className="size-9 rounded-xl object-cover"
@@ -426,7 +519,7 @@ export default function CookDashboardPage() {
         </div>
 
         <p className="mt-4 text-center text-[12px] text-muted-soft">
-          {t("dashboardNote")} · {t("demoNotice")}
+          {t("dashboardNote")} · {t("paymentsByStripe")}
         </p>
       </div>
     </div>

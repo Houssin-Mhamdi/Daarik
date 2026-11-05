@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -21,7 +21,7 @@ import { ConfirmDialog, EmptyState } from "@/components/ui/overlays";
 import { StickyActionBar } from "@/components/ui/misc";
 import { PickupPicker } from "@/components/app/pickup-picker";
 import { useApp } from "@/components/providers/app-provider";
-import { getCook, getDish, loc, pickupOptions, orderSubtotal } from "@/lib/data";
+import { loc } from "@/lib/data";
 import { cn, formatPrice } from "@/lib/utils";
 
 export default function CartPage() {
@@ -30,6 +30,8 @@ export default function CartPage() {
     t,
     lang,
     dir,
+    dishes,
+    cooks,
     cart,
     cartCount,
     cartCookId,
@@ -39,27 +41,41 @@ export default function CartPage() {
     toast,
     pickup,
     setPickup,
+    pickupOptions,
     cartNote,
     setCartNote,
     serviceFee,
   } = useApp();
   const [clearOpen, setClearOpen] = useState(false);
 
-  const lines = cart
-    .map((line) => ({ line, dish: getDish(line.dishId) }))
-    .filter((item) => item.dish);
-  const cook = cartCookId ? getCook(cartCookId) : undefined;
-  const subtotal = orderSubtotal(cart);
+  const lines = useMemo(
+    () =>
+      cart
+        .map((line) => ({
+          line,
+          dish: dishes.find((d) => d.id === line.dishId),
+        }))
+        .filter((item) => item.dish),
+    [cart, dishes],
+  );
+  const cook = cartCookId ? cooks.find((c) => c.id === cartCookId) : undefined;
+  const subtotal = lines.reduce(
+    (sum, item) => sum + (item.dish?.price ?? 0) * item.line.qty,
+    0,
+  );
   const total = subtotal + (cart.length ? serviceFee : 0);
 
-  const availablePickups = useMemo(() => {
-    if (!lines.length) return [];
-    return pickupOptions
-      .filter((option) =>
-        lines.every((item) => item.dish?.pickup.includes(option.id)),
-      )
-      .map((option) => option.id);
-  }, [lines]);
+  const availablePickups = useMemo(
+    () =>
+      lines.length
+        ? pickupOptions
+            .filter((option) =>
+              lines.every((item) => item.dish?.pickup.includes(option.id)),
+            )
+            .map((option) => option.id)
+        : [],
+    [lines, pickupOptions],
+  );
 
   useEffect(() => {
     if (availablePickups.length && !availablePickups.includes(pickup)) {
@@ -77,7 +93,9 @@ export default function CartPage() {
             className="grid size-10 place-items-center rounded-full text-charcoal hover:bg-cream-100"
             aria-label={t("back")}
           >
-            <ArrowLeft className={cn("size-5", dir === "rtl" && "rotate-180")} />
+            <ArrowLeft
+              className={cn("size-5", dir === "rtl" && "rotate-180")}
+            />
           </button>
           <h1 className="ms-1 text-[17px] font-semibold text-charcoal md:hidden">
             {t("cartTitle")}
@@ -110,7 +128,9 @@ export default function CartPage() {
               className="-ms-2 grid size-10 place-items-center rounded-full text-charcoal hover:bg-cream-100 md:hidden"
               aria-label={t("back")}
             >
-              <ArrowLeft className={cn("size-5", dir === "rtl" && "rotate-180")} />
+              <ArrowLeft
+                className={cn("size-5", dir === "rtl" && "rotate-180")}
+              />
             </button>
             <div>
               <h1 className="font-sans text-[18px] font-semibold text-charcoal md:font-display md:text-[36px]">
@@ -139,6 +159,8 @@ export default function CartPage() {
                 <Link href={`/cook/${cook.id}`} className="shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
+                    loading="lazy"
+                    decoding="async"
                     src={cook.avatar}
                     alt={cook.name}
                     className="size-12 rounded-full object-cover"
@@ -180,6 +202,8 @@ export default function CartPage() {
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
+                        loading="lazy"
+                        decoding="async"
                         src={dish.image}
                         alt={loc(dish.name, lang)}
                         className="size-full object-cover"

@@ -3,6 +3,7 @@ import {
   IsBoolean,
   IsEmail,
   IsInt,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -121,6 +122,18 @@ export class UpdateCookProfileDto {
   @IsOptional()
   @IsString()
   privateAddress?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
 
   @IsOptional()
   @IsBoolean()

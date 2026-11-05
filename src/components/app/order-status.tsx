@@ -45,6 +45,63 @@ export function OrderStatusBadge({
   );
 }
 
+/** Maps the Stripe-backed payment state to a translated short label. */
+export function usePaymentStatusLabel() {
+  const { t } = useApp();
+  return (status?: string) => {
+    switch (status) {
+      case "PAID":
+        return t("paid");
+      case "PARTIALLY_REFUNDED":
+        return t("partiallyRefunded");
+      case "REFUNDED":
+        return t("refunded");
+      case "DISPUTED":
+        return t("disputed");
+      case "PROCESSING":
+        return t("paymentProcessing");
+      case "FAILED":
+        return t("paymentFailed");
+      case "CANCELLED":
+        return t("cancelled");
+      case "REQUIRES_PAYMENT":
+        return t("paymentRequired");
+      default:
+        return status ? status.replaceAll("_", " ").toLowerCase() : "";
+    }
+  };
+}
+
+export function PaymentStatusBadge({
+  status,
+  className,
+}: {
+  status?: string;
+  className?: string;
+}) {
+  const label = usePaymentStatusLabel()(status);
+  if (!status || !label) return null;
+
+  const variant =
+    status === "PAID"
+      ? "success"
+      : status === "PARTIALLY_REFUNDED"
+        ? "saffron"
+        : status === "REFUNDED"
+          ? "olive"
+          : status === "DISPUTED" || status === "FAILED"
+            ? "destructive"
+            : status === "PROCESSING"
+              ? "saffron"
+              : "soft";
+
+  return (
+    <Badge variant={variant} size="sm" className={cn("gap-1", className)}>
+      {label}
+    </Badge>
+  );
+}
+
 export function StatusDot({ status }: { status: OrderStatus }) {
   return (
     <span

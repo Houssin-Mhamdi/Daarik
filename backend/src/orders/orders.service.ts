@@ -5,13 +5,30 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { OrderStatus, PaymentMethod } from "@prisma/client";
+import {
+  ComplianceStatus,
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+} from "@prisma/client";
+import { randomInt } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateOrderDto, UpdateOrderStatusDto } from "./dto/order.dto";
+import { computeOrderMoney, toEuros } from "../payments/money";
+import { PaymentsService } from "../payments/payments.service";
+
+const PAID_STATUSES: PaymentStatus[] = [
+  PaymentStatus.PAID,
+  PaymentStatus.PARTIALLY_REFUNDED,
+  PaymentStatus.DISPUTED,
+];
 
 @Injectable()
 export class OrdersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private payments: PaymentsService,
+  ) {}
 
   async createOrder(userId: string, dto: CreateOrderDto) {
     // Load items either from request body or from the user's cart
@@ -53,27 +70,52 @@ export class OrdersService {
     if (cookIds.size > 1) {
       throw new ConflictException({
         code: "DIFFERENT_COOK",
-        message: "Darna only allows ordering from one home kitchen per checkout.",
+        message: "Daarik only allows ordering from one home kitchen per checkout.",
       });
     }
 
     const cook = dishes[0].dish.cook;
-    const settings = await this.prisma.platformSetting.findUnique({
-      where: { id: "singleton" },
-    });
-    const serviceFee = settings?.serviceFee ?? 1.5;
-    const commissionRate = settings?.commissionRate ?? 0.15;
 
-    const subtotal = dishes.reduce(
-      (sum, entry) => sum + entry.dish.price * entry.qty,
+    // A cook can only sell when BOTH gates are open: Stripe payouts enabled and
+    // Daarik compliance approved. Stripe KYC is not a food-safety check.
+    if (
+      cook.status !== "VERIFIED" ||
+      cook.complianceStatus !== ComplianceStatus.APPROVED ||
+      !cook.stripePayoutsEnabled
+    ) {
+      throw new ConflictException({
+        code: "COOK_NOT_ORDERABLE",
+        message: "This kitchen is not accepting orders right now.",
+      });
+    }
+
+    const settings =
+      (await this.prisma.platformSetting.findUnique({
+        where: { id: "singleton" },
+      })) ?? (await this.prisma.platformSetting.create({ data: { id: "singleton" } }));
+
+    // Prices come from the database, in cents. Nothing is trusted from the client.
+    const subtotalCents = dishes.reduce(
+      (sum, entry) => sum + Math.round(entry.dish.price * 100) * entry.qty,
       0,
     );
-    const commission = Number((subtotal * commissionRate).toFixed(2));
-    const total = Number((subtotal + serviceFee).toFixed(2));
-    const code = `DR-${Math.floor(2425 + Math.random() * 7500)}`;
+
+    const money = computeOrderMoney(subtotalCents, {
+      serviceFeeCents: settings.serviceFeeCents,
+      commissionRate: settings.commissionRate,
+      commissionFixedCents: settings.commissionFixedCents,
+      commissionBase: settings.commissionBase,
+    });
+
+    if (money.totalCents < settings.minOrderCents) {
+      throw new BadRequestException(
+        `Minimum order value is €${toEuros(settings.minOrderCents).toFixed(2)}`,
+      );
+    }
+
+    const code = `DR-${randomInt(10000, 99999)}`;
 
     const order = await this.prisma.$transaction(async (tx) => {
-      // Decrement portionsLeft
       for (const entry of dishes) {
         await tx.dish.update({
           where: { id: entry.dish.id },
@@ -81,19 +123,9 @@ export class OrdersService {
         });
       }
 
-      // Increment cook ordersCount & credit in-app wallet if cook doesn't use Stripe Connect
-      const cookNet = Number((subtotal - commission).toFixed(2));
-      const isStripeRouting =
-        Boolean(cook.stripeAccountId) && cook.payoutPreference === "STRIPE";
-
       await tx.cookProfile.update({
         where: { id: cook.id },
-        data: {
-          ordersCount: { increment: 1 },
-          ...(!isStripeRouting
-            ? { walletBalance: { increment: cookNet } }
-            : {}),
-        },
+        data: { ordersCount: { increment: 1 } },
       });
 
       const created = await tx.order.create({
@@ -104,11 +136,12 @@ export class OrdersService {
           status: OrderStatus.CONFIRMED,
           pickup: dto.pickup,
           pickupTime: dto.pickupTime,
-          subtotal: Number(subtotal.toFixed(2)),
-          serviceFee,
-          commission,
-          total,
-          payoutRouting: isStripeRouting ? "STRIPE_CONNECT" : "BANK_TRANSFER",
+          subtotalCents: money.subtotalCents,
+          serviceFeeCents: money.serviceFeeCents,
+          commissionCents: money.commissionCents,
+          cookNetCents: money.cookNetCents,
+          totalCents: money.totalCents,
+          currency: "eur",
           note: dto.note
             ? { nl: dto.note, en: dto.note, ar: dto.note }
             : undefined,
@@ -116,12 +149,13 @@ export class OrdersService {
           customerEmail: dto.customerEmail,
           customerPhone: dto.customerPhone,
           paymentMethod: dto.paymentMethod ?? PaymentMethod.IDEAL,
-          paid: true,
+          // Nothing is paid until Stripe confirms it via webhook.
+          paymentStatus: PaymentStatus.REQUIRES_PAYMENT,
           items: {
             create: dishes.map((entry) => ({
               dishId: entry.dish.id,
               qty: entry.qty,
-              unitPrice: entry.dish.price,
+              unitPriceCents: Math.round(entry.dish.price * 100),
               name: entry.dish.name as any,
             })),
           },
@@ -132,13 +166,13 @@ export class OrdersService {
         },
       });
 
-      // Clear customer cart after successful checkout
+      // Clear the cart once the order exists. Payment happens afterwards.
       await tx.cartItem.deleteMany({ where: { userId } });
 
       return created;
     });
 
-    return this.formatCustomerOrder(order, true);
+    return this.formatCustomerOrder(order, false);
   }
 
   async getMyOrders(userId: string) {
@@ -152,7 +186,11 @@ export class OrdersService {
     });
 
     return orders.map((o) =>
-      this.formatCustomerOrder(o, o.paid && o.status !== "CANCELLED"),
+      this.formatCustomerOrder(
+        o,
+        PAID_STATUSES.includes(o.paymentStatus) &&
+          o.status !== OrderStatus.CANCELLED,
+      ),
     );
   }
 
@@ -170,7 +208,8 @@ export class OrdersService {
     }
 
     const includeInstructions =
-      order.paid && order.status !== OrderStatus.CANCELLED;
+      PAID_STATUSES.includes(order.paymentStatus) &&
+      order.status !== OrderStatus.CANCELLED;
     return this.formatCustomerOrder(order, includeInstructions);
   }
 
@@ -183,12 +222,24 @@ export class OrdersService {
     if (!order) {
       throw new NotFoundException("Order not found");
     }
-
+    if (order.customerId !== userId) {
+      throw new ForbiddenException("This order belongs to another customer");
+    }
     if (
       order.status === OrderStatus.COMPLETED ||
       order.status === OrderStatus.CANCELLED
     ) {
       throw new BadRequestException("This order can no longer be cancelled");
+    }
+
+    // Paid orders must be refunded through Stripe, not just relabelled.
+    if (PAID_STATUSES.includes(order.paymentStatus)) {
+      await this.payments.refundOrder(
+        order.id,
+        { reason: "Customer cancelled the order" },
+        `customer:${userId}`,
+      );
+      return this.getOrderById(userId, order.id);
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -203,7 +254,7 @@ export class OrdersService {
         where: { id: order.id },
         data: {
           status: OrderStatus.CANCELLED,
-          refunded: order.paid,
+          paymentStatus: PaymentStatus.CANCELLED,
         },
         include: {
           cook: true,
@@ -244,15 +295,16 @@ export class OrdersService {
         dishId: i.dish.slug || i.dishId,
         qty: i.qty,
         name: i.name,
-        unitPrice: i.unitPrice,
+        unitPrice: toEuros(i.unitPriceCents),
       })),
       status:
         o.status === OrderStatus.CONFIRMED
           ? "incoming"
           : o.status.toLowerCase(),
+      paymentStatus: o.paymentStatus,
       pickup: { nl: "Vandaag", en: "Today", ar: "اليوم" },
       pickupTime: o.pickupTime,
-      total: o.total,
+      total: toEuros(o.totalCents),
       note: o.note,
       phone: o.customerPhone,
       placed: { nl: "Zojuist", en: "Just now", ar: "الآن" },
@@ -265,35 +317,47 @@ export class OrdersService {
     idOrCode: string,
     dto: UpdateOrderStatusDto,
   ) {
+    const cook = await this.resolveCook(userId);
     const order = await this.prisma.order.findFirst({
-      where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
+      where: {
+        OR: [{ id: idOrCode }, { code: idOrCode }],
+        cookId: cook.id,
+      },
     });
     if (!order) {
       throw new NotFoundException("Order not found");
     }
 
-    return this.prisma.order.update({
+    const completing =
+      dto.status === OrderStatus.COMPLETED &&
+      order.status !== OrderStatus.COMPLETED;
+
+    const updated = await this.prisma.order.update({
       where: { id: order.id },
       data: { status: dto.status },
       include: { items: { include: { dish: true } } },
     });
+
+    // Completing an order starts the hold clock for the earnings release.
+    if (completing) {
+      await this.payments.scheduleEarningsRelease(order.id, new Date());
+    }
+
+    return updated;
   }
 
   private async resolveCook(userId: string) {
     const cook = await this.prisma.cookProfile.findUnique({
       where: { userId },
     });
-    if (cook) return cook;
-    const demo = await this.prisma.cookProfile.findUnique({
-      where: { slug: "rana" },
-    });
-    if (!demo) {
-      throw new ForbiddenException("Cook profile not found");
+    if (!cook) {
+      throw new ForbiddenException("No cook profile is linked to this account");
     }
-    return demo;
+    return cook;
   }
 
   private formatCustomerOrder(order: any, includePickupInstructions: boolean) {
+    const paid = PAID_STATUSES.includes(order.paymentStatus);
     return {
       id: order.id,
       code: order.code,
@@ -307,7 +371,6 @@ export class OrdersService {
             area: order.cook.area,
             pickupArea: order.cook.pickupArea,
             response: order.cook.response,
-            // Only expose pickup instructions on active paid orders
             instructions: includePickupInstructions
               ? order.cook.instructions
               : undefined,
@@ -316,19 +379,20 @@ export class OrdersService {
       items: (order.items || []).map((i: any) => ({
         dishId: i.dish?.slug || i.dishId,
         qty: i.qty,
-        unitPrice: i.unitPrice,
+        unitPrice: toEuros(i.unitPriceCents),
         name: i.name,
       })),
       status: order.status.toLowerCase(),
+      paymentStatus: order.paymentStatus,
       pickup: order.pickup,
       pickupTime: order.pickupTime,
-      subtotal: order.subtotal,
-      serviceFee: order.serviceFee,
-      total: order.total,
+      subtotal: toEuros(order.subtotalCents),
+      serviceFee: toEuros(order.serviceFeeCents),
+      total: toEuros(order.totalCents),
       note: order.note,
       reviewed: order.reviewed,
-      refunded: order.refunded,
-      paid: order.paid,
+      refunded: order.refundedCents > 0,
+      paid,
       placed: {
         nl: new Date(order.createdAt).toLocaleDateString("nl-NL"),
         en: new Date(order.createdAt).toLocaleDateString("en-GB"),

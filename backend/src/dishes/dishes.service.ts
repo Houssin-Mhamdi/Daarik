@@ -166,8 +166,12 @@ export class DishesService {
         portionsLeft: dto.portionsLeft ?? dto.portions ?? 8,
         allergens: dto.allergens ?? [],
         dietary: dto.dietary ?? [],
-        ingredients: dto.ingredients ?? [],
-        pickup: dto.pickup ?? ["fri-30", "sat-31"],
+        ingredients: (dto.ingredients ?? []).map((i) => ({ ...i })),
+        pickup: dto.pickup ?? ["fri", "sat"],
+        pickupWindows: dto.pickupWindows ?? {},
+        sameDayPickup: dto.sameDayPickup ?? false,
+        sameDayRadiusKm: dto.sameDayRadiusKm ?? 5,
+        nextDayPickup: dto.nextDayPickup ?? true,
         featured: dto.featured ?? false,
         weekend: dto.weekend ?? false,
         family: dto.family ?? false,
@@ -181,11 +185,15 @@ export class DishesService {
   }
 
   async updateDish(userId: string, idOrSlug: string, dto: UpdateDishDto) {
+    const cook = await this.resolveCook(userId);
     const dish = await this.prisma.dish.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
     });
     if (!dish) {
       throw new NotFoundException("Dish not found");
+    }
+    if (dish.cookId !== cook.id) {
+      throw new ForbiddenException("This dish belongs to another kitchen");
     }
 
     const updated = await this.prisma.dish.update({
@@ -196,11 +204,15 @@ export class DishesService {
   }
 
   async deleteDish(userId: string, idOrSlug: string) {
+    const cook = await this.resolveCook(userId);
     const dish = await this.prisma.dish.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
     });
     if (!dish) {
       throw new NotFoundException("Dish not found");
+    }
+    if (dish.cookId !== cook.id) {
+      throw new ForbiddenException("This dish belongs to another kitchen");
     }
     await this.prisma.dish.delete({ where: { id: dish.id } });
     return { deleted: true, id: dish.slug };
@@ -225,18 +237,18 @@ export class DishesService {
     return { reported: true };
   }
 
+  /**
+   * Strict cook lookup. No demo fallback: that would let any logged-in user
+   * edit another kitchen's dishes.
+   */
   private async resolveCook(userId: string) {
     const cook = await this.prisma.cookProfile.findUnique({
       where: { userId },
     });
-    if (cook) return cook;
-    const demo = await this.prisma.cookProfile.findUnique({
-      where: { slug: "rana" },
-    });
-    if (!demo) {
-      throw new ForbiddenException("Cook profile required");
+    if (!cook) {
+      throw new ForbiddenException("No cook profile is linked to this account");
     }
-    return demo;
+    return cook;
   }
 
   private mapPublicDish(dish: any) {

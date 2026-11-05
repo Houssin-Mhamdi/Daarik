@@ -11,7 +11,6 @@ import {
   Soup,
   X,
 } from "lucide-react";
-import { Container } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/controls";
@@ -19,7 +18,7 @@ import { Sheet, EmptyState } from "@/components/ui/overlays";
 import { DishCardSkeleton } from "@/components/ui/skeleton";
 import { DishCard } from "@/components/app/dish-card";
 import { useApp } from "@/components/providers/app-provider";
-import { cuisines, getCuisine, loc } from "@/lib/data";
+import { loc } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 type Sort = "recommended" | "priceLow" | "priceHigh" | "rating" | "nearest";
@@ -45,7 +44,7 @@ const diets = [
 ] as const;
 
 export default function ExplorePage() {
-  const { t, lang, dishes } = useApp();
+  const { t, lang, dishes, cuisines } = useApp();
   const [query, setQuery] = useState("");
   const [cuisine, setCuisine] = useState<string>("all");
   const [price, setPrice] = useState<PriceFilter>(null);
@@ -63,24 +62,30 @@ export default function ExplorePage() {
   const [draftDiet, setDraftDiet] = useState<string[]>([]);
 
   useEffect(() => {
-    try {
-      const stored = window.sessionStorage.getItem("darna.search");
-      if (stored) {
-        setQuery(stored);
-        window.sessionStorage.removeItem("darna.search");
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      try {
+        const stored = window.sessionStorage.getItem("darna.search");
+        if (stored) {
+          setQuery(stored);
+          window.sessionStorage.removeItem("darna.search");
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
-    }
+    });
     const timer = setTimeout(() => setLoading(false), 420);
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let result = dishes.filter((dish) => {
-      const cuisineMatch =
-        cuisine === "all" || dish.cuisineId === cuisine;
+      const cuisineMatch = cuisine === "all" || dish.cuisineId === cuisine;
       const priceMatch =
         !price ||
         (price === "low" && dish.price < 10) ||
@@ -96,11 +101,18 @@ export default function ExplorePage() {
         !q ||
         loc(dish.name, lang).toLowerCase().includes(q) ||
         loc(dish.desc, lang).toLowerCase().includes(q) ||
-        loc(getCuisine(dish.cuisineId)?.label ?? "", lang)
+        loc(
+          cuisines.find((item) => item.id === dish.cuisineId)?.label ?? "",
+          lang,
+        )
           .toLowerCase()
           .includes(q);
       return (
-        cuisineMatch && priceMatch && availabilityMatch && dietMatch && queryMatch
+        cuisineMatch &&
+        priceMatch &&
+        availabilityMatch &&
+        dietMatch &&
+        queryMatch
       );
     });
 
@@ -112,7 +124,7 @@ export default function ExplorePage() {
       return Number(b.featured ?? false) - Number(a.featured ?? false);
     });
     return result;
-  }, [dishes, query, cuisine, price, availability, diet, sort, lang]);
+  }, [dishes, cuisines, query, cuisine, price, availability, diet, sort, lang]);
 
   const activeFilters =
     (cuisine !== "all" ? 1 : 0) +
@@ -241,9 +253,7 @@ export default function ExplorePage() {
             <button
               key={item.id}
               type="button"
-              onClick={() =>
-                setCuisine(cuisine === item.id ? "all" : item.id)
-              }
+              onClick={() => setCuisine(cuisine === item.id ? "all" : item.id)}
               className={cn(
                 "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[14px] font-semibold transition",
                 cuisine === item.id
@@ -278,7 +288,10 @@ export default function ExplorePage() {
                 onClick={() => setSortOpen(true)}
                 className="font-semibold text-charcoal"
               >
-                {t(sorts.find((item) => item.value === sort)?.key ?? "sortRecommended")}
+                {t(
+                  sorts.find((item) => item.value === sort)?.key ??
+                    "sortRecommended",
+                )}
               </button>
             </span>
           </div>
@@ -298,9 +311,7 @@ export default function ExplorePage() {
             icon={<Search className="size-7" />}
             title={query ? t("searchNoResultsTitle") : t("emptyExploreTitle")}
             description={
-              query
-                ? t("searchNoResultsSub", { query })
-                : t("emptyExploreSub")
+              query ? t("searchNoResultsSub", { query }) : t("emptyExploreSub")
             }
             action={
               <Button variant="secondary" onClick={clearFilters}>
@@ -311,9 +322,7 @@ export default function ExplorePage() {
         ) : null}
 
         <div className="mt-8 hidden md:flex items-center justify-between rounded-2xl border border-line bg-white/60 px-5 py-3.5">
-          <p className="text-[13.5px] text-muted">
-            {t("pickupNote")}
-          </p>
+          <p className="text-[13.5px] text-muted">{t("pickupNote")}</p>
           <Link
             href="/cook"
             className="text-[13.5px] font-semibold text-terracotta"

@@ -1,14 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { Heart, Plus, Star } from "lucide-react";
 import { useApp } from "@/components/providers/app-provider";
-import {
-  getCook,
-  getCuisine,
-  loc,
-  type Dish,
-} from "@/lib/data";
+import { AuthRequiredSheet } from "@/components/app/auth-required-sheet";
+import { loc, type Dish } from "@/lib/data";
 import { cn, formatPrice } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,35 +22,58 @@ export function DishCard({
   showCook?: boolean;
   className?: string;
 }) {
-  const { t, lang, addToCart, toggleFavorite, isFavorite, toast } = useApp();
-  const cook = getCook(dish.cookId);
-  const cuisine = getCuisine(dish.cuisineId);
+  const {
+    t,
+    lang,
+    cooks,
+    cuisines,
+    addToCart,
+    toggleFavorite,
+    isFavorite,
+    isAuthenticated,
+    toast,
+  } = useApp();
+  const pathname = usePathname();
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
+  const cook = cooks.find((c) => c.id === dish.cookId);
+  const cuisine = cuisines.find((item) => item.id === dish.cuisineId);
   const favorite = isFavorite(dish.id);
   const soldOut = dish.portionsLeft <= 0;
   const lowStock = dish.portionsLeft > 0 && dish.portionsLeft <= 3;
 
   const heart = (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const added = toggleFavorite(dish.id);
-        toast(added ? t("toastFavAdded") : t("toastFavRemoved"), {
-          variant: "success",
-        });
-      }}
-      aria-label={favorite ? t("toastFavRemoved") : t("toastFavAdded")}
-      aria-pressed={favorite}
-      className="absolute end-2.5 top-2.5 z-20 grid size-9 place-items-center rounded-full bg-white/90 text-charcoal shadow-sm backdrop-blur transition hover:bg-white active:scale-95"
-    >
-      <Heart
-        className={cn(
-          "size-[17px] transition-colors",
-          favorite ? "fill-terracotta text-terracotta" : "text-charcoal/70",
-        )}
+    <>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!isAuthenticated) {
+            setAuthPromptOpen(true);
+            return;
+          }
+          const added = toggleFavorite(dish.id);
+          toast(added ? t("toastFavAdded") : t("toastFavRemoved"), {
+            variant: "success",
+          });
+        }}
+        aria-label={favorite ? t("toastFavRemoved") : t("toastFavAdded")}
+        aria-pressed={favorite}
+        className="absolute end-2.5 top-2.5 z-20 grid size-9 place-items-center rounded-full bg-white/90 text-charcoal shadow-sm backdrop-blur transition hover:bg-white active:scale-95"
+      >
+        <Heart
+          className={cn(
+            "size-[17px] transition-colors",
+            favorite ? "fill-terracotta text-terracotta" : "text-charcoal/70",
+          )}
+        />
+      </button>
+      <AuthRequiredSheet
+        open={authPromptOpen}
+        onClose={() => setAuthPromptOpen(false)}
+        nextPath={pathname || "/"}
       />
-    </button>
+    </>
   );
 
   const addButton = (
@@ -87,12 +109,15 @@ export function DishCard({
           href={`/dish/${dish.id}`}
           className="relative size-[76px] shrink-0 overflow-hidden rounded-xl"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src={dish.image}
             alt={loc(dish.name, lang)}
+            fill
+            sizes="76px"
+            loading="lazy"
+            unoptimized
             className={cn(
-              "size-full object-cover transition duration-500 group-hover:scale-105",
+              "object-cover transition duration-500 group-hover:scale-105",
               soldOut && "grayscale",
             )}
           />
@@ -136,12 +161,15 @@ export function DishCard({
             href={`/dish/${dish.id}`}
             className="relative block aspect-[16/10] w-full overflow-hidden sm:aspect-auto sm:w-[45%] sm:shrink-0"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={dish.image}
               alt={loc(dish.name, lang)}
+              fill
+              sizes="(max-width: 640px) 100vw, 45vw"
+              loading="lazy"
+              unoptimized
               className={cn(
-                "size-full object-cover transition duration-700 group-hover:scale-105",
+                "object-cover transition duration-700 group-hover:scale-105",
                 soldOut && "grayscale",
               )}
             />
@@ -180,10 +208,13 @@ export function DishCard({
                 href={`/cook/${cook.id}`}
                 className="mt-3 flex w-fit items-center gap-2 rounded-full border border-line/70 bg-cream/50 py-1 pe-2.5 ps-1"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={cook.avatar}
                   alt={cook.name}
+                  width={24}
+                  height={24}
+                  loading="lazy"
+                  unoptimized
                   className="size-6 rounded-full object-cover"
                 />
                 <span className="text-[13px] font-semibold text-charcoal">
@@ -233,12 +264,15 @@ export function DishCard({
         href={`/dish/${dish.id}`}
         className="relative block aspect-[4/3] overflow-hidden"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={dish.image}
           alt={loc(dish.name, lang)}
+          fill
+          sizes="(max-width: 768px) 50vw, 300px"
+          loading="lazy"
+          unoptimized
           className={cn(
-            "size-full object-cover transition duration-700 group-hover:scale-105",
+            "object-cover transition duration-700 group-hover:scale-105",
             soldOut && "grayscale",
           )}
         />

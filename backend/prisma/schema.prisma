@@ -46,15 +46,59 @@ enum PaymentMethod {
   BANCONTACT
 }
 
-enum PayoutStatus {
-  SCHEDULED
+/// Lifecycle of the money for an order. Nothing is PAID until a verified
+/// Stripe webhook confirms it; the frontend can never set this.
+enum PaymentStatus {
+  REQUIRES_PAYMENT
   PROCESSING
   PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+  DISPUTED
+  FAILED
+  CANCELLED
+}
+
+/// Daarik's own compliance gate, deliberately separate from Stripe KYC.
+enum ComplianceStatus {
+  NOT_STARTED
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum StripeAccountStatus {
+  NONE
+  PENDING
+  REQUIREMENTS_DUE
+  RESTRICTED
+  ENABLED
+  DISABLED
+}
+
+/// Transfer = Daarik releasing one order's earnings into the cook's Stripe
+/// balance. Stripe's own bank payout is modelled by `Payout`.
+enum TransferStatus {
+  PENDING
+  CREATED
+  FAILED
+  REVERSED
+}
+
+enum PayoutStatus {
+  SCHEDULED
+  IN_TRANSIT
+  PAID
+  FAILED
+  CANCELED
 }
 
 enum DisputeStatus {
   OPEN
   REVIEW
+  WON
+  LOST
   RESOLVED
 }
 
@@ -116,15 +160,38 @@ model CookProfile {
   /// Exact pickup instructions & door details — NEVER exposed on public endpoints; only returned on paid/confirmed customer orders
   instructions  Json
   privateAddress String?
+  /// Kitchen map position. Public endpoints only expose it rounded (~1 km).
+  latitude      Float?
+  longitude     Float?
   yearsCooking  Int        @default(1)
   kitchenOpen   Boolean    @default(true)
-  iban          String?
-  accountHolder String?
-  payoutDay     String     @default("tuesday")
-  stripeAccountId   String?
-  stripeOnboarded   Boolean @default(false)
-  payoutPreference  String  @default("BANK_TRANSFER")
-  walletBalance     Float   @default(0)
+  payoutDay     String     @default("monday")
+
+  // ---- Stripe Connect (payout routing only; no identity data stored here) ----
+  /// Connected account id (`acct_...`). The only Stripe identifier we persist.
+  stripeAccountId        String?             @unique
+  stripeAccountStatus    StripeAccountStatus @default(NONE)
+  stripeChargesEnabled   Boolean             @default(false)
+  stripePayoutsEnabled   Boolean             @default(false)
+  /// Requirement keys Stripe says are still missing, e.g. ["individual.id_number"].
+  stripeRequirementsDue  String[]            @default([])
+  stripeDisabledReason   String?
+  stripeSyncedAt         DateTime?
+  /// Display-safe bank details only. Full IBAN/BSN never leave Stripe.
+  bankName               String?
+  ibanLast4              String?
+
+  // ---- Daarik compliance (NOT covered by Stripe KYC) ----
+  complianceStatus       ComplianceStatus    @default(NOT_STARTED)
+  complianceNote         String?
+  complianceCheckedAt    DateTime?
+  complianceCheckedBy    String?
+  kvkNumber              String?
+  nvwaRegistered         Boolean             @default(false)
+
+  /// Per-cook override for the platform hold period (null = use platform default).
+  payoutHoldDays         Int?
+
   maxPortionsPerDay Int    @default(20)
   availableDays String[]   @default(["fri-30", "sat-31", "sun-01"])
   availableSlots String[]  @default(["17:00", "17:30", "18:00", "18:30"])
@@ -135,6 +202,7 @@ model CookProfile {
   orders        Order[]
   reviews       Review[]
   payouts       Payout[]
+  transfers     Transfer[]
   favoritedBy   FavoriteCook[]
   disputes      Dispute[]
 
@@ -188,6 +256,13 @@ model Dish {
   dietary      String[]
   ingredients  Json
   pickup       String[]
+  /// Per-weekday pickup windows, e.g. { "mon": ["17:00","18:00"] }
+  pickupWindows Json?
+  /// Allow ordering for pickup today when the customer is inside the radius.
+  sameDayPickup Boolean @default(false)
+  sameDayRadiusKm Int   @default(5)
+  /// Allow ordering for pickup tomorrow.
+  nextDayPickup Boolean @default(true)
   featured     Boolean    @default(false)
   weekend      Boolean    @default(false)
   family       Boolean    @default(false)
@@ -266,26 +341,47 @@ model Order {
   status        OrderStatus   @default(CONFIRMED)
   pickup        String
   pickupTime    String
-  subtotal      Float
-  serviceFee    Float         @default(1.5)
-  commission    Float
-  total         Float
+  /// All money is stored as integer euro cents. Never Float.
+  subtotalCents    Int
+  serviceFeeCents  Int           @default(150)
+  commissionCents  Int
+  cookNetCents     Int
+  totalCents       Int
+  currency         String        @default("eur")
+
   note          Json?
   customerName  String
   customerEmail String
   customerPhone String
   paymentMethod PaymentMethod @default(IDEAL)
-  stripePaymentIntentId String?
-  payoutRouting String        @default("BANK_TRANSFER")
-  paid          Boolean       @default(true)
-  refunded      Boolean       @default(false)
-  reviewed      Boolean       @default(false)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+
+  // ---- Stripe ----
+  paymentStatus         PaymentStatus @default(REQUIRES_PAYMENT)
+  stripeCheckoutSessionId String?     @unique
+  stripePaymentIntentId String?       @unique
+  stripeChargeId        String?       @unique
+  /// What Stripe actually charged us in processing fees (from the balance tx).
+  stripeFeeCents        Int           @default(0)
+  refundedCents         Int           @default(0)
+  paidAt                DateTime?
+  failedReason          String?
+
+  // ---- Earnings release ----
+  completedAt       DateTime?
+  /// Money may be released on/after this instant. Null until the order completes.
+  transferEligibleAt DateTime?
+  /// Set while a dispute is open so the release job skips this order.
+  disputeBlocked    Boolean   @default(false)
+
+  reviewed      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   items         OrderItem[]
   reviews       Review[]
   disputes      Dispute[]
+  transfers     Transfer[]
+  refunds       Refund[]
 
   @@index([customerId])
   @@index([cookId])
@@ -300,7 +396,8 @@ model OrderItem {
   dishId    String
   dish      Dish   @relation(fields: [dishId], references: [id])
   qty       Int
-  unitPrice Float
+  /// Price snapshot at purchase time, in euro cents.
+  unitPriceCents Int
   name      Json
 }
 
@@ -325,25 +422,96 @@ model Review {
   @@index([dishId])
 }
 
+/// A Stripe bank payout to the cook's external account. Populated only from
+/// `payout.*` webhooks, so a payout is never marked PAID before Stripe says so.
 model Payout {
-  id         String       @id @default(cuid())
-  code       String       @unique
-  cookId     String
-  cook       CookProfile  @relation(fields: [cookId], references: [id], onDelete: Cascade)
-  period     String
-  gross      Float
-  commission Float
-  net        Float
-  ordersCount Int         @default(0)
-  method     String       @default("BANK_TRANSFER")
-  ibanSnapshot String?
-  stripeTransferId String?
-  status     PayoutStatus @default(SCHEDULED)
-  paidAt     DateTime?
-  createdAt  DateTime     @default(now())
+  id              String       @id @default(cuid())
+  code            String       @unique
+  cookId          String
+  cook            CookProfile  @relation(fields: [cookId], references: [id], onDelete: Cascade)
+
+  /// Stripe payout id (`po_...`). Null until the webhook arrives.
+  stripePayoutId  String?      @unique
+  amountCents     Int
+  currency        String       @default("eur")
+
+  /// Statement snapshot for the admin UI.
+  period          String
+  grossCents      Int          @default(0)
+  commissionCents Int          @default(0)
+  ordersCount     Int          @default(0)
+
+  status          PayoutStatus @default(SCHEDULED)
+  automatic       Boolean      @default(true)
+  arrivalDate     DateTime?
+  failureCode     String?
+  failureMessage  String?
+  paidAt          DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@index([cookId])
   @@index([status])
+}
+
+/// One order's earnings released from the Daarik platform balance into the
+/// cook's Stripe balance. Created by the release job, never by a request.
+model Transfer {
+  id                   String         @id @default(cuid())
+  orderId              String
+  order                Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  cookId               String
+  cook                 CookProfile    @relation(fields: [cookId], references: [id], onDelete: Cascade)
+
+  amountCents          Int
+  currency             String         @default("eur")
+  status               TransferStatus @default(PENDING)
+
+  stripeTransferId     String?        @unique
+  stripeSourceChargeId String?
+  reversedCents        Int            @default(0)
+  failureReason        String?
+
+  /// Unique retry key, e.g. `transfer:ord_123`, so a retry is never double-paid.
+  idempotencyKey       String         @unique
+  createdBy            String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([cookId])
+  @@index([status])
+  @@index([orderId])
+}
+
+model Refund {
+  id                 String   @id @default(cuid())
+  orderId            String
+  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stripeRefundId     String   @unique
+  amountCents        Int
+  reason             String?
+  status             String   @default("succeeded")
+  reversedTransferCents Int   @default(0)
+  createdBy          String?
+  createdAt          DateTime @default(now())
+
+  @@index([orderId])
+}
+
+/// Raw Stripe events, used for idempotency and audit. `stripeEventId` is the
+/// dedupe key; a duplicate delivery returns 200 without reprocessing.
+model WebhookEvent {
+  id            String    @id @default(cuid())
+  stripeEventId String    @unique
+  type          String
+  payload       Json
+  processedAt   DateTime?
+  attempts      Int       @default(0)
+  error         String?
+  createdAt     DateTime  @default(now())
+
+  @@index([type])
+  @@index([createdAt])
 }
 
 model Dispute {
@@ -359,8 +527,17 @@ model Dispute {
   reason         String
   customerNote   String?
   resolutionNote String?
-  amount         Float
-  refundAmount   Float?
+  amountCents    Int           @default(0)
+  refundCents    Int?
+
+  stripeDisputeId  String?      @unique
+  stripeChargeId   String?
+  stripePaymentIntentId String?
+  evidenceDueBy    DateTime?
+  /// Stripe dispute status string as delivered by the webhook.
+  stripeStatus     String?
+  transferReversed Boolean      @default(false)
+
   status         DisputeStatus @default(OPEN)
   openedAt       DateTime      @default(now())
   resolvedAt     DateTime?
@@ -394,15 +571,44 @@ model SupportTicket {
 
 model PlatformSetting {
   id                  String   @id @default("singleton")
-  platformName        String   @default("Darna")
+  platformName        String   @default("Daarik")
   region              String   @default("NL")
   currency            String   @default("EUR")
   timezone            String   @default("Europe/Amsterdam")
+
+  // ---- Pricing ----
+  /// Customer-facing flat service fee, in euro cents.
+  serviceFeeCents     Int      @default(150)
+  /// Kept for backwards compatibility with older clients; mirrors serviceFeeCents/100.
   serviceFee          Float    @default(1.5)
+  /// Commission as a fraction of the base, e.g. 0.15.
   commissionRate      Float    @default(0.15)
+  /// Optional fixed commission added on top, in euro cents.
+  commissionFixedCents Int     @default(0)
+  /// `SUBTOTAL` (food only) or `TOTAL` (food + service fee).
+  commissionBase      String   @default("SUBTOTAL")
+  /// Smallest order we accept, in euro cents. Protects against fee-destroying orders.
+  minOrderCents       Int      @default(800)
+
+  // ---- Stripe fees ----
+  /// `PLATFORM` = Daarik absorbs processing fees out of commission + service fee.
+  stripeFeeBearer     String   @default("PLATFORM")
+
+  // ---- Payout policy ----
+  /// Days after completion before earnings may be released.
+  payoutHoldDays      Int      @default(7)
+  /// `DAILY` | `WEEKLY` | `MONTHLY` | `MANUAL` — applied to each connected account.
+  payoutInterval      String   @default("WEEKLY")
+  payoutWeeklyAnchor  String   @default("monday")
+  payoutMonthlyAnchor Int      @default(1)
+
+  // ---- Compliance / invoicing ----
+  vatRateBps          Int      @default(2100)
+  kvkNumber           String?
+  supportEmail        String   @default("hello@daarik.nl")
+
   requireVerification Boolean  @default(true)
   autoApproveCooks    Boolean  @default(false)
   maintenanceMode     Boolean  @default(false)
-  supportEmail        String   @default("hello@darna.nl")
   updatedAt           DateTime @updatedAt
 }

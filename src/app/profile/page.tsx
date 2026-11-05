@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -14,7 +15,6 @@ import {
   Globe2,
   Heart,
   LogOut,
-  Mail,
   MapPin,
   Package,
   Pencil,
@@ -33,13 +33,26 @@ import { ConfirmDialog, Sheet } from "@/components/ui/overlays";
 import { PageHeader, SettingRow, KeyValue } from "@/components/ui/misc";
 import { LanguageSheet } from "@/components/app/language-sheet";
 import { useApp } from "@/components/providers/app-provider";
-import { currentUser, loc } from "@/lib/data";
 import { langMeta } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
+import {
+  useCurrentUserQuery,
+  useUpdateUserProfileMutation,
+} from "@/lib/queries";
 
 export default function ProfilePage() {
-  const { t, lang, toast, favorites, favoriteCooks, user, logout } = useApp();
+  const {
+    t,
+    lang,
+    toast,
+    favorites,
+    favoriteCooks,
+    user,
+    isAuthenticated,
+    logout,
+  } = useApp();
   const router = useRouter();
+  const { data: currentUser, isPending: authPending } = useCurrentUserQuery();
+  const updateProfile = useUpdateUserProfileMutation();
   const [languageOpen, setLanguageOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
@@ -48,9 +61,34 @@ export default function ProfilePage() {
   const [offers, setOffers] = useState(false);
   const [emailNotif, setEmailNotif] = useState(true);
   const [pushNotif, setPushNotif] = useState(true);
-  const [name, setName] = useState(user.name || currentUser.name);
-  const [email, setEmail] = useState(user.email || currentUser.email);
-  const [phone, setPhone] = useState(user.phone || currentUser.phone);
+  const [profileOverrides, setProfileOverrides] = useState<{
+    name?: string;
+    email?: string;
+    phone?: string;
+  }>({});
+  const name = profileOverrides.name ?? user.name;
+  const email = profileOverrides.email ?? user.email;
+  const phone = profileOverrides.phone ?? user.phone ?? "";
+  const setName = (value: string) =>
+    setProfileOverrides((previous) => ({ ...previous, name: value }));
+  const setEmail = (value: string) =>
+    setProfileOverrides((previous) => ({ ...previous, email: value }));
+  const setPhone = (value: string) =>
+    setProfileOverrides((previous) => ({ ...previous, phone: value }));
+
+  useEffect(() => {
+    if (!authPending && !currentUser) {
+      router.replace("/login?next=%2Fprofile");
+    }
+  }, [authPending, currentUser, router]);
+
+  if (authPending || !currentUser) {
+    return (
+      <div className="mx-auto max-w-[480px] px-4 py-16 text-center text-sm text-muted">
+        {t("loading")}
+      </div>
+    );
+  }
 
   return (
     <div className="pb-10 md:pb-16">
@@ -60,7 +98,11 @@ export default function ProfilePage() {
           subtitle={t("myAccount")}
           eyebrow={t("account")}
           action={
-            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setEditOpen(true)}
+            >
               <Pencil className="size-3.5" />
               {t("editProfile")}
             </Button>
@@ -73,46 +115,73 @@ export default function ProfilePage() {
             <div className="overflow-hidden rounded-[24px] border border-line bg-white shadow-card">
               <div className="h-20 bg-[linear-gradient(120deg,#f6ddd2_0%,#efe4d2_55%,#e6eadb_100%)]" />
               <div className="-mt-8 px-4 pb-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={currentUser.avatar}
-                  alt={name}
-                  className="size-[68px] rounded-full border-4 border-white object-cover shadow-sm"
-                />
+                <div className="grid size-[68px] place-items-center rounded-full border-4 border-white bg-terracotta font-display text-[26px] font-bold text-white shadow-sm">
+                  {isAuthenticated
+                    ? (name || email || "U").slice(0, 1).toUpperCase()
+                    : "?"}
+                </div>
                 <h2 className="mt-2.5 font-display text-[21px] font-semibold leading-tight text-charcoal">
-                  {name}
+                  {isAuthenticated ? name || email : t("signIn")}
                 </h2>
                 <p className="mt-0.5 flex items-center gap-1 text-[13px] text-muted">
                   <MapPin className="size-3" />
-                  {currentUser.city} · {t("memberSince", { date: currentUser.since[lang] })}
+                  {isAuthenticated
+                    ? `${user.city || "Rotterdam"} · ${email}`
+                    : t("loginSub")}
                 </p>
                 <div className="mt-3 grid grid-cols-3 gap-2 border-t border-line pt-3 text-center">
                   <div>
                     <p className="text-[18px] font-semibold text-charcoal">
                       {favorites.length}
                     </p>
-                    <p className="text-[11.5px] text-muted">{t("savedDishes")}</p>
+                    <p className="text-[11.5px] text-muted">
+                      {t("savedDishes")}
+                    </p>
                   </div>
                   <div className="border-x border-line">
                     <p className="text-[18px] font-semibold text-charcoal">
                       {favoriteCooks.length}
                     </p>
-                    <p className="text-[11.5px] text-muted">{t("savedCooks")}</p>
+                    <p className="text-[11.5px] text-muted">
+                      {t("savedCooks")}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-[18px] font-semibold text-charcoal">8</p>
-                    <p className="text-[11.5px] text-muted">{t("orders")}</p>
+                    <p className="text-[18px] font-semibold text-charcoal">
+                      {isAuthenticated ? user.role : "—"}
+                    </p>
+                    <p className="text-[11.5px] text-muted">{t("account")}</p>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 h-9 w-full"
-                  onClick={() => setEditOpen(true)}
-                >
-                  <Pencil className="size-3.5" />
-                  {t("editDetails")}
-                </Button>
+                {isAuthenticated ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 h-9 w-full"
+                    onClick={() => setEditOpen(true)}
+                  >
+                    <Pencil className="size-3.5" />
+                    {t("editDetails")}
+                  </Button>
+                ) : (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Button
+                      size="sm"
+                      className="h-9 w-full"
+                      onClick={() => router.push("/login")}
+                    >
+                      {t("signIn")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 w-full"
+                      onClick={() => router.push("/register")}
+                    >
+                      {t("createAccount")}
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -177,7 +246,11 @@ export default function ProfilePage() {
                 <SettingRow
                   icon={<MapPin className="size-4" />}
                   title={t("addressBook")}
-                  description={`${currentUser.address}, ${currentUser.postcode} ${currentUser.city}`}
+                  description={
+                    [user.address, user.postcode, user.city]
+                      .filter(Boolean)
+                      .join(", ") || "—"
+                  }
                   onClick={() => toast(t("savedChanges"))}
                 />
                 <SettingRow
@@ -196,7 +269,7 @@ export default function ProfilePage() {
                   title={t("becomeCookProfile")}
                   description={t("becomeCookProfileDesc")}
                   href="/cook"
-                    />
+                />
               </div>
             </section>
 
@@ -298,9 +371,7 @@ export default function ProfilePage() {
                     <p className="text-[15px] font-semibold text-charcoal">
                       {t("emailNotif")}
                     </p>
-                    <p className="mt-0.5 text-[12.5px] text-muted">
-                      {email}
-                    </p>
+                    <p className="mt-0.5 text-[12.5px] text-muted">{email}</p>
                   </div>
                   <Switch
                     checked={emailNotif}
@@ -383,24 +454,37 @@ export default function ProfilePage() {
                 </Badge>
               </div>
               <div className="mt-3 flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-10 flex-1"
-                  onClick={() => setSignOutOpen(true)}
-                >
-                  <LogOut className="size-3.5" />
-                  {t("signOut")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 flex-1 text-[#a13a28] hover:bg-[#fdf1ec]"
-                  onClick={() => setDeleteOpen(true)}
-                >
-                  <Trash2 className="size-3.5" />
-                  {t("deleteAccount")}
-                </Button>
+                {isAuthenticated ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-10 flex-1"
+                      onClick={() => setSignOutOpen(true)}
+                    >
+                      <LogOut className="size-3.5" />
+                      {t("signOut")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-10 flex-1 text-[#a13a28] hover:bg-[#fdf1ec]"
+                      onClick={() => setDeleteOpen(true)}
+                    >
+                      <Trash2 className="size-3.5" />
+                      {t("deleteAccount")}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="h-10 w-full"
+                    onClick={() => router.push("/login")}
+                  >
+                    <UserRound className="size-3.5" />
+                    {t("signIn")}
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -424,9 +508,15 @@ export default function ProfilePage() {
         footer={
           <Button
             className="w-full"
-            onClick={() => {
-              setEditOpen(false);
-              toast(t("savedChanges"));
+            loading={updateProfile.isPending}
+            onClick={async () => {
+              try {
+                await updateProfile.mutateAsync({ name, email, phone });
+                setEditOpen(false);
+                toast(t("savedChanges"));
+              } catch {
+                toast(t("loadError"), { variant: "error" });
+              }
             }}
           >
             {t("saveChanges")}
@@ -435,12 +525,21 @@ export default function ProfilePage() {
       >
         <div className="flex flex-col items-center">
           <div className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={currentUser.avatar}
-              alt={name}
-              className="size-[76px] rounded-full object-cover"
-            />
+            {user.avatar ? (
+              <Image
+                src={user.avatar || "/img/daarik-logo.png"}
+                alt={name}
+                width={76}
+                height={76}
+                loading="lazy"
+                unoptimized
+                className="size-[76px] rounded-full object-cover"
+              />
+            ) : (
+              <span className="grid size-[76px] place-items-center rounded-full bg-terracotta text-xl font-bold text-white">
+                {(name || email || "U").slice(0, 1).toUpperCase()}
+              </span>
+            )}
             <button
               type="button"
               onClick={() => toast(t("photoSelected"))}
@@ -462,7 +561,11 @@ export default function ProfilePage() {
               autoComplete="name"
             />
           </Field>
-          <Field label={t("email")} htmlFor="profile-email" hint={t("emailVerified")}>
+          <Field
+            label={t("email")}
+            htmlFor="profile-email"
+            hint={t("emailVerified")}
+          >
             <Input
               id="profile-email"
               type="email"
@@ -481,10 +584,12 @@ export default function ProfilePage() {
             />
           </Field>
           <div className="rounded-2xl bg-cream-100 p-3">
-            <KeyValue label={t("city")} value={currentUser.city} />
+            <KeyValue label={t("city")} value={user.city || "—"} />
             <KeyValue
               label={t("address")}
-              value={`${currentUser.address}, ${currentUser.postcode}`}
+              value={
+                [user.address, user.postcode].filter(Boolean).join(", ") || "—"
+              }
               className="mt-2"
             />
           </div>

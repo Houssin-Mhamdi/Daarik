@@ -7,7 +7,6 @@ import {
   CircleDollarSign,
   Clock3,
   FileText,
-  Headphones,
   MessageSquare,
   ShieldCheck,
   User,
@@ -25,64 +24,32 @@ import {
   SectionHead,
   StatusPill,
 } from "@/components/admin/admin-ui";
-import { adminDisputes, adminKpis } from "@/lib/data";
+import {
+  useAdminDisputesQuery,
+  useAdminResolveDisputeMutation,
+} from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
 
 type DisputeStatus = "open" | "review" | "resolved";
-
-type Dispute = {
-  id: string;
-  code: string;
-  customer: string;
-  cook: string;
-  reason: string;
-  amount: number;
-  status: DisputeStatus;
-  opened?: string;
-};
-
-const resolvedDisputes: Dispute[] = [
-  {
-    id: "DSP-1024",
-    code: "DR-2312",
-    customer: "Sanne K.",
-    cook: "Rana El Amri",
-    reason: "Item missing from order",
-    amount: 9.5,
-    status: "resolved",
-    opened: "18 Oct 2026",
-  },
-  {
-    id: "DSP-1019",
-    code: "DR-2298",
-    customer: "Mehdi B.",
-    cook: "Samira Khoury",
-    reason: "Pickup cancelled by cook",
-    amount: 24,
-    status: "resolved",
-    opened: "12 Oct 2026",
-  },
-];
 
 type Filter = "all" | DisputeStatus;
 
 export default function AdminDisputesPage() {
   const { t, lang, toast } = useApp();
   const [filter, setFilter] = useState<Filter>("all");
-  const [disputes, setDisputes] = useState<Dispute[]>([
-    ...adminDisputes.map((dispute) => ({ ...dispute, opened: "28 Oct 2026", status: dispute.status as DisputeStatus })),
-    ...resolvedDisputes,
-  ]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [refund, setRefund] = useState("");
   const [note, setNote] = useState("");
+  const { data: disputes = [], isPending, isError } = useAdminDisputesQuery();
+  const resolveDisputeMutation = useAdminResolveDisputeMutation();
 
   const counts = useMemo(
     () => ({
       all: disputes.length,
       open: disputes.filter((dispute) => dispute.status === "open").length,
       review: disputes.filter((dispute) => dispute.status === "review").length,
-      resolved: disputes.filter((dispute) => dispute.status === "resolved").length,
+      resolved: disputes.filter((dispute) => dispute.status === "resolved")
+        .length,
     }),
     [disputes],
   );
@@ -90,26 +57,34 @@ export default function AdminDisputesPage() {
   const visible = disputes.filter(
     (dispute) => filter === "all" || dispute.status === filter,
   );
-  const selected = disputes.find((dispute) => dispute.id === selectedId) ?? null;
+  const selected =
+    disputes.find((dispute) => dispute.id === selectedId) ?? null;
 
-  const openDispute = (dispute: Dispute) => {
+  const openDispute = (dispute: (typeof disputes)[number]) => {
     setSelectedId(dispute.id);
     setRefund(dispute.amount.toFixed(2));
     setNote("");
   };
 
-  const resolve = (dispute: Dispute, withRefund: boolean) => {
-    setDisputes((prev) =>
-      prev.map((item) =>
-        item.id === dispute.id ? { ...item, status: "resolved" } : item,
-      ),
-    );
-    setSelectedId(null);
-    toast(t("disputeResolved"), {
-      description: withRefund
-        ? `${dispute.code} · ${t("refundIssued")} ${formatPrice(Number(refund) || 0, lang)}`
-        : dispute.code,
-    });
+  const resolve = async (
+    dispute: (typeof disputes)[number],
+    withRefund: boolean,
+  ) => {
+    try {
+      await resolveDisputeMutation.mutateAsync({
+        id: dispute.id,
+        ...(withRefund ? { refundAmount: Number(refund) || 0 } : {}),
+        resolutionNote: note.trim() || undefined,
+      });
+      setSelectedId(null);
+      toast(t("disputeResolved"), {
+        description: withRefund
+          ? `${dispute.code} · ${t("refundIssued")} ${formatPrice(Number(refund) || 0, lang)}`
+          : dispute.code,
+      });
+    } catch {
+      toast(t("loadError"), { variant: "error" });
+    }
   };
 
   return (
@@ -126,7 +101,7 @@ export default function AdminDisputesPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
         <KpiCard
           label={t("openDisputes")}
           value={counts.open}
@@ -139,20 +114,12 @@ export default function AdminDisputesPage() {
           value={counts.review}
           icon={<Clock3 className="size-4" />}
           accent="#d9a441"
-          foot="1.8 days avg"
         />
         <KpiCard
           label={t("resolved")}
-          value={counts.resolved + 36}
+          value={counts.resolved}
           icon={<ShieldCheck className="size-4" />}
           accent="#697653"
-          foot={`${adminKpis.refundRate}% ${t("refundRate").toLowerCase()}`}
-        />
-        <KpiCard
-          label={t("supportTickets")}
-          value={18}
-          icon={<Headphones className="size-4" />}
-          foot={t("ordersToday").toLowerCase()}
         />
       </div>
 
@@ -166,91 +133,129 @@ export default function AdminDisputesPage() {
               tabs={[
                 { value: "all", label: t("all"), count: counts.all },
                 { value: "open", label: t("open"), count: counts.open },
-                { value: "review", label: t("underReviewStatus"), count: counts.review },
-                { value: "resolved", label: t("resolved"), count: counts.resolved },
+                {
+                  value: "review",
+                  label: t("underReviewStatus"),
+                  count: counts.review,
+                },
+                {
+                  value: "resolved",
+                  label: t("resolved"),
+                  count: counts.resolved,
+                },
               ]}
               className="min-w-max"
             />
           </AdminCard>
 
-          {visible.map((dispute) => (
-            <AdminCard key={dispute.id} className="p-4 md:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <span
-                    className={cn(
-                      "grid size-9 shrink-0 place-items-center rounded-xl",
-                      dispute.status === "resolved"
-                        ? "bg-olive-50 text-olive"
-                        : "bg-[#fbe9e4] text-[#a4412c]",
-                    )}
-                  >
-                    {dispute.status === "resolved" ? (
-                      <Check className="size-4" />
-                    ) : (
-                      <AlertTriangle className="size-4" />
-                    )}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-[15px] font-semibold text-charcoal">{dispute.id}</p>
-                      <StatusPill status={dispute.status} />
-                      <Badge variant="outline">{dispute.code}</Badge>
-                    </div>
-                    <p className="mt-1 text-[14px] font-medium text-charcoal">{dispute.reason}</p>
-                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
-                      <span className="inline-flex items-center gap-1">
-                        <User className="size-3" />
-                        {dispute.customer}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <UtensilsCrossed className="size-3" />
-                        {dispute.cook}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Clock3 className="size-3" />
-                        {dispute.opened}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-end">
-                    <p className="text-[17px] font-semibold leading-none text-charcoal">
-                      {formatPrice(dispute.amount, lang)}
-                    </p>
-                    <p className="mt-1 text-[11.5px] text-muted-soft">{t("refundAmount")}</p>
-                  </div>
-                  {dispute.status === "resolved" ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => toast(t("disputeResolved"), { description: dispute.id })}
-                    >
-                      {t("viewDetails")}
-                    </Button>
-                  ) : (
-                    <Button size="sm" onClick={() => openDispute(dispute)}>
-                      {t("resolveDispute")}
-                    </Button>
-                  )}
-                </div>
-              </div>
+          {isError ? (
+            <div
+              role="alert"
+              className="px-5 py-8 text-center text-sm text-danger"
+            >
+              {t("loadError")}
+            </div>
+          ) : isPending ? (
+            <AdminCard className="px-5 py-8 text-center text-sm text-muted">
+              {t("loading")}
             </AdminCard>
-          ))}
+          ) : (
+            visible.map((dispute) => (
+              <AdminCard key={dispute.id} className="p-4 md:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span
+                      className={cn(
+                        "grid size-9 shrink-0 place-items-center rounded-xl",
+                        dispute.status === "resolved"
+                          ? "bg-olive-50 text-olive"
+                          : "bg-[#fbe9e4] text-[#a4412c]",
+                      )}
+                    >
+                      {dispute.status === "resolved" ? (
+                        <Check className="size-4" />
+                      ) : (
+                        <AlertTriangle className="size-4" />
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[15px] font-semibold text-charcoal">
+                          {dispute.id}
+                        </p>
+                        <StatusPill status={dispute.status} />
+                        <Badge variant="outline">{dispute.code}</Badge>
+                      </div>
+                      <p className="mt-1 text-[14px] font-medium text-charcoal">
+                        {dispute.reason}
+                      </p>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+                        <span className="inline-flex items-center gap-1">
+                          <User className="size-3" />
+                          {dispute.customer}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <UtensilsCrossed className="size-3" />
+                          {dispute.cook}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Clock3 className="size-3" />
+                          {dispute.opened}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-end">
+                      <p className="text-[17px] font-semibold leading-none text-charcoal">
+                        {formatPrice(dispute.amount, lang)}
+                      </p>
+                      <p className="mt-1 text-[11.5px] text-muted-soft">
+                        {t("refundAmount")}
+                      </p>
+                    </div>
+                    {dispute.status === "resolved" ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          toast(t("disputeResolved"), {
+                            description: dispute.id,
+                          })
+                        }
+                      >
+                        {t("viewDetails")}
+                      </Button>
+                    ) : (
+                      <Button size="sm" onClick={() => openDispute(dispute)}>
+                        {t("resolveDispute")}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </AdminCard>
+            ))
+          )}
 
           {visible.length === 0 ? (
             <AdminCard className="px-5 py-16 text-center">
               <ShieldCheck className="mx-auto size-7 text-olive" />
-              <p className="mt-3 text-[16px] font-semibold text-charcoal">{t("allCaughtUp")}</p>
-              <p className="mt-1 text-[13.5px] text-muted">{t("disputesEmptyDesc")}</p>
+              <p className="mt-3 text-[16px] font-semibold text-charcoal">
+                {t("allCaughtUp")}
+              </p>
+              <p className="mt-1 text-[13.5px] text-muted">
+                {t("disputesEmptyDesc")}
+              </p>
             </AdminCard>
           ) : null}
         </div>
 
         <div className="space-y-4 xl:col-span-4">
           <AdminCard>
-            <SectionHead title={t("resolution")} subtitle={t("disputePolicySub")} />
+            <SectionHead
+              title={t("resolution")}
+              subtitle={t("disputePolicySub")}
+            />
             <div className="space-y-3 p-4 pt-3 md:p-5 md:pt-4">
               {[
                 {
@@ -276,8 +281,12 @@ export default function AdminDisputesPage() {
                       <Icon className="size-3.5" />
                     </span>
                     <div>
-                      <p className="text-[13.5px] font-semibold text-charcoal">{item.title}</p>
-                      <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">{item.desc}</p>
+                      <p className="text-[13.5px] font-semibold text-charcoal">
+                        {item.title}
+                      </p>
+                      <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
+                        {item.desc}
+                      </p>
                     </div>
                   </div>
                 );
@@ -287,23 +296,33 @@ export default function AdminDisputesPage() {
 
           <AdminCard className="p-4 md:p-5">
             <div className="flex items-center justify-between">
-              <p className="text-[15px] font-semibold text-charcoal">{t("recentResolutions")}</p>
+              <p className="text-[15px] font-semibold text-charcoal">
+                {t("recentResolutions")}
+              </p>
               <Badge variant="success">{t("resolved")}</Badge>
             </div>
             <div className="mt-3 space-y-2.5">
-              {resolvedDisputes.map((dispute) => (
-                <div key={dispute.id} className="flex items-center justify-between gap-2 text-[13px]">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-charcoal">{dispute.reason}</p>
-                    <p className="text-[11.5px] text-muted-soft">
-                      {dispute.code} · {dispute.opened}
-                    </p>
+              {disputes
+                .filter((dispute) => dispute.status === "resolved")
+                .slice(0, 4)
+                .map((dispute) => (
+                  <div
+                    key={dispute.id}
+                    className="flex items-center justify-between gap-2 text-[13px]"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-charcoal">
+                        {dispute.reason}
+                      </p>
+                      <p className="text-[11.5px] text-muted-soft">
+                        {dispute.code} · {dispute.opened}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-semibold tabular-nums text-charcoal">
+                      {formatPrice(dispute.amount, lang)}
+                    </span>
                   </div>
-                  <span className="shrink-0 font-semibold tabular-nums text-charcoal">
-                    {formatPrice(dispute.amount, lang)}
-                  </span>
-                </div>
-              ))}
+                ))}
             </div>
           </AdminCard>
 
@@ -320,7 +339,9 @@ export default function AdminDisputesPage() {
       <Sheet
         open={Boolean(selected)}
         onClose={() => setSelectedId(null)}
-        title={selected ? `${selected.id} · ${selected.code}` : t("resolveDispute")}
+        title={
+          selected ? `${selected.id} · ${selected.code}` : t("resolveDispute")
+        }
         description={selected?.reason}
         footer={
           selected ? (
@@ -332,7 +353,10 @@ export default function AdminDisputesPage() {
               >
                 {t("closeDispute")}
               </Button>
-              <Button className="flex-1" onClick={() => resolve(selected, true)}>
+              <Button
+                className="flex-1"
+                onClick={() => resolve(selected, true)}
+              >
                 <CircleDollarSign className="size-4" />
                 {t("refundCustomer")}
               </Button>
@@ -347,9 +371,11 @@ export default function AdminDisputesPage() {
                 { label: t("customerName"), value: selected.customer },
                 { label: t("cookName"), value: selected.cook },
                 { label: t("orderRefLabel"), value: selected.code },
-                { label: t("reportedBy"), value: selected.customer },
               ].map((row) => (
-                <div key={row.label} className="rounded-xl border border-line bg-white p-3">
+                <div
+                  key={row.label}
+                  className="rounded-xl border border-line bg-white p-3"
+                >
                   <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-muted-soft">
                     {row.label}
                   </p>
@@ -368,7 +394,7 @@ export default function AdminDisputesPage() {
                 {selected.reason}
               </p>
               <p className="mt-3 rounded-lg bg-cream/70 p-2.5 text-[12.5px] leading-relaxed text-muted">
-                {t("disputeCustomerNote")}
+                {selected.customerNote || t("disputeCustomerNote")}
               </p>
             </div>
 
@@ -397,10 +423,13 @@ export default function AdminDisputesPage() {
                   <button
                     key={fraction}
                     type="button"
-                    onClick={() => setRefund((selected.amount * fraction).toFixed(2))}
+                    onClick={() =>
+                      setRefund((selected.amount * fraction).toFixed(2))
+                    }
                     className={cn(
                       "rounded-full border px-2.5 py-1 text-[12px] font-semibold transition",
-                      Number(refund) === Number((selected.amount * fraction).toFixed(2))
+                      Number(refund) ===
+                        Number((selected.amount * fraction).toFixed(2))
                         ? "border-terracotta bg-terracotta-50 text-terracotta-700"
                         : "border-line text-muted hover:border-line-strong",
                     )}

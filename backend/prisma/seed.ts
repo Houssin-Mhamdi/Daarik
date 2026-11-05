@@ -1,4 +1,14 @@
-import { PrismaClient, Role, CookStatus, DishStatus, OrderStatus, PayoutStatus, DisputeStatus, ApplicationStatus } from "@prisma/client";
+import {
+  PrismaClient,
+  Role,
+  CookStatus,
+  DishStatus,
+  OrderStatus,
+  ComplianceStatus,
+  StripeAccountStatus,
+  PaymentStatus,
+  ApplicationStatus,
+} from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -8,21 +18,33 @@ async function main() {
   console.log("Seeding Darna PostgreSQL database...");
 
   // 1. Platform Settings
+  // Pricing is stored in euro cents. Commission is 15% of the food subtotal
+  // plus an optional fixed component; the €1.50 service fee is Daarik revenue
+  // and is never commissioned.
   await prisma.platformSetting.upsert({
     where: { id: "singleton" },
     update: {},
     create: {
       id: "singleton",
-      platformName: "Darna",
+      platformName: "Daarik",
       region: "NL",
       currency: "EUR",
       timezone: "Europe/Amsterdam",
+      serviceFeeCents: 150,
       serviceFee: 1.5,
       commissionRate: 0.15,
+      commissionFixedCents: 0,
+      commissionBase: "SUBTOTAL",
+      minOrderCents: 800,
+      stripeFeeBearer: "PLATFORM",
+      payoutHoldDays: 7,
+      payoutInterval: "WEEKLY",
+      payoutWeeklyAnchor: "monday",
+      vatRateBps: 2100,
       requireVerification: true,
       autoApproveCooks: false,
       maintenanceMode: false,
-      supportEmail: "hello@darna.nl",
+      supportEmail: "hello@daarik.nl",
     },
   });
 
@@ -135,8 +157,14 @@ async function main() {
         "اطلب الجرس مرتين عند الرقم 14. أسكن في الطابق الأرضي، والباب على الجانب.",
       ),
       yearsCooking: 22,
-      iban: "NL91 ABNA 0417 1643 00",
-      accountHolder: "Rana El Amri",
+      // Daarik compliance gate (separate from Stripe KYC). These are demo
+      // values; real KVK/NVWA checks must be done by an admin.
+      complianceStatus: ComplianceStatus.APPROVED,
+      complianceCheckedAt: new Date(),
+      complianceCheckedBy: "seed",
+      kvkNumber: "DEMO-0001",
+      nvwaRegistered: true,
+      stripeAccountStatus: StripeAccountStatus.NONE,
     },
     {
       slug: "omar",
@@ -169,8 +197,12 @@ async function main() {
         "ابحث عن الباب الأخضر بجانب المخبز. اطلب جرس «بنعلي».",
       ),
       yearsCooking: 15,
-      iban: "NL44 INGB 0001 2345 67",
-      accountHolder: "Omar Benali",
+      complianceStatus: ComplianceStatus.APPROVED,
+      complianceCheckedAt: new Date(),
+      complianceCheckedBy: "seed",
+      kvkNumber: "DEMO-0002",
+      nvwaRegistered: true,
+      stripeAccountStatus: StripeAccountStatus.NONE,
     },
     {
       slug: "fatima",
@@ -203,8 +235,12 @@ async function main() {
         "تجدني على الزاوية بجانب الحديقة الصغيرة. اتصل عند وصولك.",
       ),
       yearsCooking: 30,
-      iban: "NL12 RABO 0123 4567 89",
-      accountHolder: "Fatima Haddad",
+      complianceStatus: ComplianceStatus.APPROVED,
+      complianceCheckedAt: new Date(),
+      complianceCheckedBy: "seed",
+      kvkNumber: "DEMO-0003",
+      nvwaRegistered: true,
+      stripeAccountStatus: StripeAccountStatus.NONE,
     },
     {
       slug: "samira",
@@ -237,8 +273,12 @@ async function main() {
         "اطلب الجرس المكتوب عليه «خوري». أسكن في الطابق الأول.",
       ),
       yearsCooking: 18,
-      iban: "NL88 ABNA 0987 6543 21",
-      accountHolder: "Samira Khoury",
+      complianceStatus: ComplianceStatus.APPROVED,
+      complianceCheckedAt: new Date(),
+      complianceCheckedBy: "seed",
+      kvkNumber: "DEMO-0004",
+      nvwaRegistered: true,
+      stripeAccountStatus: StripeAccountStatus.NONE,
     },
   ];
 
@@ -324,6 +364,29 @@ async function main() {
       prepTime: L("15 min", "15 min", "15 دقيقة"),
     },
     {
+      slug: "couscous-veg",
+      cookSlug: "rana",
+      name: L("Couscous met zeven groenten", "Seven-Vegetable Couscous", "كسكسي بسبع خضار"),
+      desc: L(
+        "Een volledig plantaardige couscous met wortel, pompoen, kikkererwten, courgette en verse kruiden.",
+        "A fully plant-based couscous with carrot, pumpkin, chickpeas, courgette and fresh herbs.",
+        "كسكسي نباتي بالكامل مع جزر وقرع وحمص وكوسا وأعشاب طازجة.",
+      ),
+      image: "/img/couscous.jpg",
+      price: 12.5,
+      cuisineId: "tunisian",
+      rating: 4.7,
+      reviewCount: 38,
+      serves: 2,
+      portions: 10,
+      portionsLeft: 6,
+      allergens: ["gluten", "celery"],
+      dietary: ["vegan", "halal"],
+      ingredients: [L("Couscous", "Couscous", "كسكسي"), L("Kikkererwten", "Chickpeas", "حمص")],
+      pickup: ["sat-31", "sun-01", "fri-06"],
+      prepTime: L("2,5 uur", "2.5 hours", "ساعتان ونصف"),
+    },
+    {
       slug: "tagine-chicken",
       cookSlug: "omar",
       name: L("Kiptajine met ingemaakte citroen", "Chicken Tagine with Preserved Lemon", "طاجين دجاج بالليمون المخلل"),
@@ -345,7 +408,56 @@ async function main() {
       ingredients: [L("Kip", "Chicken", "دجاج"), L("Bewaard citroen", "Preserved lemon", "ليمون مخلل")],
       pickup: ["fri-30", "sat-31"],
       featured: true,
+      weekend: true,
       prepTime: L("2,5 uur", "2.5 hours", "ساعتان ونصف"),
+    },
+    {
+      slug: "tagine-lamb",
+      cookSlug: "omar",
+      name: L("Lamsvleestajine met pruimen", "Lamb Tagine with Prunes", "طاجين لحم بالبرقوق"),
+      desc: L(
+        "Zacht lamsvlees met geconfijte pruimen, amandelen en kaneel.",
+        "Tender lamb with candied prunes, almonds and cinnamon.",
+        "لحم غنم طري مع برقوق معسّل ولوز وقرفة.",
+      ),
+      image: "/img/tagine.jpg",
+      price: 17.0,
+      cuisineId: "moroccan",
+      rating: 5.0,
+      reviewCount: 44,
+      serves: 3,
+      portions: 6,
+      portionsLeft: 3,
+      allergens: ["nuts"],
+      dietary: ["halal", "glutenFree"],
+      ingredients: [L("Lamsvlees", "Lamb", "لحم غنم"), L("Pruimen & amandelen", "Prunes & almonds", "برقوق ولوز")],
+      pickup: ["sat-31", "sun-01"],
+      family: true,
+      badge: L("Familiemaaltijd", "Family meal", "وجبة عائلية"),
+      prepTime: L("3 uur", "3 hours", "3 ساعات"),
+    },
+    {
+      slug: "bastilla",
+      cookSlug: "omar",
+      name: L("Kipbastilla", "Chicken Bastilla", "بسطيلة دجاج"),
+      desc: L(
+        "Knapperig filodeeg gevuld met kip, amandelen en een vleugje kaneel.",
+        "Crisp filo filled with chicken, almonds and a hint of cinnamon.",
+        "عجين رقيق مقرمش محشو بالدجاج واللوز ولمسة قرفة.",
+      ),
+      image: "/img/brik.jpg",
+      price: 8.5,
+      cuisineId: "moroccan",
+      rating: 4.8,
+      reviewCount: 29,
+      serves: 1,
+      portions: 10,
+      portionsLeft: 7,
+      allergens: ["gluten", "egg", "nuts", "dairy"],
+      dietary: ["halal"],
+      ingredients: [L("Kip", "Chicken", "دجاج"), L("Filodeeg", "Filo pastry", "عجين رقيق")],
+      pickup: ["fri-30", "sat-31"],
+      prepTime: L("2 uur", "2 hours", "ساعتان"),
     },
     {
       slug: "kibbeh",
@@ -369,6 +481,7 @@ async function main() {
       ingredients: [L("Lam & bulgur", "Lamb & bulgur", "لحم غنم وبرغل")],
       pickup: ["fri-30", "sat-31"],
       featured: true,
+      family: true,
       prepTime: L("2 uur", "2 hours", "ساعتان"),
     },
     {
@@ -395,6 +508,30 @@ async function main() {
       prepTime: L("2 uur", "2 hours", "ساعتان"),
     },
     {
+      slug: "maqluba",
+      cookSlug: "fatima",
+      name: L("Maqluba met kip", "Chicken Maqluba", "مقلوبة بالدجاج"),
+      desc: L(
+        "De klassieke omgekeerde rijsttafel: rijst, kip, aubergine en bloemkool, samen gestoomd.",
+        "The classic upside-down rice dish: rice, chicken, aubergine and cauliflower steamed together.",
+        "طبق الأرز المقلوب الكلاسيكي: أرز ودجاج وباذنجان وقرنبيط على البخار.",
+      ),
+      image: "/img/kibbeh.jpg",
+      price: 14.75,
+      cuisineId: "syrian",
+      rating: 4.9,
+      reviewCount: 27,
+      serves: 3,
+      portions: 6,
+      portionsLeft: 4,
+      allergens: ["nuts", "dairy"],
+      dietary: ["halal", "glutenFree"],
+      ingredients: [L("Rijst & kip", "Rice & chicken", "أرز ودجاج")],
+      pickup: ["sat-31"],
+      family: true,
+      prepTime: L("2,5 uur", "2.5 hours", "ساعتان ونصف"),
+    },
+    {
       slug: "warak-enab",
       cookSlug: "samira",
       name: L("Warak enab", "Warak Enab (Stuffed Vine Leaves)", "ورق عنب"),
@@ -417,6 +554,53 @@ async function main() {
       pickup: ["fri-30", "sat-31"],
       prepTime: L("1,5 uur", "1.5 hours", "ساعة ونصف"),
     },
+    {
+      slug: "hummus-lamb",
+      cookSlug: "samira",
+      name: L("Hummus met lam & pijnboompitten", "Hummus with Lamb & Pine Nuts", "حمص باللحم والصنوبر"),
+      desc: L(
+        "Zijdezachte hummus met warme tahini, gemarineerd lamsvlees en geroosterde pijnboompitten.",
+        "Silky hummus with warm tahini, marinated lamb and toasted pine nuts.",
+        "حمص ناعم مع طحينة دافئة ولحم متبّل وصنوبر محمّص.",
+      ),
+      image: "/img/kibbeh.jpg",
+      price: 11.0,
+      cuisineId: "lebanese",
+      rating: 4.7,
+      reviewCount: 35,
+      serves: 1,
+      portions: 10,
+      portionsLeft: 6,
+      allergens: ["sesame", "nuts", "dairy", "gluten"],
+      dietary: ["halal", "spicy"],
+      ingredients: [L("Kikkererwten & tahini", "Chickpeas & tahini", "حمص وطحينة")],
+      pickup: ["fri-30", "sat-31", "sun-01"],
+      prepTime: L("1 uur", "1 hour", "ساعة"),
+    },
+    {
+      slug: "fatteh",
+      cookSlug: "samira",
+      name: L("Fatteh met kikkererwten", "Fatteh with Chickpeas & Yoghurt", "فتة بالحمص والزبادي"),
+      desc: L(
+        "Geroosterd platbrood, warme kikkererwten, knoflookyoghurt en geroosterde pijnboompitten.",
+        "Toasted flatbread, warm chickpeas, garlicky yoghurt and toasted pine nuts.",
+        "خبز محمّص وحمص دافئ وزبادي بالثوم وصنوبر محمّص.",
+      ),
+      image: "/img/brik.jpg",
+      price: 10.5,
+      cuisineId: "lebanese",
+      rating: 4.9,
+      reviewCount: 24,
+      serves: 1,
+      portions: 10,
+      portionsLeft: 7,
+      allergens: ["gluten", "dairy", "sesame", "nuts"],
+      dietary: ["vegetarian"],
+      ingredients: [L("Platbrood & yoghurt", "Flatbread & yoghurt", "خبز وزبادي")],
+      pickup: ["sat-31", "sun-01"],
+      weekend: true,
+      prepTime: L("45 min", "45 min", "45 دقيقة"),
+    },
   ];
 
   const dishMap: Record<string, string> = {};
@@ -433,6 +617,92 @@ async function main() {
     });
     dishMap[d.slug] = created.id;
   }
+
+  // 4b. Reviews
+  await prisma.review.deleteMany();
+  await prisma.review.createMany({
+    data: [
+      {
+        cookId: cookMap["rana"],
+        dishId: dishMap["couscous-royal"],
+        customerId: customerUser.id,
+        author: "Sarah de Vries",
+        initials: "SD",
+        rating: 5,
+        date: L("2 weken geleden", "2 weeks ago", "قبل أسبوعين"),
+        text: L(
+          "Echt de beste couscous die ik in Rotterdam heb gegeten. Nog warm bij het ophalen en zo vriendelijk ontvangen.",
+          "Honestly the best couscous I've had in Rotterdam. Still warm at pickup and such a warm welcome.",
+          "بصراحة أفضل كسكسي أكلته في روتردام. كان دافئًا عند الاستلام والاستقبال كان دافئًا أيضًا.",
+        ),
+      },
+      {
+        cookId: cookMap["fatima"],
+        dishId: dishMap["kibbeh"],
+        author: "Youssef A.",
+        initials: "YA",
+        rating: 5,
+        date: L("1 maand geleden", "1 month ago", "قبل شهر"),
+        text: L(
+          "De kibbeh smaakte precies zoals thuis in Damascus. Mooi verpakt en duidelijke ophaalinstructies.",
+          "The kibbeh tasted exactly like home in Damascus. Beautifully packed and clear pickup instructions.",
+          "الكبة كانت بطعم البيت في دمشق تمامًا. التغليف جميل وتعليمات الاستلام واضحة.",
+        ),
+      },
+      {
+        cookId: cookMap["omar"],
+        dishId: dishMap["tagine-chicken"],
+        author: "Lotte Jansen",
+        initials: "LJ",
+        rating: 5,
+        date: L("3 weken geleden", "3 weeks ago", "قبل 3 أسابيع"),
+        text: L(
+          "De tajine was boterzacht en de citroen maakte het af. Omar gaf nog een extra zakje brood mee.",
+          "The tagine was melt-in-the-mouth and the lemon made it. Omar even added an extra bag of bread.",
+          "الطاجين كان طريًا جدًا والليمون أكمل الطعم. أعطاني عمر كيس خبز إضافيًا.",
+        ),
+      },
+      {
+        cookId: cookMap["samira"],
+        dishId: dishMap["warak-enab"],
+        author: "Nadia H.",
+        initials: "NH",
+        rating: 5,
+        date: L("5 dagen geleden", "5 days ago", "قبل 5 أيام"),
+        text: L(
+          "Perfect gerold en niet te zuur. Ik heb meteen twee porties extra besteld voor mijn moeder.",
+          "Perfectly rolled and not too sour. I immediately ordered two extra portions for my mother.",
+          "ملفوف بإتقان وغير حامض أكثر من اللازم. طلبت حصتين إضافيتين لأمي فورًا.",
+        ),
+      },
+      {
+        cookId: cookMap["rana"],
+        dishId: dishMap["brik"],
+        author: "Mehdi B.",
+        initials: "MB",
+        rating: 4,
+        date: L("1 week geleden", "1 week ago", "قبل أسبوع"),
+        text: L(
+          "Heerlijk krokant, het ei was precies goed. Volgende keer bestel ik er twee.",
+          "Lovely and crisp, the egg was just right. Next time I'm ordering two.",
+          "مقرمش ولذيذ، والبيضة كانت مثالية. في المرة القادمة سأطلب اثنين.",
+        ),
+      },
+      {
+        cookId: cookMap["fatima"],
+        dishId: dishMap["stuffed-aubergine"],
+        author: "Emma V.",
+        initials: "EV",
+        rating: 5,
+        date: L("2 maanden geleden", "2 months ago", "قبل شهرين"),
+        text: L(
+          "Zo veel smaak in één gerecht. Fatima legde ook nog uit hoe ik het het beste kon opwarmen.",
+          "So much flavour in one dish. Fatima also explained the best way to reheat it.",
+          "نكهة غنية جدًا في طبق واحد. شرحت لي فاطمة أيضًا أفضل طريقة لتسخينه.",
+        ),
+      },
+    ],
+  });
 
   // 5. Verification Queue
   await prisma.cookApplication.deleteMany();
@@ -459,54 +729,14 @@ async function main() {
     ],
   });
 
-  // 6. Payouts
-  await prisma.payout.upsert({
-    where: { code: "PAY-8821" },
-    update: {},
-    create: {
-      code: "PAY-8821",
-      cookId: cookMap["rana"],
-      period: "20 – 26 Oct",
-      gross: 612.4,
-      commission: 91.86,
-      net: 520.54,
-      ordersCount: 31,
-      status: PayoutStatus.SCHEDULED,
-    },
-  });
-
-  await prisma.payout.upsert({
-    where: { code: "PAY-8822" },
-    update: {},
-    create: {
-      code: "PAY-8822",
-      cookId: cookMap["omar"],
-      period: "20 – 26 Oct",
-      gross: 748.0,
-      commission: 112.2,
-      net: 635.8,
-      ordersCount: 38,
-      status: PayoutStatus.SCHEDULED,
-    },
-  });
-
-  // 7. Disputes
-  await prisma.dispute.upsert({
-    where: { code: "DSP-1042" },
-    update: {},
-    create: {
-      code: "DSP-1042",
-      orderCode: "DR-2402",
-      cookId: cookMap["samira"],
-      customerName: "Lisa Meijer",
-      cookName: "Samira Khoury",
-      reason: "Order not collected / cook closed",
-      amount: 29.5,
-      status: DisputeStatus.OPEN,
-    },
-  });
-
-  // 8. Sample Order for Sarah
+  // 6. Sample order for Sarah
+  //
+  // Deliberately left in REQUIRES_PAYMENT: no order is ever seeded as paid,
+  // because `paymentStatus = PAID` must only ever come from a verified Stripe
+  // webhook. To exercise the full flow, complete Stripe test onboarding as the
+  // cook, then pay this order through Checkout.
+  //
+  // 26.30 food + 1.50 service fee - 15% commission (3.95) = 22.35 for the cook.
   await prisma.order.upsert({
     where: { code: "DR-2418" },
     update: {},
@@ -517,14 +747,16 @@ async function main() {
       status: OrderStatus.PREPARING,
       pickup: "sat-31",
       pickupTime: "18:00",
-      subtotal: 26.3,
-      serviceFee: 1.5,
-      commission: 3.95,
-      total: 27.8,
+      subtotalCents: 2630,
+      serviceFeeCents: 150,
+      commissionCents: 395,
+      cookNetCents: 2235,
+      totalCents: 2780,
+      currency: "eur",
       customerName: "Sarah de Vries",
       customerEmail: "sarah.devries@example.nl",
       customerPhone: "+31 6 12 34 56 78",
-      paid: true,
+      paymentStatus: PaymentStatus.REQUIRES_PAYMENT,
       note: L(
         "Graag zonder koriander, als dat kan. Dank je wel!",
         "No coriander if possible, please. Thank you!",
@@ -535,13 +767,13 @@ async function main() {
           {
             dishId: dishMap["couscous-royal"],
             qty: 1,
-            unitPrice: 16.5,
+            unitPriceCents: 1650,
             name: L("Couscous royal met lam", "Couscous Royal with Lamb", "كسكسي ملكي باللحم"),
           },
           {
             dishId: dishMap["brik"],
             qty: 2,
-            unitPrice: 4.9,
+            unitPriceCents: 490,
             name: L("Brik à l'œuf", "Brik à l'Œuf", "بريك بالبيض"),
           },
         ],

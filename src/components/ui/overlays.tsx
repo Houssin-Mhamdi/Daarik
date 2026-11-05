@@ -20,7 +20,9 @@ function useLockScroll(open: boolean) {
 
 function useMounted() {
   const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
+  React.useEffect(() => {
+    queueMicrotask(() => setMounted(true));
+  }, []);
   return mounted;
 }
 

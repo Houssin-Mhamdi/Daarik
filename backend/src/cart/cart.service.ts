@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AddCartItemDto, UpdateCartItemDto } from "./dto/cart.dto";
+import { computeOrderMoney, toCents, toEuros } from "../payments/money";
 
 @Injectable()
 export class CartService {
@@ -34,16 +35,23 @@ export class CartService {
       orderBy: { createdAt: "asc" },
     });
 
-    const settings = await this.prisma.platformSetting.findUnique({
-      where: { id: "singleton" },
-    });
-    const serviceFee = settings?.serviceFee ?? 1.5;
+    const settings =
+      (await this.prisma.platformSetting.findUnique({
+        where: { id: "singleton" },
+      })) ?? (await this.prisma.platformSetting.create({ data: { id: "singleton" } }));
 
-    const subtotal = items.reduce(
-      (sum, item) => sum + item.dish.price * item.qty,
+    // Money is computed in integer cents, exactly like the order service. The
+    // cart is only a preview; the authoritative total is recomputed at checkout.
+    const subtotalCents = items.reduce(
+      (sum, item) => sum + toCents(item.dish.price) * item.qty,
       0,
     );
-    const total = items.length > 0 ? subtotal + serviceFee : 0;
+    const money = computeOrderMoney(subtotalCents, {
+      serviceFeeCents: settings.serviceFeeCents,
+      commissionRate: settings.commissionRate,
+      commissionFixedCents: settings.commissionFixedCents,
+      commissionBase: settings.commissionBase,
+    });
     const cook = items[0]?.dish.cook ?? null;
 
     return {
@@ -60,9 +68,9 @@ export class CartService {
           id: item.dish.slug || item.dish.id,
         },
       })),
-      subtotal: Number(subtotal.toFixed(2)),
-      serviceFee: items.length > 0 ? serviceFee : 0,
-      total: Number(total.toFixed(2)),
+      subtotal: toEuros(money.subtotalCents),
+      serviceFee: items.length > 0 ? toEuros(money.serviceFeeCents) : 0,
+      total: toEuros(items.length > 0 ? money.totalCents : 0),
     };
   }
 

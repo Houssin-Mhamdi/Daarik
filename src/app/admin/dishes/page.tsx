@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -28,7 +28,12 @@ import {
   Td,
   Th,
 } from "@/components/admin/admin-ui";
-import { dishes, getCook, loc } from "@/lib/data";
+import { loc } from "@/lib/data";
+import {
+  useAdminDishesQuery,
+  useAdminModerateDishMutation,
+  useAdminRemoveDishMutation,
+} from "@/lib/queries";
 import { formatPrice } from "@/lib/utils";
 
 type DishRow = {
@@ -47,52 +52,6 @@ type DishRow = {
   reported?: boolean;
 };
 
-const extraDishes: DishRow[] = [
-  {
-    id: "admin-msemen",
-    name: "M'semen met honing",
-    desc: "Flaky layered flatbread served warm with honey and butter.",
-    image: "/img/brik.jpg",
-    cook: "Omar Benali",
-    cookId: "omar",
-    cuisine: "Moroccan",
-    price: 6.5,
-    rating: 4.7,
-    reviewCount: 22,
-    portionsLeft: 0,
-    status: "paused",
-  },
-  {
-    id: "admin-fatteh",
-    name: "Fatteh met kikkererwten",
-    desc: "Crisp bread, chickpeas, yoghurt and pine nuts.",
-    image: "/img/kibbeh.jpg",
-    cook: "Fatima Haddad",
-    cookId: "fatima",
-    cuisine: "Syrian",
-    price: 11,
-    rating: 4.9,
-    reviewCount: 18,
-    portionsLeft: 4,
-    status: "live",
-    reported: true,
-  },
-  {
-    id: "admin-maqluba",
-    name: "Maqluba met aubergine",
-    desc: "Upside-down rice dish with aubergine and spiced chicken.",
-    image: "/img/stuffed.jpg",
-    cook: "Fatima Haddad",
-    cookId: "fatima",
-    cuisine: "Syrian",
-    price: 15.5,
-    rating: 5,
-    reviewCount: 11,
-    portionsLeft: 6,
-    status: "draft",
-  },
-];
-
 type Filter = "all" | "live" | "paused" | "draft" | "reported";
 
 export default function AdminDishesPage() {
@@ -101,24 +60,29 @@ export default function AdminDishesPage() {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hideId, setHideId] = useState<string | null>(null);
+  const { data: apiDishes = [], isPending, isError } = useAdminDishesQuery();
+  const moderateDish = useAdminModerateDishMutation();
+  const removeDish = useAdminRemoveDishMutation();
 
-  const [rows, setRows] = useState<DishRow[]>(() => [
-    ...dishes.map((dish) => ({
-      id: dish.id,
-      name: loc(dish.name, lang),
-      desc: loc(dish.desc, lang),
-      image: dish.image,
-      cook: getCook(dish.cookId)?.name ?? "",
-      cookId: dish.cookId,
-      cuisine: dish.cuisineId.charAt(0).toUpperCase() + dish.cuisineId.slice(1),
-      price: dish.price,
-      rating: dish.rating,
-      reviewCount: dish.reviewCount,
-      portionsLeft: dish.portionsLeft,
-      status: "live" as const,
-    })),
-    ...extraDishes,
-  ]);
+  const rows = useMemo<DishRow[]>(
+    () =>
+      apiDishes.map((dish) => ({
+        id: dish.id,
+        name: loc(dish.name, lang),
+        desc: loc(dish.desc, lang),
+        image: dish.image,
+        cook: dish.cook,
+        cookId: dish.cookId,
+        cuisine: dish.cuisine,
+        price: Number(dish.price),
+        rating: Number(dish.rating),
+        reviewCount: Number(dish.reviewCount),
+        portionsLeft: Number(dish.portionsLeft),
+        status: dish.status,
+        reported: dish.reported,
+      })),
+    [apiDishes, lang],
+  );
 
   const counts = useMemo(
     () => ({
@@ -172,20 +136,20 @@ export default function AdminDishesPage() {
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <KpiCard
           label={t("liveDishes")}
-          value={counts.live + 1180}
+          value={counts.live}
           icon={<UtensilsCrossed className="size-4" />}
           foot={t("liveKitchens")}
         />
         <KpiCard
           label={t("pausedDishes")}
-          value={counts.paused + 42}
+          value={counts.paused}
           icon={<EyeOff className="size-4" />}
           accent="#d9a441"
           foot={t("today")}
         />
         <KpiCard
           label={t("drafts")}
-          value={counts.draft + 27}
+          value={counts.draft}
           icon={<Flame className="size-4" />}
           accent="#697653"
           foot={t("thisWeek")}
@@ -230,94 +194,126 @@ export default function AdminDishesPage() {
               { value: "live", label: t("live"), count: counts.live },
               { value: "paused", label: t("paused"), count: counts.paused },
               { value: "draft", label: t("draft"), count: counts.draft },
-              { value: "reported", label: t("flaggedReviews"), count: counts.reported },
+              {
+                value: "reported",
+                label: t("flaggedReviews"),
+                count: counts.reported,
+              },
             ]}
             className="min-w-max md:ms-auto"
           />
         </div>
 
-        <AdminTable>
-          <thead>
-            <tr>
-              <Th>{t("adminNavDishes")}</Th>
-              <Th className="hidden lg:table-cell">{t("cookCol")}</Th>
-              <Th className="hidden md:table-cell">{t("filterCuisine")}</Th>
-              <Th>{t("price")}</Th>
-              <Th className="hidden sm:table-cell">{t("ratingCol")}</Th>
-              <Th className="hidden xl:table-cell">{t("portionsLeft")}</Th>
-              <Th>{t("statusCol")}</Th>
-              <Th className="text-end">{t("actionCol")}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((row) => (
-              <tr key={row.id} className="transition hover:bg-cream/40">
-                <Td>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(row.id)}
-                    className="flex items-center gap-2.5 text-start"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={row.image}
-                      alt=""
-                      className="size-9 shrink-0 rounded-lg object-cover"
-                    />
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-1.5">
-                        <span className="max-w-[220px] truncate font-semibold">{row.name}</span>
-                        {row.reported ? (
-                          <AlertTriangle className="size-3 shrink-0 text-[#a4412c]" />
-                        ) : null}
-                      </span>
-                      <span className="block truncate text-[12px] text-muted">{row.cuisine}</span>
-                    </span>
-                  </button>
-                </Td>
-                <Td className="hidden text-muted lg:table-cell">{row.cook}</Td>
-                <Td className="hidden md:table-cell">
-                  <Badge variant="outline">{row.cuisine}</Badge>
-                </Td>
-                <Td className="font-semibold">{formatPrice(row.price, lang)}</Td>
-                <Td className="hidden sm:table-cell">
-                  <span className="inline-flex items-center gap-1 text-[13px] font-semibold">
-                    <Star className="size-3 fill-saffron text-saffron" />
-                    {row.rating.toFixed(1)}
-                    <span className="font-normal text-muted">({row.reviewCount})</span>
-                  </span>
-                </Td>
-                <Td className="hidden xl:table-cell">
-                  <span
-                    className={
-                      row.portionsLeft === 0 ? "text-[13px] font-semibold text-[#a4412c]" : "text-[13px]"
-                    }
-                  >
-                    {row.portionsLeft === 0 ? t("soldOut") : row.portionsLeft}
-                  </span>
-                </Td>
-                <Td>
-                  <StatusPill status={row.status} />
-                </Td>
-                <Td className="text-end">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(row.id)}
-                    className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-charcoal transition hover:bg-cream-100"
-                  >
-                    {t("viewDetails")}
-                  </button>
-                </Td>
+        {isError ? (
+          <p role="alert" className="px-5 py-8 text-center text-sm text-danger">
+            {t("loadError")}
+          </p>
+        ) : isPending ? (
+          <p className="px-5 py-8 text-center text-sm text-muted">
+            {t("loading")}
+          </p>
+        ) : (
+          <AdminTable>
+            <thead>
+              <tr>
+                <Th>{t("adminNavDishes")}</Th>
+                <Th className="hidden lg:table-cell">{t("cookCol")}</Th>
+                <Th className="hidden md:table-cell">{t("filterCuisine")}</Th>
+                <Th>{t("price")}</Th>
+                <Th className="hidden sm:table-cell">{t("ratingCol")}</Th>
+                <Th className="hidden xl:table-cell">{t("portionsLeft")}</Th>
+                <Th>{t("statusCol")}</Th>
+                <Th className="text-end">{t("actionCol")}</Th>
               </tr>
-            ))}
-          </tbody>
-        </AdminTable>
+            </thead>
+            <tbody>
+              {filtered.map((row) => (
+                <tr key={row.id} className="transition hover:bg-cream/40">
+                  <Td>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(row.id)}
+                      className="flex items-center gap-2.5 text-start"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        loading="lazy"
+                        decoding="async"
+                        src={row.image}
+                        alt=""
+                        className="size-9 shrink-0 rounded-lg object-cover"
+                      />
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5">
+                          <span className="max-w-[220px] truncate font-semibold">
+                            {row.name}
+                          </span>
+                          {row.reported ? (
+                            <AlertTriangle className="size-3 shrink-0 text-[#a4412c]" />
+                          ) : null}
+                        </span>
+                        <span className="block truncate text-[12px] text-muted">
+                          {row.cuisine}
+                        </span>
+                      </span>
+                    </button>
+                  </Td>
+                  <Td className="hidden text-muted lg:table-cell">
+                    {row.cook}
+                  </Td>
+                  <Td className="hidden md:table-cell">
+                    <Badge variant="outline">{row.cuisine}</Badge>
+                  </Td>
+                  <Td className="font-semibold">
+                    {formatPrice(row.price, lang)}
+                  </Td>
+                  <Td className="hidden sm:table-cell">
+                    <span className="inline-flex items-center gap-1 text-[13px] font-semibold">
+                      <Star className="size-3 fill-saffron text-saffron" />
+                      {row.rating.toFixed(1)}
+                      <span className="font-normal text-muted">
+                        ({row.reviewCount})
+                      </span>
+                    </span>
+                  </Td>
+                  <Td className="hidden xl:table-cell">
+                    <span
+                      className={
+                        row.portionsLeft === 0
+                          ? "text-[13px] font-semibold text-[#a4412c]"
+                          : "text-[13px]"
+                      }
+                    >
+                      {row.portionsLeft === 0 ? t("soldOut") : row.portionsLeft}
+                    </span>
+                  </Td>
+                  <Td>
+                    <StatusPill status={row.status} />
+                  </Td>
+                  <Td className="text-end">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(row.id)}
+                      className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-charcoal transition hover:bg-cream-100"
+                    >
+                      {t("viewDetails")}
+                    </button>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </AdminTable>
+        )}
 
         {filtered.length === 0 ? (
           <div className="px-5 py-14 text-center">
             <UtensilsCrossed className="mx-auto size-7 text-muted-soft" />
-            <p className="mt-3 text-[15.5px] font-semibold text-charcoal">{t("noResults")}</p>
-            <p className="mt-1 text-[13.5px] text-muted">{t("noResultsFilters")}</p>
+            <p className="mt-3 text-[15.5px] font-semibold text-charcoal">
+              {t("noResults")}
+            </p>
+            <p className="mt-1 text-[13.5px] text-muted">
+              {t("noResultsFilters")}
+            </p>
           </div>
         ) : null}
 
@@ -330,7 +326,9 @@ export default function AdminDishesPage() {
         open={Boolean(selected)}
         onClose={() => setSelectedId(null)}
         title={selected?.name}
-        description={selected ? `${selected.cook} · ${selected.cuisine}` : undefined}
+        description={
+          selected ? `${selected.cook} · ${selected.cuisine}` : undefined
+        }
         className="md:max-w-lg"
         footer={
           selected ? (
@@ -338,17 +336,18 @@ export default function AdminDishesPage() {
               <Button
                 variant="secondary"
                 className="flex-1"
-                onClick={() => {
-                  setRows((prev) =>
-                    prev.map((row) =>
-                      row.id === selected.id
-                        ? { ...row, status: row.status === "live" ? "paused" : "live" }
-                        : row,
-                    ),
-                  );
-                  toast(
-                    selected.status === "live" ? t("dishHiddenToast") : t("dishRestoredToast"),
-                  );
+                onClick={async () => {
+                  const status = selected.status === "live" ? "PAUSED" : "LIVE";
+                  try {
+                    await moderateDish.mutateAsync({ id: selected.id, status });
+                    toast(
+                      status === "PAUSED"
+                        ? t("dishHiddenToast")
+                        : t("dishRestoredToast"),
+                    );
+                  } catch {
+                    toast(t("loadError"), { variant: "error" });
+                  }
                   setSelectedId(null);
                 }}
               >
@@ -379,6 +378,8 @@ export default function AdminDishesPage() {
           <div className="space-y-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              loading="lazy"
+              decoding="async"
               src={selected.image}
               alt={selected.name}
               className="h-44 w-full rounded-2xl object-cover md:h-52"
@@ -414,7 +415,9 @@ export default function AdminDishesPage() {
               </div>
             ) : null}
 
-            <p className="text-[14px] leading-relaxed text-muted">{selected.desc}</p>
+            <p className="text-[14px] leading-relaxed text-muted">
+              {selected.desc}
+            </p>
 
             <div className="grid grid-cols-3 gap-2">
               {[
@@ -422,11 +425,16 @@ export default function AdminDishesPage() {
                 { label: t("reviews"), value: selected.reviewCount },
                 { label: t("portionsLeft"), value: selected.portionsLeft },
               ].map((stat) => (
-                <div key={stat.label} className="rounded-xl border border-line bg-white p-3 text-center">
+                <div
+                  key={stat.label}
+                  className="rounded-xl border border-line bg-white p-3 text-center"
+                >
                   <p className="text-[18px] font-semibold leading-none text-charcoal">
                     {stat.value}
                   </p>
-                  <p className="mt-1 text-[11.5px] text-muted-soft">{stat.label}</p>
+                  <p className="mt-1 text-[11.5px] text-muted-soft">
+                    {stat.label}
+                  </p>
                 </div>
               ))}
             </div>
@@ -446,12 +454,16 @@ export default function AdminDishesPage() {
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#fdf5e3] px-2 py-1 text-[12px] font-semibold text-[#8a5d13]">
                   <AlertTriangle className="size-3" />
-                  {selected.reported ? t("flaggedReviews") : t("awaitingReview")}
+                  {selected.reported
+                    ? t("flaggedReviews")
+                    : t("awaitingReview")}
                 </span>
               </div>
             </div>
 
-            <p className="text-[12.5px] leading-relaxed text-muted-soft">{t("adminDishNote")}</p>
+            <p className="text-[12.5px] leading-relaxed text-muted-soft">
+              {t("adminDishNote")}
+            </p>
           </div>
         ) : null}
       </Sheet>
@@ -459,14 +471,17 @@ export default function AdminDishesPage() {
       <ConfirmDialog
         open={Boolean(hideTarget)}
         onClose={() => setHideId(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (hideTarget) {
-            setRows((prev) =>
-              prev.map((row) =>
-                row.id === hideTarget.id ? { ...row, status: "paused" } : row,
-              ),
-            );
-            toast(t("dishHiddenToast"), { description: hideTarget.name, variant: "info" });
+            try {
+              await removeDish.mutateAsync(hideTarget.id);
+              toast(t("dishHiddenToast"), {
+                description: hideTarget.name,
+                variant: "info",
+              });
+            } catch {
+              toast(t("loadError"), { variant: "error" });
+            }
           }
           setHideId(null);
           setSelectedId(null);

@@ -1,13 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import {
   ArrowRight,
   Check,
-  ChefHat,
   Clock3,
-  Copy,
   MapPin,
   MessageCircle,
   Phone,
@@ -23,8 +20,6 @@ import { Card } from "@/components/ui/misc";
 import { CookMobileHeader } from "@/components/cook/cook-mobile-header";
 import { useApp } from "@/components/providers/app-provider";
 import {
-  cookOrders as seedOrders,
-  getDish,
   loc,
   type CookOrder,
 } from "@/lib/data";
@@ -47,7 +42,7 @@ const tabKey: Record<Tab, string> = {
 
 export default function CookOrdersPage() {
   const { t, lang, toast } = useApp();
-  const { data: queriedOrders = seedOrders } = useCookOrdersQuery();
+  const { data: queriedOrders = [] } = useCookOrdersQuery();
   const updateStatusMutation = useUpdateCookOrderStatusMutation();
   const [statusOverrides, setStatusOverrides] = useState<Record<string, Status>>({});
   const [declinedIds, setDeclinedIds] = useState<string[]>([]);
@@ -313,9 +308,12 @@ function OrderCard({
   onUpdate: (id: string, status: Status, toastKey: string) => void;
   onMessage: () => void;
 }) {
-  const { t, lang } = useApp();
+  const { t, lang, dishes } = useApp();
   const lines = order.items
-    .map((item) => ({ item, dish: getDish(item.dishId) }))
+    .map((item) => ({
+      item,
+      dish: dishes.find((d) => d.id === item.dishId),
+    }))
     .filter((line) => line.dish);
 
   const statusBadge = {

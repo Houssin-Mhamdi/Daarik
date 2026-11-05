@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
@@ -8,11 +8,19 @@ import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { useApp } from "@/components/providers/app-provider";
+import {
+  getAuthenticatedHome,
+  getSafeNextPath,
+  useHasHydrated,
+} from "@/lib/auth-navigation";
+import { useCurrentUserQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 export default function RegisterPage() {
   const router = useRouter();
   const { t, register, toast } = useApp();
+  const { data: currentUser, isPending: authPending } = useCurrentUserQuery();
+  const hasHydrated = useHasHydrated();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -20,7 +28,31 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"CUSTOMER" | "COOK">("CUSTOMER");
   const [loading, setLoading] = useState(false);
+  const [registrationCompleted, setRegistrationCompleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (
+      !hasHydrated ||
+      authPending ||
+      loading ||
+      registrationCompleted ||
+      !currentUser
+    ) {
+      return;
+    }
+    router.replace(
+      getSafeNextPath(window.location.search) ??
+        getAuthenticatedHome(currentUser.role),
+    );
+  }, [
+    authPending,
+    currentUser,
+    hasHydrated,
+    loading,
+    registrationCompleted,
+    router,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,15 +68,29 @@ export default function RegisterPage() {
         role,
       });
       toast(t("savedChanges"));
-      router.push(role === "COOK" ? "/cook/apply" : "/profile");
-    } catch (err: any) {
-      const msg = err?.message || "Registration failed";
+      setRegistrationCompleted(true);
+      router.replace(
+        role === "COOK"
+          ? "/cook/apply"
+          : (getSafeNextPath(window.location.search) ?? "/profile"),
+      );
+    } catch (error) {
+      const msg =
+        error instanceof Error ? error.message : "Registration failed";
       setError(msg);
       toast(msg, { variant: "error" });
     } finally {
       setLoading(false);
     }
   };
+
+  if (!hasHydrated || authPending || (currentUser && !loading)) {
+    return (
+      <div className="mx-auto max-w-[460px] px-4 py-16 text-center text-sm text-muted">
+        {t("loading")}
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-[460px] px-4 py-8 md:py-16">
@@ -99,10 +145,7 @@ export default function RegisterPage() {
             />
           </Field>
           <Field label={t("city")}>
-            <Input
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-            />
+            <Input value={city} onChange={(e) => setCity(e.target.value)} />
           </Field>
           <Field label="Password (min 8 chars)" required>
             <Input

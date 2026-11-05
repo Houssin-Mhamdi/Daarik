@@ -26,7 +26,7 @@ export class SupportController {
   }
 
   @Public()
-  @Get("catalog")
+  @Get("support/catalog")
   getCatalogMeta() {
     return this.supportService.getCatalogMeta();
   }

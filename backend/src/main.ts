@@ -1,14 +1,24 @@
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
+import { join } from "node:path";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
   const config = app.get(ConfigService);
+
+  // Uploaded dish photos are served as static files (see UploadsController).
+  app.useStaticAssets(join(process.cwd(), "uploads"), {
+    prefix: "/uploads/",
+    maxAge: "30d",
+  });
 
   // Security headers (relaxed CSP on /api/docs so Swagger UI assets load cleanly)
   app.use(

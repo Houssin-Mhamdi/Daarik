@@ -47,6 +47,15 @@ export class CooksController {
     return this.cooksService.submitApplication(user?.sub, dto);
   }
 
+  @Public()
+  @Get("me/application")
+  getMyApplication(
+    @CurrentUser() user: JwtPayloadUser | undefined,
+    @Query("email") email?: string,
+  ) {
+    return this.cooksService.getMyApplication(user?.sub, email);
+  }
+
   @Get("me/dashboard")
   getMyDashboard(@CurrentUser() user: JwtPayloadUser) {
     return this.cooksService.getMyDashboard(user.sub);

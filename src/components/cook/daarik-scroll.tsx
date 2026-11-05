@@ -99,7 +99,7 @@ export function DaarikScroll() {
           </div>
 
           <div className="mt-10 grid gap-4 md:grid-cols-4 md:gap-6">
-            {STEP_KEYS.map((step, index) => (
+            {STEP_KEYS.map((step) => (
               <div
                 key={step.title}
                 className="daarik-step rounded-[24px] border border-line bg-white p-6 shadow-card"

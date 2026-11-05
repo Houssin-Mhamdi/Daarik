@@ -1,13 +1,13 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, Search, SlidersHorizontal, X } from "lucide-react";
 import { Sheet } from "@/components/ui/overlays";
 import { Rating } from "@/components/ui/controls";
 import { useApp } from "@/components/providers/app-provider";
-import { cuisines, dishes, getCook, loc, cooks } from "@/lib/data";
+import { loc } from "@/lib/data";
 import { cn, formatPrice } from "@/lib/utils";
 
 export function SearchBar({
@@ -17,7 +17,11 @@ export function SearchBar({
   variant?: "hero" | "inline";
   className?: string;
 }) {
-  const { t, lang, dir } = useApp();
+  const { t, lang, dir, dishes, cooks, cuisines } = useApp();
+  const getCook = useCallback(
+    (id: string) => cooks.find((c) => c.id === id),
+    [cooks],
+  );
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -38,12 +42,22 @@ export function SearchBar({
         return (
           loc(dish.name, lang).toLowerCase().includes(q) ||
           loc(dish.desc, lang).toLowerCase().includes(q) ||
-          loc(getCuisineLabel(dish.cuisineId), lang).toLowerCase().includes(q) ||
+          loc(
+            cuisines.find((cuisine) => cuisine.id === dish.cuisineId)
+              ?.label ?? {
+              nl: dish.cuisineId,
+              en: dish.cuisineId,
+              ar: dish.cuisineId,
+            },
+            lang,
+          )
+            .toLowerCase()
+            .includes(q) ||
           cook?.name.toLowerCase().includes(q)
         );
       })
       .slice(0, 4);
-  }, [query, lang]);
+  }, [query, lang, dishes, cuisines, getCook]);
 
   const cookResults = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -55,7 +69,7 @@ export function SearchBar({
           cook.city.toLowerCase().includes(q),
       )
       .slice(0, 2);
-  }, [query]);
+  }, [query, cooks]);
 
   const submit = (value: string) => {
     const q = value.trim();
@@ -107,7 +121,11 @@ export function SearchBar({
         </button>
       )}
 
-      <Sheet open={open} onClose={() => setOpen(false)} className="md:max-w-2xl">
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        className="md:max-w-2xl"
+      >
         <div className="sticky -top-5 z-10 -mx-5 flex items-center gap-2.5 border-b border-line/70 bg-cream/95 px-5 pb-3 pt-1 backdrop-blur">
           <span className="flex h-11 flex-1 items-center gap-2.5 rounded-full border border-line bg-white px-4">
             <Search className="size-4 shrink-0 text-muted-soft" />
@@ -187,6 +205,8 @@ export function SearchBar({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
+                      loading="lazy"
+                      decoding="async"
                       src={dish.image}
                       alt={loc(dish.name, lang)}
                       className="size-14 rounded-xl object-cover"
@@ -236,6 +256,8 @@ export function SearchBar({
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
+                        loading="lazy"
+                        decoding="async"
                         src={dish.image}
                         alt={loc(dish.name, lang)}
                         className="size-14 rounded-xl object-cover"
@@ -275,6 +297,8 @@ export function SearchBar({
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
+                        loading="lazy"
+                        decoding="async"
                         src={cook.avatar}
                         alt={cook.name}
                         className="size-10 rounded-full object-cover"
@@ -306,15 +330,5 @@ export function SearchBar({
         )}
       </Sheet>
     </>
-  );
-}
-
-function getCuisineLabel(id: string) {
-  return (
-    cuisines.find((cuisine) => cuisine.id === id)?.label ?? {
-      nl: id,
-      en: id,
-      ar: id,
-    }
   );
 }

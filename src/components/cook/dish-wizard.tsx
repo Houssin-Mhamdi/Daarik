@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -14,6 +15,7 @@ import {
   Minus,
   Plus,
   Star,
+  Upload,
   Users,
   UtensilsCrossed,
 } from "lucide-react";
@@ -21,33 +23,20 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Textarea, Field, Select } from "@/components/ui/input";
 import { Progress, QuantityStepper } from "@/components/ui/controls";
-import { Card, Money } from "@/components/ui/misc";
+import { Card } from "@/components/ui/misc";
 import { useApp } from "@/components/providers/app-provider";
+import { allergenNames, dietaryNames, loc, type Dish } from "@/lib/data";
+import { useCreateDishMutation, useUpdateDishMutation, useUploadDishImageMutation } from "@/lib/queries";
+import { cn, errorMessage, formatPrice } from "@/lib/utils";
 import {
-  allergenNames,
-  cuisines,
-  dietaryNames,
-  loc,
-  pickupOptions,
-  type Dish,
-} from "@/lib/data";
-import { useCreateDishMutation, useUpdateDishMutation } from "@/lib/queries";
-import { cn, formatPrice } from "@/lib/utils";
-
-const samplePhotos = [
-  "/img/couscous.jpg",
-  "/img/kibbeh.jpg",
-  "/img/brik.jpg",
-  "/img/tagine.jpg",
-  "/img/stuffed.jpg",
-  "/img/splash-tajine.jpg",
-];
-
-const defaultSlots = ["12:00", "12:30", "17:30", "18:00", "18:30"];
-const allSlots = ["12:00", "12:30", "13:00", "17:00", "17:30", "18:00", "18:30", "19:00"];
+  ALL_PICKUP_SLOTS,
+  DEFAULT_PICKUP_SLOTS,
+  SAME_DAY_RADII,
+  WEEK_ORDER,
+} from "@/lib/pickup";
 
 export function DishWizard({ dish }: { dish?: Dish }) {
-  const { t, lang, toast } = useApp();
+  const { t, lang, toast, cuisines } = useApp();
   const router = useRouter();
   const createDishMutation = useCreateDishMutation();
   const updateDishMutation = useUpdateDishMutation();
@@ -57,14 +46,60 @@ export function DishWizard({ dish }: { dish?: Dish }) {
   const [error, setError] = useState("");
 
   const [photo, setPhoto] = useState(dish?.image ?? "");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadImage = useUploadDishImageMutation();
+
+  async function handleFileSelect(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast(t("photoUploadFailed"), { variant: "error" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast(t("photoTooLarge"), { variant: "error" });
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const uploaded = await uploadImage.mutateAsync(file);
+      setPhoto(uploaded.url);
+      setError("");
+      toast(t("photoSelected"));
+    } catch (err) {
+      toast(errorMessage(err, t("photoUploadFailed")), { variant: "error" });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
   const [name, setName] = useState(dish ? loc(dish.name, lang) : "");
   const [description, setDescription] = useState(
     dish ? loc(dish.desc, lang) : "",
   );
   const [cuisine, setCuisine] = useState(dish?.cuisineId ?? "tunisian");
-  const [ingredients, setIngredients] = useState(
-    dish ? dish.ingredients.map((item) => loc(item, lang)).join(", ") : "",
+  const [ingredients, setIngredients] = useState<string[]>(
+    dish
+      ? dish.ingredients.map((item) => loc(item, lang)).filter(Boolean)
+      : [],
   );
+  const [ingredientDraft, setIngredientDraft] = useState("");
+
+  function addIngredients(raw: string) {
+    const parts = raw
+      .split(/[,،;\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!parts.length) return;
+    setIngredients((current) => {
+      const next = [...current];
+      for (const part of parts) {
+        if (!next.some((i) => i.toLowerCase() === part.toLowerCase())) {
+          next.push(part.slice(0, 120));
+        }
+      }
+      return next;
+    });
+  }
   const [allergens, setAllergens] = useState<string[]>(dish?.allergens ?? []);
   const [dietary, setDietary] = useState<string[]>(dish?.dietary ?? []);
   const [price, setPrice] = useState(dish ? String(dish.price) : "14.50");
@@ -73,8 +108,17 @@ export function DishWizard({ dish }: { dish?: Dish }) {
   const [prepTime, setPrepTime] = useState(
     dish ? loc(dish.prepTime, lang) : "2 uur",
   );
-  const [days, setDays] = useState<string[]>(["fri", "sat", "sun"]);
-  const [slots, setSlots] = useState<string[]>(defaultSlots);
+  const [windows, setWindows] = useState<Record<string, string[]>>(
+    () => dish?.schedule?.windows ?? {},
+  );
+  const [sameDay, setSameDay] = useState(dish?.schedule?.sameDay ?? false);
+  const [sameDayRadius, setSameDayRadius] = useState(
+    dish?.schedule?.sameDayRadiusKm ?? 5,
+  );
+  const [nextDay, setNextDay] = useState(dish?.schedule?.nextDay ?? true);
+  const [activeDay, setActiveDay] = useState<string>(
+    () => WEEK_ORDER.find((d) => dish?.schedule?.windows?.[d]) ?? "",
+  );
   const [capacity, setCapacity] = useState(dish?.portions ?? 12);
 
   const steps = [
@@ -87,24 +131,62 @@ export function DishWizard({ dish }: { dish?: Dish }) {
   ];
 
   const weekDays = t("weekDays").split(",");
+  const selectedDays = WEEK_ORDER.filter((d) => windows[d]);
+  const selectedSlots = [
+    ...new Set(selectedDays.flatMap((d) => windows[d])),
+  ].sort();
+  const currentDay = windows[activeDay] ? activeDay : (selectedDays[0] ?? "");
+
+  function toggleDay(key: string) {
+    if (!windows[key]) setActiveDay(key);
+    setWindows((current) => {
+      const next = { ...current };
+      if (next[key]) delete next[key];
+      else next[key] = [...DEFAULT_PICKUP_SLOTS];
+      return next;
+    });
+  }
+
+  function toggleSlot(day: string, slot: string) {
+    setWindows((current) => {
+      const slots = current[day] ?? [];
+      const updated = slots.includes(slot)
+        ? slots.filter((s) => s !== slot)
+        : [...slots, slot].sort();
+      return { ...current, [day]: updated };
+    });
+  }
+
+  function copySlotsToAll(day: string) {
+    setWindows((current) => {
+      const source = current[day] ?? [];
+      return Object.fromEntries(
+        Object.keys(current).map((d) => [d, [...source]]),
+      );
+    });
+  }
   const parsedPrice = Number.parseFloat(price.replace(",", ".")) || 0;
 
   const previewDish = useMemo(
     () => ({
-      image: photo || samplePhotos[0],
+      image: photo,
       name: name || t("dishNamePh"),
       price: parsedPrice,
       serves,
       cuisine: cuisines.find((item) => item.id === cuisine),
     }),
-    [photo, name, parsedPrice, serves, cuisine, t],
+    [photo, name, parsedPrice, serves, cuisine, cuisines, t],
   );
 
   function validate() {
     if (step === 0 && !photo) return t("photoRequired");
     if (step === 1 && !name.trim()) return t("nameRequired");
     if (step === 3 && parsedPrice <= 0) return t("priceRequired");
-    if (step === 4 && (!days.length || !slots.length)) return t("slotRequired");
+    if (step === 4) {
+      if (!selectedDays.length && !sameDay && !nextDay)
+        return t("pickAtLeastOneDay");
+      if (selectedDays.some((d) => !windows[d].length)) return t("slotRequired");
+    }
     return "";
   }
 
@@ -124,11 +206,11 @@ export function DishWizard({ dish }: { dish?: Dish }) {
     }
   }
 
-  function publish() {
+  async function publish() {
     const payload = {
       name: { nl: name, en: name, ar: name },
       desc: { nl: description, en: description, ar: description },
-      image: photo || samplePhotos[0],
+      image: photo,
       price: parsedPrice,
       cuisineId: cuisine,
       serves,
@@ -136,32 +218,48 @@ export function DishWizard({ dish }: { dish?: Dish }) {
       portionsLeft: capacity,
       allergens,
       dietary,
-      ingredients: ingredients
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((s) => ({ nl: s, en: s, ar: s })),
-      pickup: ["fri-30", "sat-31"],
+      ingredients: [
+        ...ingredients,
+        ...ingredientDraft
+          .split(/[,،;\n]/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ].map((s) => ({ nl: s, en: s, ar: s })),
+      pickup: selectedDays,
+      pickupWindows: windows,
+      sameDayPickup: sameDay,
+      sameDayRadiusKm: sameDayRadius,
+      nextDayPickup: nextDay,
       prepTime: { nl: prepTime, en: prepTime, ar: prepTime },
     };
 
-    if (isEdit && dish) {
-      updateDishMutation.mutate({ id: dish.id, body: payload });
-    } else {
-      createDishMutation.mutate(payload);
+    try {
+      if (isEdit && dish) {
+        await updateDishMutation.mutateAsync({ id: dish.id, body: payload });
+      } else {
+        await createDishMutation.mutateAsync(payload);
+      }
+      setPublished(true);
+      toast(isEdit ? t("savedChanges") : t("dishPublished"), {
+        description: isEdit ? undefined : t("dishPublishedDesc"),
+      });
+      setTimeout(() => router.push("/cook/dishes"), 700);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      setError(t("loadError"));
+      toast(t("loadError"), { variant: "error" });
     }
-
-    setPublished(true);
-    toast(isEdit ? t("savedChanges") : t("dishPublished"), {
-      description: isEdit ? undefined : t("dishPublishedDesc"),
-    });
-    setTimeout(() => router.push("/cook/dishes"), 700);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function toggle(list: string[], setList: (value: string[]) => void, value: string) {
+  function toggle(
+    list: string[],
+    setList: (value: string[]) => void,
+    value: string,
+  ) {
     setList(
-      list.includes(value) ? list.filter((item) => item !== value) : [...list, value],
+      list.includes(value)
+        ? list.filter((item) => item !== value)
+        : [...list, value],
     );
   }
 
@@ -251,16 +349,32 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                 <h2 className="text-[17px] font-semibold text-charcoal">
                   {t("photosTitle")}
                 </h2>
-                <p className="mt-1 text-[13.5px] text-muted">{t("photosSub")}</p>
+                <p className="mt-1 text-[13.5px] text-muted">
+                  {t("photosSub")}
+                </p>
 
                 <div className="mt-4">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      void handleFileSelect(file);
+                      event.target.value = "";
+                    }}
+                  />
                   {photo ? (
-                    <div className="relative overflow-hidden rounded-[22px]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[22px]">
+                      <Image
                         src={photo}
                         alt={name || t("dishPhotoAlt", { dish: "" })}
-                        className="aspect-[4/3] w-full object-cover"
+                        fill
+                        sizes="(max-width: 768px) 100vw, 560px"
+                        loading="lazy"
+                        unoptimized
+                        className="object-cover"
                       />
                       <div className="absolute inset-x-3 bottom-3 flex gap-2">
                         <span className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full bg-white/92 text-[12.5px] font-semibold text-charcoal backdrop-blur">
@@ -269,7 +383,7 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setPhoto("")}
+                          onClick={() => fileInputRef.current?.click()}
                           className="flex h-9 items-center gap-1.5 rounded-full bg-charcoal/80 px-3 text-[12.5px] font-semibold text-white backdrop-blur"
                         >
                           <ImagePlus className="size-3.5" />
@@ -280,51 +394,69 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setPhoto(samplePhotos[0])}
-                      className="flex w-full flex-col items-center justify-center gap-2 rounded-[22px] border-2 border-dashed border-line-strong bg-cream/40 py-10 transition hover:border-terracotta/50 hover:bg-terracotta-50/30"
+                      disabled={uploadingPhoto}
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const file = e.dataTransfer.files?.[0];
+                        void handleFileSelect(file);
+                      }}
+                      className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2.5 rounded-[22px] border-2 border-dashed border-line-strong bg-cream/50 p-6 text-center transition hover:border-terracotta hover:bg-terracotta-50/30"
                     >
                       <span className="grid size-12 place-items-center rounded-full bg-white text-terracotta shadow-sm">
-                        <ImagePlus className="size-5" />
+                        <Upload className="size-5" />
                       </span>
-                      <span className="text-[14px] font-semibold text-charcoal">
-                        {t("choosePhotoHint")}
-                      </span>
-                      <span className="text-[12px] text-muted">
-                        {t("photoHint")}
-                      </span>
+                      <div>
+                        <p className="text-[15px] font-semibold text-charcoal">
+                          {uploadingPhoto
+                            ? t("uploadingPhoto")
+                            : t("uploadPhoto")}
+                        </p>
+                        <p className="mt-0.5 text-[12.5px] text-muted">
+                          JPG, PNG, WebP · {t("photosSub")}
+                        </p>
+                      </div>
                     </button>
                   )}
-                </div>
 
-                <div className="mt-4">
-                  <p className="text-[12.5px] font-semibold uppercase tracking-[0.1em] text-muted">
-                    {t("samplePhotos")}
-                  </p>
-                  <div className="mt-2 grid grid-cols-4 gap-2">
-                    {samplePhotos.slice(0, 4).map((src) => (
-                      <button
-                        key={src}
-                        type="button"
-                        onClick={() => {
-                          setPhoto(src);
-                          toast(t("photoSelected"));
-                        }}
-                        className={cn(
-                          "relative aspect-square overflow-hidden rounded-xl border-2 transition",
-                          photo === src
-                            ? "border-terracotta"
-                            : "border-transparent hover:opacity-90",
-                        )}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={src} alt="" className="size-full object-cover" />
-                        {photo === src ? (
-                          <span className="absolute end-1 top-1 grid size-4 place-items-center rounded-full bg-terracotta text-white">
-                            <Check className="size-2.5" strokeWidth={3} />
-                          </span>
-                        ) : null}
-                      </button>
-                    ))}
+                  <div className="mt-3">
+                    <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-muted-soft">
+                      {t("samplePhotos")}
+                    </p>
+                    <div className="mt-2 grid grid-cols-4 gap-2">
+                      {[
+                        "/img/couscous.jpg",
+                        "/img/tagine.jpg",
+                        "/img/kibbeh.jpg",
+                        "/img/brik.jpg",
+                      ].map((sample) => (
+                        <button
+                          key={sample}
+                          type="button"
+                          onClick={() => {
+                            setPhoto(sample);
+                            setError("");
+                          }}
+                          className={cn(
+                            "relative aspect-[4/3] overflow-hidden rounded-xl border-2 transition",
+                            photo === sample
+                              ? "border-terracotta ring-2 ring-terracotta/25"
+                              : "border-transparent opacity-80 hover:opacity-100",
+                          )}
+                        >
+                          <Image
+                            src={sample}
+                            alt=""
+                            fill
+                            sizes="120px"
+                            loading="lazy"
+                            unoptimized
+                            className="object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -349,7 +481,9 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                   <Textarea
                     id="wizard-desc"
                     value={description}
-                    onChange={(event) => setDescription(event.target.value.slice(0, 240))}
+                    onChange={(event) =>
+                      setDescription(event.target.value.slice(0, 240))
+                    }
                     placeholder={t("descriptionPh")}
                     rows={4}
                   />
@@ -358,7 +492,9 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                   <Select
                     id="wizard-cuisine"
                     value={cuisine}
-                    onChange={(event) => setCuisine(event.target.value as typeof cuisine)}
+                    onChange={(event) =>
+                      setCuisine(event.target.value as typeof cuisine)
+                    }
                   >
                     {cuisines.map((item) => (
                       <option key={item.id} value={item.id}>
@@ -370,19 +506,71 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                 <Field
                   label={t("ingredientsLabel")}
                   htmlFor="wizard-ingredients"
-                  hint={t("ingredientsHint")}
+                  hint={t("ingredientsEnterHint")}
                 >
-                  <Textarea
-                    id="wizard-ingredients"
-                    value={ingredients}
-                    onChange={(event) => setIngredients(event.target.value)}
-                    placeholder={t("ingredientsPh")}
-                    rows={3}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="wizard-ingredients"
+                      value={ingredientDraft}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        if (/[,،;]/.test(value)) {
+                          addIngredients(value);
+                          setIngredientDraft("");
+                        } else {
+                          setIngredientDraft(value);
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addIngredients(ingredientDraft);
+                          setIngredientDraft("");
+                        }
+                      }}
+                      onBlur={() => {
+                        addIngredients(ingredientDraft);
+                        setIngredientDraft("");
+                      }}
+                      placeholder={t("ingredientsPh")}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        addIngredients(ingredientDraft);
+                        setIngredientDraft("");
+                      }}
+                    >
+                      {t("addIngredient")}
+                    </Button>
+                  </div>
+                  {ingredients.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {ingredients.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() =>
+                            setIngredients((cur) => cur.filter((i) => i !== item))
+                          }
+                          aria-label={`${t("remove")} ${item}`}
+                          className="flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1.5 text-[13px] text-charcoal"
+                        >
+                          {item}
+                          <span aria-hidden className="text-muted">×</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </Field>
                 <div className="flex items-center gap-2 rounded-2xl bg-cream-100 p-3">
                   <Clock3 className="size-4 shrink-0 text-terracotta" />
-                  <Field label={t("prepTime")} htmlFor="wizard-prep" className="[&_label]:mb-0">
+                  <Field
+                    label={t("prepTime")}
+                    htmlFor="wizard-prep"
+                    className="[&_label]:mb-0"
+                  >
                     <Input
                       id="wizard-prep"
                       value={prepTime}
@@ -406,7 +594,9 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                       <h2 className="text-[16px] font-semibold text-charcoal">
                         {t("allergensTitle")}
                       </h2>
-                      <p className="text-[12.5px] text-muted">{t("allergensSub")}</p>
+                      <p className="text-[12.5px] text-muted">
+                        {t("allergensSub")}
+                      </p>
                     </div>
                   </div>
                   <p className="mt-3 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
@@ -444,7 +634,9 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                       <h2 className="text-[16px] font-semibold text-charcoal">
                         {t("dietaryTitle")}
                       </h2>
-                      <p className="text-[12.5px] text-muted">{t("dietarySub")}</p>
+                      <p className="text-[12.5px] text-muted">
+                        {t("dietarySub")}
+                      </p>
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5">
@@ -535,7 +727,9 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                   <Select
                     id="wizard-min"
                     value={String(minPortions)}
-                    onChange={(event) => setMinPortions(Number(event.target.value))}
+                    onChange={(event) =>
+                      setMinPortions(Number(event.target.value))
+                    }
                   >
                     {[1, 2, 3, 4].map((value) => (
                       <option key={value} value={value}>
@@ -567,13 +761,21 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                   </p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {weekDays.map((day, index) => {
-                      const key = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"][index];
-                      const active = days.includes(key);
+                      const key = [
+                        "mon",
+                        "tue",
+                        "wed",
+                        "thu",
+                        "fri",
+                        "sat",
+                        "sun",
+                      ][index];
+                      const active = selectedDays.includes(key);
                       return (
                         <button
                           key={key}
                           type="button"
-                          onClick={() => toggle(days, setDays, key)}
+                          onClick={() => toggleDay(key)}
                           className={cn(
                             "flex h-10 min-w-[52px] flex-1 items-center justify-center rounded-xl border text-[13px] font-semibold transition",
                             active
@@ -599,29 +801,134 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                       </p>
                     </div>
                     <Badge variant="outline" size="sm">
-                      {slots.length} {t("time")}
+                      {selectedSlots.length} {t("time")}
                     </Badge>
                   </div>
-                  <div className="mt-3 grid grid-cols-4 gap-1.5">
-                    {allSlots.map((slot) => {
-                      const active = slots.includes(slot);
-                      return (
-                        <button
-                          key={slot}
-                          type="button"
-                          onClick={() => toggle(slots, setSlots, slot)}
-                          className={cn(
-                            "flex h-9 items-center justify-center rounded-xl border text-[13px] font-semibold transition",
-                            active
-                              ? "border-olive bg-olive-50 text-olive-600"
-                              : "border-line bg-white text-muted",
-                          )}
-                        >
-                          {slot}
-                        </button>
-                      );
-                    })}
+                  {selectedDays.length ? (
+                    <>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {selectedDays.map((d) => {
+                          const label =
+                            weekDays[WEEK_ORDER.indexOf(d)] ?? d;
+                          return (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() => setActiveDay(d)}
+                              className={cn(
+                                "h-9 rounded-full border px-3 text-[12.5px] font-semibold transition",
+                                currentDay === d
+                                  ? "border-charcoal bg-charcoal text-cream"
+                                  : "border-line bg-white text-muted",
+                              )}
+                            >
+                              {label} · {windows[d].length}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {currentDay ? (
+                        <>
+                          <p className="mt-3 text-[13px] font-semibold text-charcoal">
+                            {t("slotsForDay", {
+                              day: weekDays[WEEK_ORDER.indexOf(currentDay)],
+                            })}
+                          </p>
+                          <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-5">
+                            {ALL_PICKUP_SLOTS.map((slot) => {
+                              const on = windows[currentDay].includes(slot);
+                              return (
+                                <button
+                                  key={slot}
+                                  type="button"
+                                  aria-pressed={on}
+                                  onClick={() => toggleSlot(currentDay, slot)}
+                                  className={cn(
+                                    "h-9 rounded-lg border text-[12.5px] font-semibold transition",
+                                    on
+                                      ? "border-terracotta bg-terracotta text-white"
+                                      : "border-line bg-white text-muted",
+                                  )}
+                                >
+                                  {slot}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {selectedDays.length > 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => copySlotsToAll(currentDay)}
+                              className="mt-3 text-[12.5px] font-semibold text-terracotta"
+                            >
+                              {t("copyToAllDays")}
+                            </button>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </>
+                  ) : null}
+                </Card>
+
+                <Card className="space-y-4 p-4 md:p-5">
+                  <div>
+                    <label className="flex items-center justify-between gap-3">
+                      <span>
+                        <span className="block text-[16px] font-semibold text-charcoal">
+                          {t("sameDayTitle")}
+                        </span>
+                        <span className="mt-0.5 block text-[12.5px] text-muted">
+                          {t("sameDayHint")}
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={sameDay}
+                        onChange={(event) => setSameDay(event.target.checked)}
+                        className="size-5 accent-[#c65d3a]"
+                      />
+                    </label>
+                    {sameDay ? (
+                      <div className="mt-3">
+                        <p className="text-[13px] font-semibold text-charcoal">
+                          {t("sameDayRadiusLabel")}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {SAME_DAY_RADII.map((km) => (
+                            <button
+                              key={km}
+                              type="button"
+                              onClick={() => setSameDayRadius(km)}
+                              className={cn(
+                                "h-9 rounded-full border px-3.5 text-[13px] font-semibold transition",
+                                sameDayRadius === km
+                                  ? "border-terracotta bg-terracotta text-white"
+                                  : "border-line bg-white text-muted",
+                              )}
+                            >
+                              {km} km
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
+                  <label className="flex items-center justify-between gap-3">
+                    <span>
+                      <span className="block text-[16px] font-semibold text-charcoal">
+                        {t("nextDayTitle")}
+                      </span>
+                      <span className="mt-0.5 block text-[12.5px] text-muted">
+                        {t("nextDayHint")}
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={nextDay}
+                      onChange={(event) => setNextDay(event.target.checked)}
+                      className="size-5 accent-[#c65d3a]"
+                    />
+                  </label>
                 </Card>
 
                 <Card className="p-4 md:p-5">
@@ -671,17 +978,28 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                 <h2 className="text-[17px] font-semibold text-charcoal">
                   {t("previewTitle")}
                 </h2>
-                <p className="mt-1 text-[13.5px] text-muted">{t("previewSub")}</p>
+                <p className="mt-1 text-[13.5px] text-muted">
+                  {t("previewSub")}
+                </p>
 
                 <div className="mx-auto mt-4 max-w-[280px]">
                   <div className="overflow-hidden rounded-[22px] border border-line bg-white shadow-card">
-                    <div className="relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={previewDish.image}
-                        alt={previewDish.name}
-                        className="aspect-[4/3] w-full object-cover"
-                      />
+                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-cream-100">
+                      {previewDish.image ? (
+                        <Image
+                          src={previewDish.image}
+                          alt={previewDish.name}
+                          fill
+                          sizes="280px"
+                          loading="lazy"
+                          unoptimized
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="grid size-full place-items-center text-muted-soft">
+                          <ImagePlus className="size-7" />
+                        </div>
+                      )}
                       <span className="absolute start-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-terracotta backdrop-blur">
                         {previewDish.cuisine?.flag}{" "}
                         {previewDish.cuisine
@@ -722,21 +1040,26 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                   <div className="flex justify-between">
                     <span className="text-muted">{t("cookingDays")}</span>
                     <span className="font-medium text-charcoal">
-                      {days.length} · {t("cookingDaysCount", { count: days.length })}
+                      {selectedDays.length} ·{" "}
+                      {t("cookingDaysCount", { count: selectedDays.length })}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted">{t("pickupSlots")}</span>
                     <span className="font-medium text-charcoal">
-                      {slots.slice(0, 3).join(", ")}
-                      {slots.length > 3 ? " +" + (slots.length - 3) : ""}
+                      {selectedSlots.slice(0, 3).join(", ")}
+                      {selectedSlots.length > 3
+                        ? " +" + (selectedSlots.length - 3)
+                        : ""}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted">{t("allergens")}</span>
                     <span className="max-w-[60%] text-end font-medium text-charcoal">
                       {allergens.length
-                        ? allergens.map((key) => loc(allergenNames[key], lang)).join(", ")
+                        ? allergens
+                            .map((key) => loc(allergenNames[key], lang))
+                            .join(", ")
                         : t("allergensNone")}
                     </span>
                   </div>
@@ -744,7 +1067,9 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                     <span className="text-muted">{t("dietary")}</span>
                     <span className="max-w-[60%] text-end font-medium text-charcoal">
                       {dietary.length
-                        ? dietary.map((key) => loc(dietaryNames[key], lang)).join(", ")
+                        ? dietary
+                            .map((key) => loc(dietaryNames[key], lang))
+                            .join(", ")
                         : t("dietaryNone")}
                     </span>
                   </div>
@@ -767,7 +1092,9 @@ export function DishWizard({ dish }: { dish?: Dish }) {
             <div className="mt-4 hidden items-center justify-between md:flex">
               <Button
                 variant="ghost"
-                onClick={() => (step === 0 ? router.push("/cook/dishes") : setStep(step - 1))}
+                onClick={() =>
+                  step === 0 ? router.push("/cook/dishes") : setStep(step - 1)
+                }
               >
                 <ArrowLeft className="size-4 rtl:rotate-180" />
                 {step === 0 ? t("cancel") : t("prevStep")}
@@ -802,18 +1129,33 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                 <p className="text-[13.5px] font-semibold text-charcoal">
                   {t("livePreview")}
                 </p>
-                <Badge variant={photo && name ? "olive" : "outline"} size="sm" className="ms-auto">
+                <Badge
+                  variant={photo && name ? "olive" : "outline"}
+                  size="sm"
+                  className="ms-auto"
+                >
                   {photo && name ? t("live") : t("draft")}
                 </Badge>
               </div>
               <div className="p-3">
                 <div className="overflow-hidden rounded-2xl border border-line">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={previewDish.image}
-                    alt=""
-                    className="aspect-[4/3] w-full object-cover"
-                  />
+                  <div className="relative aspect-[4/3] w-full bg-cream-100">
+                    {previewDish.image ? (
+                      <Image
+                        src={previewDish.image}
+                        alt={previewDish.name}
+                        fill
+                        sizes="320px"
+                        loading="lazy"
+                        unoptimized
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="grid size-full place-items-center text-muted-soft">
+                        <ImagePlus className="size-7" />
+                      </div>
+                    )}
+                  </div>
                   <div className="p-3">
                     <p className="line-clamp-1 text-[14.5px] font-semibold text-charcoal">
                       {previewDish.name}
@@ -836,12 +1178,16 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                   <div className="flex justify-between text-[12.5px]">
                     <span className="text-muted">{t("availablePickup")}</span>
                     <span className="font-medium text-charcoal">
-                      {days.length} {t("days")}
+                      {selectedDays.length} {t("days")}
                     </span>
                   </div>
                   <div className="flex justify-between text-[12.5px]">
-                    <span className="text-muted">{t("portionsAvailableLabel")}</span>
-                    <span className="font-medium text-charcoal">{capacity}</span>
+                    <span className="text-muted">
+                      {t("portionsAvailableLabel")}
+                    </span>
+                    <span className="font-medium text-charcoal">
+                      {capacity}
+                    </span>
                   </div>
                 </div>
               </div>

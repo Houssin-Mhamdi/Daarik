@@ -10,7 +10,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   translate,
   isRtl,
@@ -19,26 +18,26 @@ import {
   type TranslationKey,
 } from "@/lib/i18n";
 import {
-  cooks as fallbackCooks,
-  currentUser as fallbackUser,
-  dishes as fallbackDishes,
-  getDish,
-  pickupOptions,
   SERVICE_FEE,
   type Cook,
   type Dish,
   type OrderItem,
+  type PickupOption,
 } from "@/lib/data";
-import { darnaApi, getAccessToken, setAuthTokens } from "@/lib/api";
+import { darnaApi, getAccessToken, type CatalogCuisine } from "@/lib/api";
+import { buildPickupOptions } from "@/lib/pickup";
 import {
-  queryKeys,
+  useCatalogQuery,
   useCooksQuery,
   useCreateOrderMutation,
   useCurrentUserQuery,
+  useFavoritesQuery,
   useDishesQuery,
   useLoginMutation,
   useLogoutMutation,
   useRegisterMutation,
+  useToggleFavoriteCookMutation,
+  useToggleFavoriteDishMutation,
 } from "@/lib/queries";
 
 export type CartLine = { dishId: string; qty: number };
@@ -74,16 +73,21 @@ export type AuthUser = {
   address?: string;
   postcode?: string;
   city?: string;
-  role?: "CUSTOMER" | "COOK" | "ADMIN";
+  role?: "CUSTOMER" | "COOK" | "ADMIN" | "GUEST";
 };
 
 type AppContextValue = {
   lang: Lang;
   setLang: (lang: Lang) => void;
   dir: "ltr" | "rtl";
-  t: (key: TranslationKey | string, vars?: Record<string, string | number>) => string;
+  t: (
+    key: TranslationKey | string,
+    vars?: Record<string, string | number>,
+  ) => string;
   dishes: Dish[];
   cooks: Cook[];
+  cuisines: CatalogCuisine[];
+  pickupOptions: PickupOption[];
   user: AuthUser;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -107,7 +111,6 @@ type AppContextValue = {
   confirmSwitch: () => void;
   cancelSwitch: () => void;
   favorites: string[];
-  favoritesReady: boolean;
   toggleFavorite: (dishId: string) => boolean;
   isFavorite: (dishId: string) => boolean;
   favoriteCooks: string[];
@@ -136,18 +139,11 @@ const AppContext = createContext<AppContextValue | null>(null);
 const STORAGE = {
   lang: "darna.lang",
   cart: "darna.cart",
-  favorites: "darna.favorites",
-  favoriteCooks: "darna.favoriteCooks",
   pickup: "darna.pickup",
   pickupTime: "darna.pickupTime",
 };
 
-const defaultCart: CartLine[] = [
-  { dishId: "couscous-royal", qty: 1 },
-  { dishId: "brik", qty: 2 },
-];
-const defaultFavorites = ["kibbeh", "warak-enab", "couscous-royal"];
-const defaultFavoriteCooks = ["rana", "fatima"];
+const defaultCart: CartLine[] = [];
 
 function readStored<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -163,85 +159,103 @@ function readStored<T>(key: string, fallback: T): T {
 let toastSeq = 0;
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const queryClient = useQueryClient();
-  const { data: liveDishes = fallbackDishes } = useDishesQuery();
-  const { data: liveCooks = fallbackCooks } = useCooksQuery();
+  const { data: liveDishes = [] } = useDishesQuery();
+  const { data: liveCooks = [] } = useCooksQuery();
+  const { data: catalog } = useCatalogQuery();
   const { data: apiUser } = useCurrentUserQuery();
+  const { data: apiFavorites } = useFavoritesQuery();
   const loginMutation = useLoginMutation();
   const registerMutation = useRegisterMutation();
   const logoutMutation = useLogoutMutation();
   const createOrderMutation = useCreateOrderMutation();
+  const toggleFavoriteDishMutation = useToggleFavoriteDishMutation();
+  const toggleFavoriteCookMutation = useToggleFavoriteCookMutation();
 
   const [lang, setLangState] = useState<Lang>("nl");
+  const [langHydrated, setLangHydrated] = useState(false);
   const [cart, setCart] = useState<CartLine[]>(defaultCart);
-  const [favorites, setFavorites] = useState<string[]>(defaultFavorites);
-  const [favoriteCooks, setFavoriteCooks] = useState<string[]>(
-    defaultFavoriteCooks,
-  );
-  const [favoritesReady, setFavoritesReady] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<PendingSwitch>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [lastOrder, setLastOrder] = useState<PlacedOrder | null>(null);
-  const [pickup, setPickupState] = useState<string>("sat-31");
+  const [pickup, setPickupState] = useState<string>("");
   const [pickupTime, setPickupTimeState] = useState<string>("18:00");
   const [cartNote, setCartNote] = useState("");
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const orderSeq = useRef(2422);
 
   const findDish = useCallback(
-    (id: string) => liveDishes.find((d) => d.id === id) ?? getDish(id),
+    (id: string) => liveDishes.find((d) => d.id === id),
     [liveDishes],
   );
 
-  // hydrate preferences from localStorage & auto-authenticate demo session if none exists
-  useEffect(() => {
-    const storedLang = readStored<Lang | null>(STORAGE.lang, null);
-    if (storedLang && locales.includes(storedLang)) {
-      setLangState(storedLang);
-    }
-    const storedCart = readStored<CartLine[] | null>(STORAGE.cart, null);
-    if (storedCart) setCart(storedCart);
-    const storedFavs = readStored<string[] | null>(STORAGE.favorites, null);
-    if (storedFavs) setFavorites(storedFavs);
-    const storedCooks = readStored<string[] | null>(
-      STORAGE.favoriteCooks,
-      null,
-    );
-    if (storedCooks) setFavoriteCooks(storedCooks);
-    const storedPickup = readStored<string | null>(STORAGE.pickup, null);
-    if (storedPickup) setPickupState(storedPickup);
-    const storedTime = readStored<string | null>(STORAGE.pickupTime, null);
-    if (storedTime) setPickupTimeState(storedTime);
-    setFavoritesReady(true);
+  const favoriteDishIds = useMemo(
+    () =>
+      apiUser
+        ? (apiFavorites?.dishes ?? []).map((dish) => dish.slug || dish.id)
+        : [],
+    [apiUser, apiFavorites],
+  );
+  const favoriteCookIds = useMemo(
+    () =>
+      apiUser
+        ? (apiFavorites?.cooks ?? []).map((cook) => cook.slug || cook.id)
+        : [],
+    [apiUser, apiFavorites],
+  );
+  const catalogPickupOptions = useMemo(() => buildPickupOptions(), []);
+  const catalogCuisines = useMemo(
+    () => (catalog?.cuisines ?? []).map((c) => ({ ...c, flag: "" })),
+    [catalog?.cuisines],
+  );
+  const selectedPickupOption =
+    catalogPickupOptions.find((option) => option.id === pickup) ??
+    catalogPickupOptions[0];
+  const activePickup = selectedPickupOption?.id ?? pickup;
+  const activePickupTime = pickupTime;
 
-    // Auto-authenticate demo session against backend if no token exists yet
-    if (!getAccessToken()) {
-      darnaApi.auth
-        .login({
-          email: "sarah.devries@example.nl",
-          password: "Darna2026!",
-        })
-        .then((res) => {
-          setAuthTokens(res.accessToken, res.refreshToken);
-          queryClient.setQueryData(queryKeys.authMe, res.user);
-        })
-        .catch(() => {
-          /* offline fallback */
-        });
+  const setLang = useCallback((nextLang: Lang) => {
+    setLangState(nextLang);
+    try {
+      window.localStorage.setItem(STORAGE.lang, JSON.stringify(nextLang));
+    } catch {
+      /* ignore */
     }
-  }, [queryClient]);
+  }, []);
+
+  // Hydrate preferences from localStorage (never auto-login a demo user)
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      const storedLang = readStored<Lang | null>(STORAGE.lang, null);
+      if (storedLang && locales.includes(storedLang)) {
+        setLangState(storedLang);
+      }
+      setLangHydrated(true);
+      const storedCart = readStored<CartLine[] | null>(STORAGE.cart, null);
+      if (storedCart) setCart(storedCart);
+      const storedPickup = readStored<string | null>(STORAGE.pickup, null);
+      if (storedPickup) setPickupState(storedPickup);
+      const storedTime = readStored<string | null>(STORAGE.pickupTime, null);
+      if (storedTime) setPickupTimeState(storedTime);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // sync <html lang/dir>
   useEffect(() => {
     const html = document.documentElement;
     html.lang = lang;
     html.dir = isRtl(lang) ? "rtl" : "ltr";
+    if (!langHydrated) return;
     try {
       window.localStorage.setItem(STORAGE.lang, JSON.stringify(lang));
     } catch {
       /* ignore */
     }
-  }, [lang]);
+  }, [lang, langHydrated]);
 
   useEffect(() => {
     try {
@@ -253,38 +267,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(STORAGE.favorites, JSON.stringify(favorites));
-    } catch {
-      /* ignore */
-    }
-  }, [favorites]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        STORAGE.favoriteCooks,
-        JSON.stringify(favoriteCooks),
-      );
-    } catch {
-      /* ignore */
-    }
-  }, [favoriteCooks]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE.pickup, JSON.stringify(pickup));
+      window.localStorage.setItem(STORAGE.pickup, JSON.stringify(activePickup));
       window.localStorage.setItem(
         STORAGE.pickupTime,
-        JSON.stringify(pickupTime),
+        JSON.stringify(activePickupTime),
       );
     } catch {
       /* ignore */
     }
-  }, [pickup, pickupTime]);
+  }, [activePickup, activePickupTime]);
 
   useEffect(() => {
+    const scheduledTimers = timers.current;
     return () => {
-      timers.current.forEach(clearTimeout);
+      scheduledTimers.forEach(clearTimeout);
     };
   }, []);
 
@@ -349,9 +345,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (dishId: string, qty = 1) => {
       const dish = findDish(dishId);
       if (!dish) return;
-      const currentCook = cart.length
-        ? findDish(cart[0].dishId)?.cookId
-        : null;
+      const currentCook = cart.length ? findDish(cart[0].dishId)?.cookId : null;
       if (currentCook && currentCook !== dish.cookId) {
         setPendingSwitch({ dishId, qty });
         return;
@@ -436,56 +430,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const toggleFavorite = useCallback((dishId: string) => {
-    let added = false;
-    setFavorites((prev) => {
-      if (prev.includes(dishId)) {
-        return prev.filter((id) => id !== dishId);
-      }
-      added = true;
-      return [...prev, dishId];
-    });
-    if (getAccessToken()) {
-      fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api"}/users/me/favorites/dishes/${dishId}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${getAccessToken()}` },
-        },
-      ).catch(() => {});
-    }
-    return added;
-  }, []);
-
-  const isFavorite = useCallback(
-    (dishId: string) => favorites.includes(dishId),
-    [favorites],
+  const toggleFavorite = useCallback(
+    (dishId: string) => {
+      if (!apiUser) return false;
+      const added = !favoriteDishIds.includes(dishId);
+      toggleFavoriteDishMutation.mutate(dishId);
+      return added;
+    },
+    [apiUser, favoriteDishIds, toggleFavoriteDishMutation],
   );
 
-  const toggleFavoriteCook = useCallback((cookId: string) => {
-    let added = false;
-    setFavoriteCooks((prev) => {
-      if (prev.includes(cookId)) {
-        return prev.filter((id) => id !== cookId);
-      }
-      added = true;
-      return [...prev, cookId];
-    });
-    if (getAccessToken()) {
-      fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api"}/users/me/favorites/cooks/${cookId}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${getAccessToken()}` },
-        },
-      ).catch(() => {});
-    }
-    return added;
-  }, []);
+  const isFavorite = useCallback(
+    (dishId: string) => favoriteDishIds.includes(dishId),
+    [favoriteDishIds],
+  );
+
+  const toggleFavoriteCook = useCallback(
+    (cookId: string) => {
+      if (!apiUser) return false;
+      const added = !favoriteCookIds.includes(cookId);
+      toggleFavoriteCookMutation.mutate(cookId);
+      return added;
+    },
+    [apiUser, favoriteCookIds, toggleFavoriteCookMutation],
+  );
 
   const isFavoriteCook = useCallback(
-    (cookId: string) => favoriteCooks.includes(cookId),
-    [favoriteCooks],
+    (cookId: string) => favoriteCookIds.includes(cookId),
+    [favoriteCookIds],
   );
 
   const cartCookId = useMemo(() => {
@@ -493,13 +465,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return findDish(cart[0].dishId)?.cookId ?? null;
   }, [cart, findDish]);
 
-  const setPickup = useCallback((id: string) => {
-    setPickupState(id);
-    const option = pickupOptions.find((p) => p.id === id);
-    if (option) {
-      setPickupTimeState(option.slots[0]);
-    }
-  }, []);
+  const setPickup = useCallback(
+    (id: string) => {
+      setPickupState(id);
+      const option = catalogPickupOptions.find((p) => p.id === id);
+      if (option) {
+        setPickupTimeState(option.slots[0] ?? "");
+      }
+    },
+    [catalogPickupOptions],
+  );
 
   const setPickupTime = useCallback((time: string) => {
     setPickupTimeState(time);
@@ -507,20 +482,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const user = useMemo<AuthUser>(() => {
     if (apiUser) {
+      const fullName = apiUser.name || "";
+      const firstName =
+        apiUser.firstName || (fullName ? fullName.split(/\s+/)[0] : "");
       return {
         id: apiUser.id,
-        name: apiUser.name || fallbackUser.name,
-        firstName: apiUser.firstName || fallbackUser.firstName,
-        email: apiUser.email || fallbackUser.email,
-        phone: apiUser.phone || fallbackUser.phone,
-        avatar: apiUser.avatar || fallbackUser.avatar,
-        address: apiUser.address || fallbackUser.address,
-        postcode: apiUser.postcode || fallbackUser.postcode,
-        city: apiUser.city || fallbackUser.city,
+        name: fullName,
+        firstName,
+        email: apiUser.email || "",
+        phone: apiUser.phone || "",
+        avatar: apiUser.avatar || "",
+        address: apiUser.address || "",
+        postcode: apiUser.postcode || "",
+        city: apiUser.city || "",
         role: apiUser.role || "CUSTOMER",
       };
     }
-    return fallbackUser;
+    return {
+      id: undefined,
+      name: "",
+      firstName: "",
+      email: "",
+      phone: "",
+      avatar: "",
+      address: "",
+      postcode: "",
+      city: "",
+      role: "GUEST",
+    };
   }, [apiUser]);
 
   const placeOrder = useCallback(
@@ -546,7 +535,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   ? "BANCONTACT"
                   : "IDEAL",
           })
-          .then((created: any) => {
+          .then((created) => {
             if (created?.code) {
               setLastOrder((prev) =>
                 prev ? { ...prev, code: created.code } : prev,
@@ -572,89 +561,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [findDish],
   );
 
-  const value = useMemo<AppContextValue>(
-    () => ({
-      lang,
-      setLang: setLangState,
-      dir: isRtl(lang) ? "rtl" : "ltr",
-      t,
-      dishes: liveDishes,
-      cooks: liveCooks,
-      user,
-      isAuthenticated: Boolean(apiUser),
-      login,
-      register,
-      logout,
-      cart,
-      cartCount: cart.reduce((n, line) => n + line.qty, 0),
-      cartCookId,
-      addToCart,
-      setQty,
-      removeFromCart,
-      clearCart,
-      pendingSwitch,
-      confirmSwitch,
-      cancelSwitch,
-      favorites,
-      favoritesReady,
-      toggleFavorite,
-      isFavorite,
-      favoriteCooks,
-      toggleFavoriteCook,
-      isFavoriteCook,
-      toasts,
-      toast,
-      dismissToast,
-      lastOrder,
-      placeOrder,
-      reorderCart,
-      pickup,
-      setPickup,
-      pickupTime,
-      setPickupTime,
-      cartNote,
-      setCartNote,
-      serviceFee: SERVICE_FEE,
-    }),
-    [
-      lang,
-      t,
-      liveDishes,
-      liveCooks,
-      user,
-      apiUser,
-      login,
-      register,
-      logout,
-      cart,
-      cartCookId,
-      addToCart,
-      setQty,
-      removeFromCart,
-      clearCart,
-      pendingSwitch,
-      confirmSwitch,
-      cancelSwitch,
-      favorites,
-      favoritesReady,
-      toggleFavorite,
-      isFavorite,
-      favoriteCooks,
-      toggleFavoriteCook,
-      isFavoriteCook,
-      toasts,
-      toast,
-      dismissToast,
-      lastOrder,
-      placeOrder,
-      reorderCart,
-      pickup,
-      setPickup,
-      pickupTime,
-      setPickupTime,
-      cartNote,
-    ],
-  );
+  const value: AppContextValue = {
+    lang,
+    setLang,
+    dir: isRtl(lang) ? "rtl" : "ltr",
+    t,
+    dishes: liveDishes,
+    cooks: liveCooks,
+    cuisines: catalogCuisines,
+    pickupOptions: catalogPickupOptions,
+    user,
+    isAuthenticated: Boolean(apiUser),
+    login,
+    register,
+    logout,
+    cart,
+    cartCount: cart.reduce((n, line) => n + line.qty, 0),
+    cartCookId,
+    addToCart,
+    setQty,
+    removeFromCart,
+    clearCart,
+    pendingSwitch,
+    confirmSwitch,
+    cancelSwitch,
+    favorites: favoriteDishIds,
+    toggleFavorite,
+    isFavorite,
+    favoriteCooks: favoriteCookIds,
+    toggleFavoriteCook,
+    isFavoriteCook,
+    toasts,
+    toast,
+    dismissToast,
+    lastOrder,
+    placeOrder,
+    reorderCart,
+    pickup: activePickup,
+    setPickup,
+    pickupTime: activePickupTime,
+    setPickupTime,
+    cartNote,
+    setCartNote,
+    serviceFee: catalog?.serviceFee ?? SERVICE_FEE,
+  };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

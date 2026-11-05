@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -9,8 +9,8 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
-  ChefHat,
   Clock3,
+  CreditCard,
   Info,
   MapPin,
   MessageCircle,
@@ -26,20 +26,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, ConfirmDialog, EmptyState } from "@/components/ui/overlays";
 import { Card, KeyValue } from "@/components/ui/misc";
-import { OrderStatusBadge } from "@/components/app/order-status";
-import { useApp } from "@/components/providers/app-provider";
 import {
-  customerOrders,
-  getCook,
-  getDish,
-  loc,
-  orderSubtotal,
-  pickupOptions,
-  type CustomerOrder,
-  type OrderStatus,
-} from "@/lib/data";
+  OrderStatusBadge,
+  PaymentStatusBadge,
+} from "@/components/app/order-status";
+import { useApp } from "@/components/providers/app-provider";
+import { loc, type CustomerOrder, type OrderStatus } from "@/lib/data";
 import {
   useCancelOrderMutation,
+  useCreateCheckoutSessionMutation,
   useCreateReviewMutation,
   useOrderQuery,
 } from "@/lib/queries";
@@ -52,25 +47,24 @@ export default function OrderDetailPage() {
     t,
     lang,
     dir,
+    dishes,
+    cooks,
+    pickupOptions,
     serviceFee,
     toast,
     reorderCart,
   } = useApp();
 
-  const { data: queriedOrder } = useOrderQuery(params.id);
+  const { data: queriedOrder, isLoading } = useOrderQuery(params.id);
   const cancelMutation = useCancelOrderMutation();
   const createReviewMutation = useCreateReviewMutation();
+  const checkoutMutation = useCreateCheckoutSessionMutation();
 
-  const initial = useMemo(
-    () =>
-      queriedOrder ??
-      customerOrders.find(
-        (order) => order.id === params.id || order.code === params.id,
-      ),
-    [queriedOrder, params.id],
-  );
-  const [localOverride, setLocalOverride] = useState<Partial<CustomerOrder> | null>(null);
-  const order = initial ? { ...initial, ...localOverride } : undefined;
+  const [localOverride, setLocalOverride] =
+    useState<Partial<CustomerOrder> | null>(null);
+  const order = queriedOrder
+    ? { ...queriedOrder, ...localOverride }
+    : undefined;
   const [cancelOpen, setCancelOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -79,6 +73,14 @@ export default function OrderDetailPage() {
   const [rating, setRating] = useState(5);
   const [message, setMessage] = useState("");
   const [reviewText, setReviewText] = useState("");
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-[1120px] px-4 pt-10 md:px-8">
+        <div className="h-64 animate-pulse rounded-[22px] bg-charcoal/10" />
+      </div>
+    );
+  }
 
   if (!order) {
     return (
@@ -97,15 +99,38 @@ export default function OrderDetailPage() {
     );
   }
 
-  const cook = getCook(order.cookId);
+  const cook = order.cook ?? cooks.find((c) => c.id === order.cookId);
   const pickup = pickupOptions.find((option) => option.id === order.pickup);
   const lines = order.items
-    .map((item) => ({ item, dish: getDish(item.dishId) }))
+    .map((item) => ({
+      item,
+      dish: dishes.find((d) => d.id === item.dishId),
+    }))
     .filter((line) => line.dish);
-  const subtotal = orderSubtotal(order.items);
-  const total = subtotal + serviceFee;
+  const computedSubtotal = lines.reduce(
+    (sum, line) => sum + (line.dish?.price ?? 0) * line.item.qty,
+    0,
+  );
+  const subtotal = order.subtotal ?? computedSubtotal;
+  const total = order.total ?? subtotal + serviceFee;
   const isUpcoming = ["confirmed", "preparing", "ready"].includes(order.status);
   const isCancelled = order.status === "cancelled";
+  const needsPayment =
+    order.paymentStatus === "REQUIRES_PAYMENT" ||
+    order.paymentStatus === "FAILED";
+
+  const payNow = async () => {
+    try {
+      const session = await checkoutMutation.mutateAsync({
+        orderCode: order.code,
+      });
+      window.location.assign(session.url);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : t("paymentFailed"), {
+        variant: "error",
+      });
+    }
+  };
 
   const steps: { key: string; status: OrderStatus; time?: string }[] = [
     { key: "orderPlaced", status: "confirmed", time: loc(order.placed, lang) },
@@ -177,7 +202,9 @@ export default function OrderDetailPage() {
             aria-label={t("back")}
             className="-ms-2 grid size-10 place-items-center rounded-full text-charcoal hover:bg-cream-100"
           >
-            <ArrowLeft className={cn("size-5", dir === "rtl" && "rotate-180")} />
+            <ArrowLeft
+              className={cn("size-5", dir === "rtl" && "rotate-180")}
+            />
           </button>
           <div className="min-w-0">
             <h1 className="text-[17px] font-semibold leading-tight text-charcoal">
@@ -218,7 +245,11 @@ export default function OrderDetailPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setMessageOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMessageOpen(true)}
+            >
               <MessageCircle className="size-3.5" />
               {t("messageCook")}
             </Button>
@@ -272,7 +303,10 @@ export default function OrderDetailPage() {
                       const done = currentStep >= index;
                       const active = currentStep === index;
                       return (
-                        <div key={step.key} className="flex flex-1 flex-col items-center">
+                        <div
+                          key={step.key}
+                          className="flex flex-1 flex-col items-center"
+                        >
                           <div className="flex w-full items-center">
                             <div
                               className={cn(
@@ -342,6 +376,8 @@ export default function OrderDetailPage() {
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
+                      loading="lazy"
+                      decoding="async"
                       src={cook.avatar}
                       alt={cook.name}
                       className="size-12 rounded-full object-cover"
@@ -403,9 +439,12 @@ export default function OrderDetailPage() {
                   <p className="text-[13px] font-semibold text-charcoal">
                     {t("exactAddressNote")}
                   </p>
-                  <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
-                    {cook?.instructions[lang]}
-                  </p>
+                  {order.paid &&
+                  (order.cook?.instructions ?? cook?.instructions) ? (
+                    <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
+                      {(order.cook?.instructions ?? cook?.instructions)?.[lang]}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </Card>
@@ -425,6 +464,8 @@ export default function OrderDetailPage() {
                   <div key={item.dishId} className="flex gap-3 py-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
+                      loading="lazy"
+                      decoding="async"
                       src={dish!.image}
                       alt={loc(dish!.name, lang)}
                       className="size-14 shrink-0 rounded-xl object-cover"
@@ -522,14 +563,35 @@ export default function OrderDetailPage() {
                 {t("paymentDetails")}
               </h2>
               <div className="mt-3 space-y-2.5">
-                <KeyValue label={t("paymentStatus")} value={order.paid ? t("paid") : t("refunded")} />
-                <KeyValue label={t("paymentMethod")} value="iDEAL" />
+                <KeyValue
+                  label={t("paymentStatus")}
+                  value={
+                    order.paymentStatus ? (
+                      <PaymentStatusBadge status={order.paymentStatus} />
+                    ) : order.paid ? (
+                      t("paid")
+                    ) : (
+                      t("refunded")
+                    )
+                  }
+                />
+                <KeyValue label={t("paymentMethod")} value="iDEAL · Card" />
                 <KeyValue label={t("orderRef")} value={order.code} />
                 <KeyValue
                   label={t("pickupFrom")}
                   value={cook?.pickupArea[lang] ?? ""}
                 />
               </div>
+              {needsPayment ? (
+                <Button
+                  className="mt-3 w-full"
+                  loading={checkoutMutation.isPending}
+                  onClick={payNow}
+                >
+                  <CreditCard className="size-4" />
+                  {t("payNow", { amount: formatPrice(total, lang) })}
+                </Button>
+              ) : null}
               <p className="mt-3 flex items-start gap-1.5 border-t border-line pt-3 text-[12px] leading-relaxed text-muted">
                 <ShieldCheck className="mt-0.5 size-3 shrink-0 text-olive" />
                 {t("billingNote")}
@@ -595,7 +657,7 @@ export default function OrderDetailPage() {
 
             <p className="px-1 text-center text-[12px] leading-relaxed text-muted-soft">
               {t("cancelWindowNote", { time: t("free") })} ·{" "}
-              {t("demoNotice")}
+              {t("paymentsByStripe")}
             </p>
           </aside>
         </div>
@@ -603,6 +665,16 @@ export default function OrderDetailPage() {
         {/* Mobile action bar */}
         {isUpcoming ? (
           <div className="mt-4 grid gap-2 md:hidden">
+            {needsPayment ? (
+              <Button
+                className="h-11"
+                loading={checkoutMutation.isPending}
+                onClick={payNow}
+              >
+                <CreditCard className="size-4" />
+                {t("payNow", { amount: formatPrice(total, lang) })}
+              </Button>
+            ) : null}
             {order.status === "ready" ? (
               <div className="flex items-center justify-center gap-2 rounded-2xl bg-olive px-4 py-3.5 text-[14.5px] font-semibold text-white">
                 <CheckCircle2 className="size-4" />
@@ -676,6 +748,8 @@ export default function OrderDetailPage() {
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                loading="lazy"
+                decoding="async"
                 src={cook.avatar}
                 alt={cook.name}
                 className="size-10 rounded-full object-cover"

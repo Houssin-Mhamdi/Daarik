@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import {
@@ -8,14 +8,12 @@ import {
   ChefHat,
   Check,
   CircleDollarSign,
-  ClipboardCheck,
   Clock3,
   HeartHandshake,
   MapPin,
   ShieldCheck,
   Sparkles,
   Star,
-  UtensilsCrossed,
   Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -89,6 +87,8 @@ export default function CookLandingPage() {
             <div className="relative overflow-hidden rounded-[30px] border border-white/60 shadow-pop">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                loading="lazy"
+                decoding="async"
                 src="/img/cook-hero.jpg"
                 alt={t("sampleCookName")}
                 className="aspect-[4/5] w-full object-cover md:aspect-[5/5.4]"
@@ -97,6 +97,8 @@ export default function CookLandingPage() {
               <div className="absolute inset-x-3 bottom-3 flex items-center gap-2.5 rounded-2xl bg-white/92 p-2.5 backdrop-blur-md">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src="/img/cook-rana.jpg"
                   alt=""
                   className="size-10 rounded-full object-cover"
@@ -259,6 +261,8 @@ export default function CookLandingPage() {
               <div className="mt-3 flex items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src="/img/cook-rana.jpg"
                   alt=""
                   className="size-8 rounded-full object-cover"

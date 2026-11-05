@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -8,16 +8,60 @@ import { EmptyState } from "@/components/ui/overlays";
 import { Button } from "@/components/ui/button";
 import { DishCard } from "@/components/app/dish-card";
 import { useApp } from "@/components/providers/app-provider";
-import { cooks, dishes, getCook, loc } from "@/lib/data";
-import { cn } from "@/lib/utils";
+import { loc } from "@/lib/data";
+import { useCurrentUserQuery } from "@/lib/queries";
 
 export default function FavoritesPage() {
-  const { t, lang, favorites, favoriteCooks, toggleFavoriteCook, toast } =
-    useApp();
+  const {
+    t,
+    lang,
+    dishes,
+    cooks,
+    favorites,
+    favoriteCooks,
+    toggleFavoriteCook,
+    toast,
+  } = useApp();
   const [tab, setTab] = useState<"dishes" | "cooks">("dishes");
+  const { data: currentUser, isPending: authPending } = useCurrentUserQuery();
 
   const savedDishes = dishes.filter((dish) => favorites.includes(dish.id));
   const savedCooks = cooks.filter((cook) => favoriteCooks.includes(cook.id));
+
+  if (authPending) {
+    return (
+      <div className="mx-auto max-w-[480px] px-4 py-16 text-center text-sm text-muted">
+        {t("loading")}
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    const next = encodeURIComponent("/favorites");
+    return (
+      <div className="mx-auto w-full max-w-[480px] px-4 py-16 text-center">
+        <span className="mx-auto grid size-14 place-items-center rounded-full bg-terracotta-50 text-terracotta">
+          <Heart className="size-6" />
+        </span>
+        <h1 className="mt-4 font-display text-[26px] font-semibold text-charcoal">
+          {t("authRequiredTitle")}
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          {t("authRequiredDescription")}
+        </p>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <Link href={`/login?next=${next}`}>
+            <Button className="w-full">{t("authSignIn")}</Button>
+          </Link>
+          <Link href={`/register?next=${next}`}>
+            <Button variant="secondary" className="w-full">
+              {t("authCreateAccount")}
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pb-8">
@@ -43,8 +87,16 @@ export default function FavoritesPage() {
         <div className="mt-5 md:max-w-md">
           <SegmentedTabs
             tabs={[
-              { value: "dishes", label: t("savedDishes"), count: savedDishes.length },
-              { value: "cooks", label: t("savedCooks"), count: savedCooks.length },
+              {
+                value: "dishes",
+                label: t("savedDishes"),
+                count: savedDishes.length,
+              },
+              {
+                value: "cooks",
+                label: t("savedCooks"),
+                count: savedCooks.length,
+              },
             ]}
             value={tab}
             onChange={setTab}
@@ -81,15 +133,14 @@ export default function FavoritesPage() {
                 <Link href={`/cook/${cook.id}`} className="shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
+                    loading="lazy"
+                    decoding="async"
                     src={cook.avatar}
                     alt={cook.name}
                     className="size-14 rounded-full object-cover"
                   />
                 </Link>
-                <Link
-                  href={`/cook/${cook.id}`}
-                  className="min-w-0 flex-1"
-                >
+                <Link href={`/cook/${cook.id}`} className="min-w-0 flex-1">
                   <p className="truncate text-[15.5px] font-semibold text-charcoal">
                     {cook.name}
                   </p>
@@ -134,7 +185,10 @@ export default function FavoritesPage() {
 
         <div className="mt-8 hidden items-center justify-between rounded-2xl border border-line bg-white/60 px-5 py-4 md:flex">
           <p className="text-[13.5px] text-muted">{t("emptyFavSub")}</p>
-          <Link href="/explore" className="text-[13.5px] font-semibold text-terracotta">
+          <Link
+            href="/explore"
+            className="text-[13.5px] font-semibold text-terracotta"
+          >
             {t("exploreFood")}
           </Link>
         </div>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import {
@@ -91,6 +91,8 @@ export default function InstallPage() {
                 <div className="relative h-full">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
+                    loading="lazy"
+                    decoding="async"
                     src="/img/splash-tajine.jpg"
                     alt="Darna app"
                     className="absolute inset-0 size-full object-cover"

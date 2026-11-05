@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import { Check, Minus, Plus, Star } from "lucide-react";
@@ -307,6 +307,8 @@ export function Avatar({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
+      loading="lazy"
+      decoding="async"
       src={src}
       alt={alt}
       width={size}

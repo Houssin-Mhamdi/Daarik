@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   ChevronLeft,
   ChevronRight,
   Clock3,
   Download,
-  MapPin,
   Package,
   ReceiptText,
   Search,
@@ -19,8 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, SegmentedTabs } from "@/components/ui/controls";
+import { SegmentedTabs } from "@/components/ui/controls";
 import { ConfirmDialog, Sheet } from "@/components/ui/overlays";
 import { useApp } from "@/components/providers/app-provider";
 import {
@@ -32,81 +31,22 @@ import {
   Td,
   Th,
 } from "@/components/admin/admin-ui";
-import { adminKpis, adminOrders } from "@/lib/data";
+import {
+  useAdminOrdersQuery,
+  useAdminUpdateOrderStatusMutation,
+  type AdminOrderRecord,
+} from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
 
-type AdminOrder = (typeof adminOrders)[number];
-
-const extraOrders: AdminOrder[] = [
-  {
-    code: "DR-2414",
-    customer: "Nadia Rahmani",
-    cook: "Fatima Haddad",
-    amount: 41.5,
-    status: "preparing" as const,
-    pickup: "31 Oct · 13:00",
-    placed: "38 min ago",
-  },
-  {
-    code: "DR-2412",
-    customer: "Jeroen Visser",
-    cook: "Omar Benali",
-    amount: 22,
-    status: "confirmed" as const,
-    pickup: "31 Oct · 12:30",
-    placed: "52 min ago",
-  },
-  {
-    code: "DR-2411",
-    customer: "Meryem Aydin",
-    cook: "Samira Khoury",
-    amount: 56.5,
-    status: "ready" as const,
-    pickup: "30 Oct · 19:00",
-    placed: "1 hr ago",
-  },
-  {
-    code: "DR-2409",
-    customer: "Daan Smit",
-    cook: "Rana El Amri",
-    amount: 18,
-    status: "completed" as const,
-    pickup: "30 Oct · 17:30",
-    placed: "2 hrs ago",
-  },
-  {
-    code: "DR-2407",
-    customer: "Layla Mansouri",
-    cook: "Fatima Haddad",
-    amount: 30.5,
-    status: "completed" as const,
-    pickup: "30 Oct · 13:30",
-    placed: "3 hrs ago",
-  },
-  {
-    code: "DR-2404",
-    customer: "Ruben de Boer",
-    cook: "Omar Benali",
-    amount: 26,
-    status: "cancelled" as const,
-    pickup: "30 Oct · 12:00",
-    placed: "4 hrs ago",
-  },
-  {
-    code: "DR-2401",
-    customer: "Ines Bouazizi",
-    cook: "Rana El Amri",
-    amount: 47.5,
-    status: "completed" as const,
-    pickup: "29 Oct · 18:30",
-    placed: "Yesterday",
-  },
-];
-
-const allOrders: AdminOrder[] = [...adminOrders, ...extraOrders];
-
-type Filter = "all" | "confirmed" | "preparing" | "ready" | "completed" | "cancelled";
-type OrderStatus = AdminOrder["status"];
+type Filter =
+  | "all"
+  | "confirmed"
+  | "preparing"
+  | "ready"
+  | "completed"
+  | "cancelled";
+type AdminOrder = AdminOrderRecord & { placed: string };
+type OrderStatus = AdminOrderRecord["status"];
 
 const nextStatus: Partial<Record<OrderStatus, OrderStatus>> = {
   confirmed: "preparing",
@@ -124,16 +64,22 @@ const statusLabelKey: Record<OrderStatus, string> = {
 
 export default function AdminOrdersPage() {
   const { t, lang, toast } = useApp();
+  const searchParams = useSearchParams();
   const [filter, setFilter] = useState<Filter>("all");
-  const [query, setQuery] = useState("");
-  const [orders, setOrders] = useState<AdminOrder[]>(allOrders);
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [cancelCode, setCancelCode] = useState<string | null>(null);
+  const { data: apiOrders = [], isPending, isError } = useAdminOrdersQuery();
+  const updateOrderStatusMutation = useAdminUpdateOrderStatusMutation();
 
-  useEffect(() => {
-    const incoming = new URLSearchParams(window.location.search).get("q");
-    if (incoming) setQuery(incoming);
-  }, []);
+  const orders = useMemo<AdminOrder[]>(
+    () =>
+      apiOrders.map((order) => ({
+        ...order,
+        placed: new Date(order.createdAt).toLocaleString(),
+      })),
+    [apiOrders],
+  );
 
   const counts = useMemo(() => {
     const base: Record<Filter, number> = {
@@ -164,15 +110,21 @@ export default function AdminOrdersPage() {
   }, [filter, orders, query]);
 
   const selected = orders.find((order) => order.code === selectedCode) ?? null;
-  const cancelTarget = orders.find((order) => order.code === cancelCode) ?? null;
+  const cancelTarget =
+    orders.find((order) => order.code === cancelCode) ?? null;
 
-  const updateStatus = (code: string, status: OrderStatus) => {
-    setOrders((prev) =>
-      prev.map((order) => (order.code === code ? { ...order, status } : order)),
-    );
-    toast(t("orderStatusUpdated"), {
-      description: `${code} · ${t(statusLabelKey[status])}`,
-    });
+  const updateStatus = async (code: string, status: OrderStatus) => {
+    try {
+      await updateOrderStatusMutation.mutateAsync({
+        id: code,
+        status: status.toUpperCase(),
+      });
+      toast(t("orderStatusUpdated"), {
+        description: `${code} · ${t(statusLabelKey[status])}`,
+      });
+    } catch {
+      toast(t("loadError"), { variant: "error" });
+    }
   };
 
   const exportCsv = () => {
@@ -212,9 +164,14 @@ export default function AdminOrdersPage() {
               className="hidden h-9 items-center gap-1.5 rounded-full border border-[#e4dbc9] bg-white px-3 text-[13.5px] font-semibold text-charcoal transition hover:border-line-strong sm:flex"
             >
               <ReceiptText className="size-3.5 text-muted" />
-              {t("openDisputes")} ({adminKpis.disputes})
+              {t("openDisputes")}
             </Link>
-            <Button variant="secondary" size="sm" className="h-9" onClick={exportCsv}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-9"
+              onClick={exportCsv}
+            >
               <Download className="size-4" />
               {t("exportCsv")}
             </Button>
@@ -226,13 +183,18 @@ export default function AdminOrdersPage() {
         {[
           {
             label: t("ordersToday"),
-            value: adminKpis.ordersToday,
+            value: orders.filter(
+              (order) =>
+                new Date(order.createdAt).toDateString() ===
+                new Date().toDateString(),
+            ).length,
             icon: ShoppingBag,
             tone: "bg-terracotta-50 text-terracotta-700",
           },
           {
             label: t("statusPreparing"),
-            value: orders.filter((order) => order.status === "preparing").length,
+            value: orders.filter((order) => order.status === "preparing")
+              .length,
             icon: Timer,
             tone: "bg-saffron-50 text-[#8a5d13]",
           },
@@ -245,8 +207,16 @@ export default function AdminOrdersPage() {
         ].map((stat) => {
           const Icon = stat.icon;
           return (
-            <AdminCard key={stat.label} className="flex items-center gap-3 p-3 md:p-4">
-              <span className={cn("hidden size-9 place-items-center rounded-xl sm:grid", stat.tone)}>
+            <AdminCard
+              key={stat.label}
+              className="flex items-center gap-3 p-3 md:p-4"
+            >
+              <span
+                className={cn(
+                  "hidden size-9 place-items-center rounded-xl sm:grid",
+                  stat.tone,
+                )}
+              >
                 <Icon className="size-4" />
               </span>
               <div className="min-w-0">
@@ -291,76 +261,119 @@ export default function AdminOrdersPage() {
               onChange={(value) => setFilter(value)}
               tabs={[
                 { value: "all", label: t("all"), count: counts.all },
-                { value: "confirmed", label: t("statusConfirmed"), count: counts.confirmed },
-                { value: "preparing", label: t("statusPreparing"), count: counts.preparing },
-                { value: "ready", label: t("statusReady"), count: counts.ready },
-                { value: "completed", label: t("completed"), count: counts.completed },
-                { value: "cancelled", label: t("cancelled"), count: counts.cancelled },
+                {
+                  value: "confirmed",
+                  label: t("statusConfirmed"),
+                  count: counts.confirmed,
+                },
+                {
+                  value: "preparing",
+                  label: t("statusPreparing"),
+                  count: counts.preparing,
+                },
+                {
+                  value: "ready",
+                  label: t("statusReady"),
+                  count: counts.ready,
+                },
+                {
+                  value: "completed",
+                  label: t("completed"),
+                  count: counts.completed,
+                },
+                {
+                  value: "cancelled",
+                  label: t("cancelled"),
+                  count: counts.cancelled,
+                },
               ]}
               className="min-w-max"
             />
           </div>
         </div>
 
-        <AdminTable>
-          <thead>
-            <tr>
-              <Th>{t("orderId")}</Th>
-              <Th>{t("customerCol")}</Th>
-              <Th className="hidden lg:table-cell">{t("cookCol")}</Th>
-              <Th className="hidden md:table-cell">{t("pickupCol")}</Th>
-              <Th className="hidden xl:table-cell">{t("placedCol")}</Th>
-              <Th>{t("amountCol")}</Th>
-              <Th>{t("statusCol")}</Th>
-              <Th className="text-end">{t("actionCol")}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((order) => (
-              <tr
-                key={order.code}
-                className="group cursor-pointer transition hover:bg-cream/40"
-                onClick={() => setSelectedCode(order.code)}
-              >
-                <Td className="font-semibold">{order.code}</Td>
-                <Td>
-                  <div className="flex items-center gap-2">
-                    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-cream-100 text-[11px] font-bold">
-                      {order.customer
-                        .split(" ")
-                        .map((part) => part[0])
-                        .slice(0, 2)
-                        .join("")}
-                    </span>
-                    <span className="truncate">{order.customer}</span>
-                  </div>
-                </Td>
-                <Td className="hidden text-muted lg:table-cell">{order.cook}</Td>
-                <Td className="hidden whitespace-nowrap text-muted md:table-cell">{order.pickup}</Td>
-                <Td className="hidden text-muted xl:table-cell">{order.placed}</Td>
-                <Td>
-                  <MoneyText value={order.amount} className="text-[14px]" />
-                </Td>
-                <Td>
-                  <StatusPill status={order.status} />
-                </Td>
-                <Td className="text-end">
-                  <span className="inline-flex size-7 items-center justify-center rounded-lg text-muted-soft transition group-hover:bg-white group-hover:text-charcoal">
-                    <ChevronRight className="size-4 rtl:rotate-180" />
-                  </span>
-                </Td>
+        {isError ? (
+          <div
+            role="alert"
+            className="px-5 py-8 text-center text-sm text-danger"
+          >
+            {t("loadError")}
+          </div>
+        ) : isPending ? (
+          <div className="px-5 py-8 text-center text-sm text-muted">
+            {t("loading")}
+          </div>
+        ) : (
+          <AdminTable>
+            <thead>
+              <tr>
+                <Th>{t("orderId")}</Th>
+                <Th>{t("customerCol")}</Th>
+                <Th className="hidden lg:table-cell">{t("cookCol")}</Th>
+                <Th className="hidden md:table-cell">{t("pickupCol")}</Th>
+                <Th className="hidden xl:table-cell">{t("placedCol")}</Th>
+                <Th>{t("amountCol")}</Th>
+                <Th>{t("statusCol")}</Th>
+                <Th className="text-end">{t("actionCol")}</Th>
               </tr>
-            ))}
-          </tbody>
-        </AdminTable>
+            </thead>
+            <tbody>
+              {filtered.map((order) => (
+                <tr
+                  key={order.code}
+                  className="group cursor-pointer transition hover:bg-cream/40"
+                  onClick={() => setSelectedCode(order.code)}
+                >
+                  <Td className="font-semibold">{order.code}</Td>
+                  <Td>
+                    <div className="flex items-center gap-2">
+                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-cream-100 text-[11px] font-bold">
+                        {order.customer
+                          .split(" ")
+                          .map((part) => part[0])
+                          .slice(0, 2)
+                          .join("")}
+                      </span>
+                      <span className="truncate">{order.customer}</span>
+                    </div>
+                  </Td>
+                  <Td className="hidden text-muted lg:table-cell">
+                    {order.cook}
+                  </Td>
+                  <Td className="hidden whitespace-nowrap text-muted md:table-cell">
+                    {order.pickup}
+                  </Td>
+                  <Td className="hidden text-muted xl:table-cell">
+                    {order.placed}
+                  </Td>
+                  <Td>
+                    <MoneyText value={order.amount} className="text-[14px]" />
+                  </Td>
+                  <Td>
+                    <StatusPill status={order.status} />
+                  </Td>
+                  <Td className="text-end">
+                    <span className="inline-flex size-7 items-center justify-center rounded-lg text-muted-soft transition group-hover:bg-white group-hover:text-charcoal">
+                      <ChevronRight className="size-4 rtl:rotate-180" />
+                    </span>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </AdminTable>
+        )}
 
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center px-5 py-14 text-center">
             <span className="grid size-11 place-items-center rounded-full bg-cream-100 text-muted">
               <Search className="size-5" />
             </span>
-            <p className="mt-3 text-[16px] font-semibold text-charcoal">{t("noResults")}</p>
-            <p className="mt-1 max-w-xs text-[13.5px] text-muted">{t("noResultsFilters")}</p>
+            <p className="mt-3 text-[16px] font-semibold text-charcoal">
+              {t("noResults")}
+            </p>
+            <p className="mt-1 max-w-xs text-[13.5px] text-muted">
+              {t("noResultsFilters")}
+            </p>
             <Button
               variant="secondary"
               size="sm"
@@ -377,7 +390,10 @@ export default function AdminOrdersPage() {
 
         <div className="flex flex-col items-center justify-between gap-2 px-4 py-3 text-[13px] text-muted sm:flex-row md:px-5">
           <span>
-            {t("showingResults", { shown: filtered.length, total: orders.length })}
+            {t("showingResults", {
+              shown: filtered.length,
+              total: orders.length,
+            })}
           </span>
           <div className="flex items-center gap-1.5">
             <button
@@ -406,8 +422,14 @@ export default function AdminOrdersPage() {
       <Sheet
         open={Boolean(selected)}
         onClose={() => setSelectedCode(null)}
-        title={selected ? `${t("orderDetails")} · ${selected.code}` : t("orderDetails")}
-        description={selected ? `${selected.placed} · ${selected.pickup}` : undefined}
+        title={
+          selected
+            ? `${t("orderDetails")} · ${selected.code}`
+            : t("orderDetails")
+        }
+        description={
+          selected ? `${selected.placed} · ${selected.pickup}` : undefined
+        }
         className="md:max-w-lg"
         footer={
           selected ? (
@@ -415,9 +437,17 @@ export default function AdminOrdersPage() {
               {nextStatus[selected.status] ? (
                 <Button
                   className="flex-1"
-                  onClick={() => updateStatus(selected.code, nextStatus[selected.status] as OrderStatus)}
+                  onClick={() =>
+                    updateStatus(
+                      selected.code,
+                      nextStatus[selected.status] as OrderStatus,
+                    )
+                  }
                 >
-                  {t("markAs")} {t(statusLabelKey[nextStatus[selected.status] as OrderStatus])}
+                  {t("markAs")}{" "}
+                  {t(
+                    statusLabelKey[nextStatus[selected.status] as OrderStatus],
+                  )}
                   <ArrowRight className="size-4 rtl:rotate-180" />
                 </Button>
               ) : (
@@ -432,8 +462,12 @@ export default function AdminOrdersPage() {
                   {t("close")}
                 </Button>
               )}
-              {selected.status !== "completed" && selected.status !== "cancelled" ? (
-                <Button variant="destructive" onClick={() => setCancelCode(selected.code)}>
+              {selected.status !== "completed" &&
+              selected.status !== "cancelled" ? (
+                <Button
+                  variant="destructive"
+                  onClick={() => setCancelCode(selected.code)}
+                >
                   {t("cancelOrder")}
                 </Button>
               ) : null}
@@ -447,43 +481,56 @@ export default function AdminOrdersPage() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-muted-soft">
-                    {t("orderStatusDemo")}
+                    {t("statusCol")}
                   </p>
                   <div className="mt-1.5 flex items-center gap-2">
                     <StatusPill status={selected.status} />
-                    <span className="text-[13px] text-muted">{selected.placed}</span>
+                    <span className="text-[13px] text-muted">
+                      {selected.placed}
+                    </span>
                   </div>
                 </div>
                 <MoneyText value={selected.amount} className="text-[20px]" />
               </div>
               <div className="mt-3 flex items-center gap-1.5">
-                {(["confirmed", "preparing", "ready", "completed"] as const).map(
-                  (status, index) => {
-                    const order = ["confirmed", "preparing", "ready", "completed"];
-                    const currentIndex = order.indexOf(selected.status);
-                    const done = selected.status !== "cancelled" && index <= currentIndex;
-                    return (
-                      <div key={status} className="flex flex-1 items-center gap-1.5">
+                {(
+                  ["confirmed", "preparing", "ready", "completed"] as const
+                ).map((status, index) => {
+                  const order = [
+                    "confirmed",
+                    "preparing",
+                    "ready",
+                    "completed",
+                  ];
+                  const currentIndex = order.indexOf(selected.status);
+                  const done =
+                    selected.status !== "cancelled" && index <= currentIndex;
+                  return (
+                    <div
+                      key={status}
+                      className="flex flex-1 items-center gap-1.5"
+                    >
+                      <span
+                        className={cn(
+                          "grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold",
+                          done
+                            ? "bg-olive text-white"
+                            : "bg-cream-200 text-muted-soft",
+                        )}
+                      >
+                        {index + 1}
+                      </span>
+                      {index < 3 ? (
                         <span
                           className={cn(
-                            "grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold",
-                            done ? "bg-olive text-white" : "bg-cream-200 text-muted-soft",
+                            "h-0.5 flex-1 rounded-full",
+                            index < currentIndex ? "bg-olive" : "bg-cream-200",
                           )}
-                        >
-                          {index + 1}
-                        </span>
-                        {index < 3 ? (
-                          <span
-                            className={cn(
-                              "h-0.5 flex-1 rounded-full",
-                              index < currentIndex ? "bg-olive" : "bg-cream-200",
-                            )}
-                          />
-                        ) : null}
-                      </div>
-                    );
-                  },
-                )}
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -495,13 +542,17 @@ export default function AdminOrdersPage() {
                 <p className="mt-1.5 text-[14px] font-semibold text-charcoal">
                   {selected.customer}
                 </p>
-                <p className="mt-0.5 text-[12.5px] text-muted">+31 6 ···· ····</p>
+                <p className="mt-0.5 text-[12.5px] text-muted">
+                  {selected.customerPhone || selected.customerEmail}
+                </p>
               </div>
               <div className="rounded-xl border border-line bg-white p-3">
                 <p className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-muted-soft">
                   {t("cookCol")}
                 </p>
-                <p className="mt-1.5 text-[14px] font-semibold text-charcoal">{selected.cook}</p>
+                <p className="mt-1.5 text-[14px] font-semibold text-charcoal">
+                  {selected.cook}
+                </p>
                 <Link
                   href="/admin/cooks"
                   className="mt-0.5 inline-flex items-center gap-1 text-[12.5px] font-semibold text-terracotta hover:underline"
@@ -517,20 +568,33 @@ export default function AdminOrdersPage() {
                   <UtensilsCrossed className="size-3.5" />
                   {t("yourOrder")}
                 </p>
-                <span className="text-[12.5px] text-muted">2 {t("items")}</span>
+                <span className="text-[12.5px] text-muted">
+                  {selected.items.length} {t("items")}
+                </span>
               </div>
               <div className="mt-2.5 space-y-1.5 text-[13.5px]">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted">Couscous Royal × 1</span>
-                  <span className="font-medium tabular-nums">€14.50</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted">Brik à l&apos;œuf × 2</span>
-                  <span className="font-medium tabular-nums">€11.00</span>
-                </div>
+                {selected.items.map((item, index) => (
+                  <div
+                    key={`${selected.id}-${index}`}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <span className="text-muted">
+                      {(typeof item.dish?.name === "string"
+                        ? item.dish.name
+                        : (item.dish?.name?.[lang] ?? item.dish?.name?.en)) ||
+                        t("adminNavDishes")}{" "}
+                      × {item.qty}
+                    </span>
+                    <span className="shrink-0 font-medium tabular-nums">
+                      {formatPrice(item.unitPrice * item.qty, lang)}
+                    </span>
+                  </div>
+                ))}
                 <div className="flex items-center justify-between">
                   <span className="text-muted">{t("serviceFee")}</span>
-                  <span className="font-medium tabular-nums">€1.50</span>
+                  <span className="font-medium tabular-nums">
+                    {formatPrice(selected.serviceFee, lang)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between border-t border-line pt-1.5 text-[14.5px] font-semibold text-charcoal">
                   <span>{t("total")}</span>
@@ -545,23 +609,17 @@ export default function AdminOrdersPage() {
                   <Clock3 className="size-3.5" />
                   {t("pickupWindow")}
                 </span>
-                <span className="font-medium text-charcoal">{selected.pickup}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 text-muted">
-                  <MapPin className="size-3.5" />
-                  {t("pickupArea")}
+                <span className="font-medium text-charcoal">
+                  {selected.pickup}
                 </span>
-                <span className="font-medium text-charcoal">Delfshaven, Rotterdam</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 text-muted">
                   <User className="size-3.5" />
                   {t("payment")}
                 </span>
-                <span className="inline-flex items-center gap-1.5 font-medium text-charcoal">
-                  iDEAL
-                  <Badge variant="success">{t("paid")}</Badge>
+                <span className="font-medium text-charcoal">
+                  {selected.paymentStatus}
                 </span>
               </div>
             </div>

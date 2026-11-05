@@ -1,21 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ChefHat, ShieldCheck, UserRound } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { useApp } from "@/components/providers/app-provider";
+import {
+  getAuthenticatedHome,
+  getSafeNextPath,
+  useHasHydrated,
+} from "@/lib/auth-navigation";
+import { queryKeys, useCurrentUserQuery } from "@/lib/queries";
+import type { AuthUserRecord } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { t, login, toast } = useApp();
+  const { data: currentUser, isPending: authPending } = useCurrentUserQuery();
+  const hasHydrated = useHasHydrated();
   const [email, setEmail] = useState("sarah.devries@example.nl");
   const [password, setPassword] = useState("Daarik2026!");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!hasHydrated || authPending || loading || !currentUser) return;
+    router.replace(
+      getSafeNextPath(window.location.search) ??
+        getAuthenticatedHome(currentUser.role),
+    );
+  }, [authPending, currentUser, hasHydrated, loading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,26 +43,30 @@ export default function LoginPage() {
     try {
       await login(email.trim(), password);
       toast(t("savedChanges"));
-      if (email.includes("admin@")) {
-        router.push("/admin");
-      } else if (
-        email.includes("rana@") ||
-        email.includes("omar@") ||
-        email.includes("fatima@") ||
-        email.includes("samira@")
-      ) {
-        router.push("/cook/dashboard");
-      } else {
-        router.push("/profile");
-      }
-    } catch (err: any) {
-      const msg = err?.message || "Invalid email or password";
+      const signedInUser = queryClient.getQueryData<AuthUserRecord>(
+        queryKeys.authMe,
+      );
+      router.replace(
+        getSafeNextPath(window.location.search) ??
+          getAuthenticatedHome(signedInUser?.role),
+      );
+    } catch (error) {
+      const msg =
+        error instanceof Error ? error.message : "Invalid email or password";
       setError(msg);
       toast(msg, { variant: "error" });
     } finally {
       setLoading(false);
     }
   };
+
+  if (!hasHydrated || authPending || (currentUser && !loading)) {
+    return (
+      <div className="mx-auto max-w-[460px] px-4 py-16 text-center text-sm text-muted">
+        {t("loading")}
+      </div>
+    );
+  }
 
   const quickLogin = async (demoEmail: string, redirect: string) => {
     setEmail(demoEmail);
@@ -54,8 +77,8 @@ export default function LoginPage() {
       await login(demoEmail, "Daarik2026!");
       toast(`Signed in as ${demoEmail}`);
       router.push(redirect);
-    } catch (err: any) {
-      setError(err?.message || "Login failed");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Login failed");
     } finally {
       setLoading(false);
     }

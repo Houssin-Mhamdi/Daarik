@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronDown, Globe2, Sparkles, WifiOff } from "lucide-react";
+import { ChevronDown, Globe2, LogOut, Sparkles, WifiOff } from "lucide-react";
 import { BottomNav } from "@/components/shell/bottom-nav";
 import { DesktopHeader } from "@/components/shell/desktop-header";
 import { CookSidebar } from "@/components/shell/cook-sidebar";
@@ -11,7 +11,7 @@ import { SiteFooter } from "@/components/shell/site-footer";
 import { LanguageSheet } from "@/components/app/language-sheet";
 import { ConfirmDialog, ToastViewport } from "@/components/ui/overlays";
 import { useApp } from "@/components/providers/app-provider";
-import { getCook, getDish } from "@/lib/data";
+import { useCurrentUserQuery, useMyCookApplicationQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const noChrome = ["/admin", "/splash", "/offline"];
@@ -42,11 +42,18 @@ function isCookArea(pathname: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: sessionUser, isPending: authPending } = useCurrentUserQuery();
+  const isCookUser = !authPending && sessionUser?.role === "COOK";
+  const { data: cookApplication, isPending: applicationPending } =
+    useMyCookApplicationQuery(isCookUser);
   const {
     t,
     lang,
     dir,
     pendingSwitch,
+    dishes,
+    cooks,
     confirmSwitch,
     cancelSwitch,
     toasts,
@@ -69,6 +76,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const bare = noChrome.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
+  const pendingSwitchCook = pendingSwitch
+    ? (cooks.find(
+        (cook) =>
+          cook.id ===
+          dishes.find((dish) => dish.id === pendingSwitch.dishId)?.cookId,
+      )?.name ?? "")
+    : "";
   const cook = isCookArea(pathname);
   const cookLanding = pathname === "/cook";
   const isApply = pathname.startsWith("/cook/apply");
@@ -77,6 +91,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname.startsWith("/orders/") ||
     isApply ||
     cookLanding;
+
+  const requiresCookApplication =
+    isCookUser && !applicationPending && cookApplication?.status !== "APPROVED";
+
+  useEffect(() => {
+    if (requiresCookApplication && pathname !== "/cook/apply") {
+      router.replace("/cook/apply");
+    } else if (
+      isCookUser &&
+      !applicationPending &&
+      cookApplication?.status === "APPROVED" &&
+      pathname === "/cook/apply"
+    ) {
+      router.replace("/cook/dashboard");
+    }
+  }, [
+    cookApplication?.status,
+    applicationPending,
+    isCookUser,
+    pathname,
+    requiresCookApplication,
+    router,
+  ]);
+
+  if (
+    isCookUser &&
+    (applicationPending || requiresCookApplication) &&
+    pathname !== "/cook/apply"
+  ) {
+    return (
+      <div className="grid min-h-dvh place-items-center text-sm text-muted">
+        {t("loading")}
+      </div>
+    );
+  }
 
   if (bare) {
     return (
@@ -101,7 +150,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className={cn(
           "min-h-dvh",
           cook && "md:ps-[248px]",
-          !navHidden && "pb-[calc(64px+env(safe-area-inset-bottom,0px))] md:pb-0",
+          !navHidden &&
+            "pb-[calc(64px+env(safe-area-inset-bottom,0px))] md:pb-0",
         )}
       >
         {offline ? (
@@ -116,9 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {!cook && !cookLanding && !isApply ? <SiteFooter /> : null}
       </div>
 
-      {!navHidden ? (
-        <BottomNav variant={cook ? "cook" : "customer"} />
-      ) : null}
+      {!navHidden ? <BottomNav variant={cook ? "cook" : "customer"} /> : null}
 
       <LanguageSheet open={langOpen} onClose={() => setLangOpen(false)} />
 
@@ -128,9 +176,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onConfirm={confirmSwitch}
         title={t("differentCookTitle")}
         description={t("differentCookDesc", {
-          cook: pendingSwitch
-            ? getCook(getDish(pendingSwitch.dishId)?.cookId ?? "")?.name ?? ""
-            : "",
+          cook: pendingSwitchCook,
         })}
         confirmLabel={t("replaceCart")}
         cancelLabel={t("keepCart")}
@@ -146,7 +192,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function CookLandingHeader({ onLanguage }: { onLanguage: () => void }) {
-  const { t, lang } = useApp();
+  const { t, lang, isAuthenticated, user, logout } = useApp();
+  const router = useRouter();
   return (
     <header className="sticky top-0 z-40 border-b border-line/70 bg-cream/88 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-[1120px] items-center gap-4 px-4 md:h-[72px] md:px-8">
@@ -154,6 +201,8 @@ function CookLandingHeader({ onLanguage }: { onLanguage: () => void }) {
           <span className="relative grid size-9 place-items-center overflow-hidden rounded-[13px] bg-terracotta">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              loading="lazy"
+              decoding="async"
               src="/img/daarik-logo.png"
               alt="Daarik"
               className="size-full object-cover"
@@ -204,6 +253,22 @@ function CookLandingHeader({ onLanguage }: { onLanguage: () => void }) {
             <Sparkles className="size-3.5" />
             {t("applyNow")}
           </Link>
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.localStorage.removeItem("darna.cookApplicationEmail");
+                }
+                void logout().then(() => router.push("/login"));
+              }}
+              title={user.email || t("signOut")}
+              className="flex h-9 items-center gap-1.5 rounded-full border border-line bg-white px-3 text-[13.5px] font-semibold text-charcoal transition hover:border-line-strong"
+            >
+              <LogOut className="size-3.5 text-terracotta" />
+              <span>{t("signOut")}</span>
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="border-t border-line/60 md:hidden">

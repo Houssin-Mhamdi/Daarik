@@ -10,8 +10,26 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from "class-validator";
+import { Type } from "class-transformer";
 import { DishStatus } from "@prisma/client";
+
+export class IngredientDto {
+  @IsString()
+  @MaxLength(120)
+  nl!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  en?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  ar?: string;
+}
 
 export class CreateDishDto {
   @IsOptional()
@@ -65,12 +83,32 @@ export class CreateDishDto {
 
   @IsOptional()
   @IsArray()
-  ingredients?: Record<string, string>[];
+  @ValidateNested({ each: true })
+  @Type(() => IngredientDto)
+  ingredients?: IngredientDto[];
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   pickup?: string[];
+
+  @IsOptional()
+  @IsObject()
+  pickupWindows?: Record<string, string[]>;
+
+  @IsOptional()
+  @IsBoolean()
+  sameDayPickup?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  sameDayRadiusKm?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  nextDayPickup?: boolean;
 
   @IsOptional()
   @IsBoolean()
@@ -147,12 +185,32 @@ export class UpdateDishDto {
 
   @IsOptional()
   @IsArray()
-  ingredients?: Record<string, string>[];
+  @ValidateNested({ each: true })
+  @Type(() => IngredientDto)
+  ingredients?: IngredientDto[];
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   pickup?: string[];
+
+  @IsOptional()
+  @IsObject()
+  pickupWindows?: Record<string, string[]>;
+
+  @IsOptional()
+  @IsBoolean()
+  sameDayPickup?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  sameDayRadiusKm?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  nextDayPickup?: boolean;
 
   @IsOptional()
   @IsBoolean()

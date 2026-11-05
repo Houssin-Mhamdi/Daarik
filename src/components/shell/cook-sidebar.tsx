@@ -1,7 +1,9 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { SignOutDialog } from "@/components/shell/sign-out-dialog";
 import {
   ArrowLeftRight,
   CalendarDays,
@@ -16,6 +18,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { useApp } from "@/components/providers/app-provider";
+import { useCookDashboardQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -29,7 +32,14 @@ const nav = [
 
 export function CookSidebar() {
   const pathname = usePathname();
-  const { t } = useApp();
+  const { t, user } = useApp();
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const { data: dashboard } = useCookDashboardQuery();
+  const cookName =
+    dashboard?.cook?.name || user.name || t("cookDashboard");
+  const cookAvatar =
+    dashboard?.cook?.avatar || user.avatar || "/img/cook-rana.jpg";
+  const kitchenOpen = dashboard?.cook ? true : true;
 
   return (
     <aside className="fixed inset-y-0 start-0 z-40 hidden w-[248px] flex-col border-e border-line/80 bg-white/70 backdrop-blur-xl md:flex">
@@ -40,17 +50,24 @@ export function CookSidebar() {
       <div className="mx-4 flex items-center gap-3 rounded-2xl border border-line bg-cream/70 p-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/img/cook-rana.jpg"
-          alt="Rana"
+          loading="lazy"
+          decoding="async"
+          src={cookAvatar}
+          alt={cookName}
           className="size-10 rounded-full object-cover ring-2 ring-white"
         />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[14.5px] font-semibold text-charcoal">
-            Rana&apos;s kitchen
+            {cookName}
           </p>
           <p className="mt-0.5 flex items-center gap-1 text-[12.5px] text-muted">
-            <span className="size-1.5 rounded-full bg-olive" />
-            {t("kitchenOpen")}
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                kitchenOpen ? "bg-olive" : "bg-muted-soft",
+              )}
+            />
+            {kitchenOpen ? t("kitchenOpen") : t("kitchenClosed")}
           </p>
         </div>
       </div>
@@ -110,14 +127,19 @@ export function CookSidebar() {
           <ArrowLeftRight className="size-4" />
           {t("switchToCustomer")}
         </Link>
-        <Link
-          href="/profile"
-          className="flex items-center gap-2.5 rounded-xl px-2 py-2 text-[14px] font-semibold text-muted transition hover:text-charcoal"
+        <button
+          type="button"
+          onClick={() => setSignOutOpen(true)}
+          className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-[14px] font-semibold text-muted transition hover:text-charcoal"
         >
           <LogOut className="size-4" />
           {t("signOut")}
-        </Link>
+        </button>
       </div>
+      <SignOutDialog
+        open={signOutOpen}
+        onClose={() => setSignOutOpen(false)}
+      />
     </aside>
   );
 }

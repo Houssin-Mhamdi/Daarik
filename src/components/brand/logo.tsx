@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export function Logo({
@@ -19,6 +19,8 @@ export function Logo({
       <span className="relative grid size-9 shrink-0 place-items-center overflow-hidden rounded-[13px] bg-terracotta shadow-[0_6px_16px_-8px_rgba(198,93,58,0.9)]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          loading="lazy"
+          decoding="async"
           src="/img/daarik-logo.png"
           alt="Daarik"
           className="size-full object-cover"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Building2,
   Check,
@@ -21,15 +21,35 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/controls";
 import { ConfirmDialog } from "@/components/ui/overlays";
 import { useApp } from "@/components/providers/app-provider";
-import { AdminCard, AdminPageHeader, SectionHead } from "@/components/admin/admin-ui";
-import { cn } from "@/lib/utils";
+import {
+  AdminCard,
+  AdminPageHeader,
+  SectionHead,
+} from "@/components/admin/admin-ui";
+import {
+  useAdminSettingsQuery,
+  useUpdateAdminSettingsMutation,
+} from "@/lib/queries";
+import { cn, errorMessage } from "@/lib/utils";
 
 export default function AdminSettingsPage() {
   const { t, toast } = useApp();
+  const { data: remoteSettings } = useAdminSettingsQuery();
+  const updateSettings = useUpdateAdminSettingsMutation();
+
   const [commission, setCommission] = useState(15);
-  const [supportEmail, setSupportEmail] = useState("support@darna.nl");
-  const [platformName, setPlatformName] = useState("Darna");
-  const [payoutDay, setPayoutDay] = useState("tuesday");
+  const [commissionFixedCents, setCommissionFixedCents] = useState(0);
+  const [commissionBase, setCommissionBase] = useState<"SUBTOTAL" | "TOTAL">(
+    "SUBTOTAL",
+  );
+  const [serviceFeeCents, setServiceFeeCents] = useState(150);
+  const [payoutHoldDays, setPayoutHoldDays] = useState(7);
+  const [payoutInterval, setPayoutInterval] = useState<
+    "DAILY" | "WEEKLY" | "MONTHLY" | "MANUAL"
+  >("WEEKLY");
+  const [payoutDay, setPayoutDay] = useState("monday");
+  const [supportEmail, setSupportEmail] = useState("hello@daarik.nl");
+  const [platformName, setPlatformName] = useState("Daarik");
   const [autoApprove, setAutoApprove] = useState(false);
   const [requireDocs, setRequireDocs] = useState(true);
   const [maintenance, setMaintenance] = useState(false);
@@ -41,8 +61,81 @@ export default function AdminSettingsPage() {
     "Cooks must prepare food in a registered home kitchen, label allergens clearly and honour pickup windows. Pickup only — no delivery.",
   );
 
-  const save = () => {
-    toast(t("savedSettingsToast"), { description: t("adminSettingsSaved") });
+  useEffect(() => {
+    if (!remoteSettings) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (typeof remoteSettings.platformName === "string") {
+        setPlatformName(remoteSettings.platformName);
+      }
+      if (typeof remoteSettings.supportEmail === "string") {
+        setSupportEmail(remoteSettings.supportEmail);
+      }
+      if (typeof remoteSettings.commissionRate === "number") {
+        setCommission(Math.round(remoteSettings.commissionRate * 100));
+      }
+      if (typeof remoteSettings.commissionFixedCents === "number") {
+        setCommissionFixedCents(remoteSettings.commissionFixedCents);
+      }
+      if (
+        remoteSettings.commissionBase === "SUBTOTAL" ||
+        remoteSettings.commissionBase === "TOTAL"
+      ) {
+        setCommissionBase(remoteSettings.commissionBase);
+      }
+      if (typeof remoteSettings.serviceFeeCents === "number") {
+        setServiceFeeCents(remoteSettings.serviceFeeCents);
+      }
+      if (typeof remoteSettings.payoutHoldDays === "number") {
+        setPayoutHoldDays(remoteSettings.payoutHoldDays);
+      }
+      if (
+        remoteSettings.payoutInterval === "DAILY" ||
+        remoteSettings.payoutInterval === "WEEKLY" ||
+        remoteSettings.payoutInterval === "MONTHLY" ||
+        remoteSettings.payoutInterval === "MANUAL"
+      ) {
+        setPayoutInterval(remoteSettings.payoutInterval);
+      }
+      if (typeof remoteSettings.payoutWeeklyAnchor === "string") {
+        setPayoutDay(remoteSettings.payoutWeeklyAnchor);
+      }
+      if (typeof remoteSettings.autoApproveCooks === "boolean") {
+        setAutoApprove(remoteSettings.autoApproveCooks);
+      }
+      if (typeof remoteSettings.requireVerification === "boolean") {
+        setRequireDocs(remoteSettings.requireVerification);
+      }
+      if (typeof remoteSettings.maintenanceMode === "boolean") {
+        setMaintenance(remoteSettings.maintenanceMode);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [remoteSettings]);
+
+  const save = async () => {
+    try {
+      await updateSettings.mutateAsync({
+        platformName,
+        supportEmail,
+        commissionRate: Number((commission / 100).toFixed(4)),
+        commissionFixedCents: Number(commissionFixedCents) || 0,
+        commissionBase,
+        serviceFeeCents: Number(serviceFeeCents) || 0,
+        payoutHoldDays: Number(payoutHoldDays) || 0,
+        payoutInterval,
+        payoutWeeklyAnchor: payoutDay,
+        autoApproveCooks: autoApprove,
+        requireVerification: requireDocs,
+        maintenanceMode: maintenance,
+      });
+      toast(t("savedSettingsToast"), { description: t("adminSettingsSaved") });
+    } catch (err) {
+      toast(errorMessage(err, t("paymentFailed")), { variant: "error" });
+    }
   };
 
   return (
@@ -52,7 +145,12 @@ export default function AdminSettingsPage() {
         title={t("adminNavSettings")}
         subtitle={t("adminSettingsNote")}
         actions={
-          <Button size="sm" className="h-9" onClick={save}>
+          <Button
+            size="sm"
+            className="h-9"
+            loading={updateSettings.isPending}
+            onClick={save}
+          >
             <Save className="size-4" />
             {t("saveAdminSettings")}
           </Button>
@@ -110,7 +208,7 @@ export default function AdminSettingsPage() {
                 <input
                   type="range"
                   min={5}
-                  max={25}
+                  max={30}
                   step={1}
                   value={commission}
                   onChange={(event) => setCommission(Number(event.target.value))}
@@ -120,11 +218,82 @@ export default function AdminSettingsPage() {
                 <div className="mt-1 flex justify-between text-[11.5px] text-muted-soft">
                   <span>5%</span>
                   <span>{t("commissionFootnote")}</span>
-                  <span>25%</span>
+                  <span>30%</span>
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted-soft">
+                    Service Fee (cents)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={2500}
+                    value={serviceFeeCents}
+                    onChange={(e) => setServiceFeeCents(Number(e.target.value))}
+                    className="mt-1.5 h-10 w-full rounded-xl border border-line bg-cream/40 px-3 text-[14.5px] outline-none focus:border-terracotta/50 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted-soft">
+                    Fixed Commission (cents)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1000}
+                    value={commissionFixedCents}
+                    onChange={(e) =>
+                      setCommissionFixedCents(Number(e.target.value))
+                    }
+                    className="mt-1.5 h-10 w-full rounded-xl border border-line bg-cream/40 px-3 text-[14.5px] outline-none focus:border-terracotta/50 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted-soft">
+                    Commission Base
+                  </label>
+                  <select
+                    value={commissionBase}
+                    onChange={(e) =>
+                      setCommissionBase(
+                        e.target.value as "SUBTOTAL" | "TOTAL",
+                      )
+                    }
+                    className="mt-1.5 h-10 w-full rounded-xl border border-line bg-cream/40 px-3 text-[14.5px] outline-none focus:border-terracotta/50 focus:bg-white"
+                  >
+                    <option value="SUBTOTAL">Food subtotal only</option>
+                    <option value="TOTAL">Subtotal + service fee</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted-soft">
+                    Payout Frequency
+                  </label>
+                  <select
+                    value={payoutInterval}
+                    onChange={(e) =>
+                      setPayoutInterval(
+                        e.target.value as
+                          | "DAILY"
+                          | "WEEKLY"
+                          | "MONTHLY"
+                          | "MANUAL",
+                      )
+                    }
+                    className="mt-1.5 h-10 w-full rounded-xl border border-line bg-cream/40 px-3 text-[14.5px] outline-none focus:border-terracotta/50 focus:bg-white"
+                  >
+                    <option value="WEEKLY">Weekly</option>
+                    <option value="DAILY">Daily</option>
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="MANUAL">Manual</option>
+                  </select>
+                </div>
                 <div>
                   <label className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted-soft">
                     {t("payoutDay")}
@@ -134,19 +303,25 @@ export default function AdminSettingsPage() {
                     onChange={(event) => setPayoutDay(event.target.value)}
                     className="mt-1.5 h-10 w-full rounded-xl border border-line bg-cream/40 px-3 text-[14.5px] outline-none focus:border-terracotta/50 focus:bg-white"
                   >
-                    {["monday", "tuesday", "wednesday", "thursday", "friday"].map((day) => (
-                      <option key={day} value={day}>
-                        {t(day)}
-                      </option>
-                    ))}
+                    {["monday", "tuesday", "wednesday", "thursday", "friday"].map(
+                      (day) => (
+                        <option key={day} value={day}>
+                          {t(day)}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </div>
                 <div>
                   <label className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted-soft">
-                    {t("payoutDelay")}
+                    Hold Days After Pickup
                   </label>
                   <input
-                    defaultValue="2"
+                    type="number"
+                    min={0}
+                    max={90}
+                    value={payoutHoldDays}
+                    onChange={(e) => setPayoutHoldDays(Number(e.target.value))}
                     className="mt-1.5 h-10 w-full rounded-xl border border-line bg-cream/40 px-3 text-[14.5px] outline-none focus:border-terracotta/50 focus:bg-white"
                   />
                 </div>
@@ -228,20 +403,28 @@ export default function AdminSettingsPage() {
           </AdminCard>
 
           <AdminCard>
-            <SectionHead title={t("environment")} subtitle={t("adminFooterNote")} />
+            <SectionHead
+              title={t("environment")}
+              subtitle={t("adminFooterNote")}
+            />
             <div className="p-4 pt-3 md:p-5 md:pt-4">
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: t("buildVersion"), value: "1.4.0" },
+                  { label: t("buildVersion"), value: "2.0.0-connect" },
                   { label: t("region"), value: "NL · EU" },
                   { label: t("currencyLabel"), value: "EUR (€)" },
-                  { label: t("timezone"), value: "CET" },
+                  { label: t("timezone"), value: "Europe/Amsterdam" },
                 ].map((item) => (
-                  <div key={item.label} className="rounded-xl border border-line bg-cream/40 p-2.5">
+                  <div
+                    key={item.label}
+                    className="rounded-xl border border-line bg-cream/40 p-2.5"
+                  >
                     <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-soft">
                       {item.label}
                     </p>
-                    <p className="mt-0.5 text-[13.5px] font-semibold text-charcoal">{item.value}</p>
+                    <p className="mt-0.5 text-[13.5px] font-semibold text-charcoal">
+                      {item.value}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -256,7 +439,10 @@ export default function AdminSettingsPage() {
           </AdminCard>
 
           <AdminCard>
-            <SectionHead title={t("dangerZone")} subtitle={t("dangerZoneSub")} />
+            <SectionHead
+              title={t("dangerZone")}
+              subtitle={t("dangerZoneSub")}
+            />
             <div className="p-4 pt-3 md:p-5 md:pt-4">
               <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-cream/40 p-3">
                 <div className="min-w-0">
@@ -309,13 +495,21 @@ export default function AdminSettingsPage() {
       <div className="mt-4 flex flex-col items-start justify-between gap-2 rounded-2xl border border-line bg-white px-4 py-3 sm:flex-row sm:items-center">
         <span className="inline-flex items-center gap-2 text-[13px] text-muted">
           <MapPin className="size-3.5" />
-          Darna B.V. · Rotterdam · KvK 87654321
+          Daarik · Rotterdam · Netherlands
         </span>
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={() => toast(t("discarded"), { variant: "info" })}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => toast(t("discarded"), { variant: "info" })}
+          >
             {t("cancel")}
           </Button>
-          <Button size="sm" onClick={save}>
+          <Button
+            size="sm"
+            loading={updateSettings.isPending}
+            onClick={save}
+          >
             <Check className="size-4" />
             {t("saveSettings")}
           </Button>
@@ -328,7 +522,10 @@ export default function AdminSettingsPage() {
         onConfirm={() => {
           setMaintenance(true);
           setMaintenanceOpen(false);
-          toast(t("maintenanceEnabled"), { description: t("maintenanceDesc"), variant: "info" });
+          toast(t("maintenanceEnabled"), {
+            description: t("maintenanceDesc"),
+            variant: "info",
+          });
         }}
         title={t("maintenanceConfirmTitle")}
         description={t("maintenanceConfirmDesc")}
@@ -359,7 +556,9 @@ function SettingToggle({
     >
       <div className="min-w-0">
         <p className="text-[13.5px] font-semibold text-charcoal">{title}</p>
-        <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{description}</p>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
+          {description}
+        </p>
       </div>
       <Switch checked={checked} onCheckedChange={onChange} label={title} />
     </div>

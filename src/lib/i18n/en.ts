@@ -187,20 +187,23 @@ const en = {
   showResults: "Show {count} dishes",
   resultsFound: "{count} dishes found",
   emptyExploreTitle: "No dishes match just yet",
-  emptyExploreSub: "Try a different cuisine, widen your filters or explore everything nearby.",
+  emptyExploreSub:
+    "Try a different cuisine, widen your filters or explore everything nearby.",
   clearSearch: "Clear search",
   allCategories: "All dishes",
   sortSheetTitle: "Sort dishes",
   openFilters: "Open filters",
   searchNoResultsTitle: "Nothing on the table",
-  searchNoResultsSub: "We couldn't find a dish for “{query}”. Try another craving.",
+  searchNoResultsSub:
+    "We couldn't find a dish for “{query}”. Try another craving.",
   browseAll: "Browse all dishes",
 
   // dish detail
   aboutDish: "About this dish",
   ingredientList: "What's inside",
   allergenInfo: "Allergen information",
-  allergenNote: "Made in a home kitchen that also handles other ingredients. Ask the cook if you have a severe allergy.",
+  allergenNote:
+    "Made in a home kitchen that also handles other ingredients. Ask the cook if you have a severe allergy.",
   availablePickup: "Available pickup",
   choosePickup: "Choose a pickup day and time",
   quantity: "Quantity",
@@ -215,7 +218,8 @@ const en = {
   contains: "Contains",
   mayContain: "May contain traces of",
   dietaryInfo: "Dietary",
-  pickupNote: "Pickup only. Your cook will share the exact address and instructions after ordering.",
+  pickupNote:
+    "Pickup only. Your cook will share the exact address and instructions after ordering.",
   maxPortions: "You can order up to {count} portions.",
   dishNotFound: "This dish is no longer available.",
   similarDishes: "You may also like",
@@ -258,12 +262,18 @@ const en = {
   nextAvailable: "Next available",
 
   // favorites
+  authRequiredTitle: "Sign in to save favorites",
+  authRequiredDescription:
+    "Create an account or sign in to save dishes and cooks to your favourites.",
+  authSignIn: "Sign in",
+  authCreateAccount: "Create account",
   favoritesTitle: "Your favourites",
   favoritesSub: "Dishes and cooks you want to come back to",
   savedDishes: "Saved dishes",
   savedCooks: "Favorite cooks",
   emptyFavTitle: "Nothing saved yet",
-  emptyFavSub: "Tap the heart on a dish or save a cook to find them here later.",
+  emptyFavSub:
+    "Tap the heart on a dish or save a cook to find them here later.",
   exploreFood: "Explore food",
   removedFavorite: "Removed from favourites",
   addedFavorite: "Saved to favourites",
@@ -284,14 +294,17 @@ const en = {
   orderSummary: "Order summary",
   clearCart: "Clear cart",
   clearCartTitle: "Empty your cart?",
-  clearCartDesc: "This removes all dishes from this order. You can always add them again.",
+  clearCartDesc:
+    "This removes all dishes from this order. You can always add them again.",
   itemRemoved: "Item removed",
   differentCookTitle: "Replace cart items?",
-  differentCookDesc: "Your cart currently contains dishes from another kitchen. Do you want to empty the cart and start a new order from \"{cook}\"?",
+  differentCookDesc:
+    'Your cart currently contains dishes from another kitchen. Do you want to empty the cart and start a new order from "{cook}"?',
   replaceCart: "Empty and start order",
   keepCart: "Cancel",
   checkoutBtn: "Go to checkout",
-  cartServiceNote: "Service fee is added at checkout. You pay online, then collect from your cook.",
+  cartServiceNote:
+    "Service fee is added at checkout. You pay online, then collect from your cook.",
   addMore: "Add more dishes",
   cartItems: "{count} items",
   cartOneItem: "1 item",
@@ -326,9 +339,15 @@ const en = {
   invalidEmail: "Enter a valid email address",
   invalidPhone: "Enter a valid Dutch phone number",
   paymentFailed: "Payment didn't go through",
-  paymentFailedDesc: "No money was taken. Check your details or try another payment method.",
+  paymentFailedDesc:
+    "No money was taken. Check your details or try another payment method.",
   tryAgain: "Try again",
-  securePayment: "Secure payment · iDEAL, card & Bancontact",
+  securePayment: "Secure payment · iDEAL & card",
+  securedByStripe: "Secured by Stripe",
+  paymentsByStripe:
+    "Payments are processed by Stripe. Daarik never stores your card or bank details.",
+  stripeRedirectNote:
+    "You'll be taken to Stripe's secure checkout to pay, then brought straight back here.",
   acceptTerms: "I agree to the Terms of Service and the pickup policy.",
   termsLink: "Terms of Service",
   orderNote: "Order note",
@@ -350,14 +369,21 @@ const en = {
 
   // confirmation
   orderConfirmedTitle: "Order confirmed",
-  orderConfirmedSub: "Your cook has your order. We'll send a reminder before pickup.",
+  orderConfirmedSub:
+    "Your cook has your order. We'll send a reminder before pickup.",
   orderNumber: "Order number",
   paymentStatus: "Payment status",
+  paymentRequired: "Payment required",
+  paymentProcessing: "Processing payment",
+  partiallyRefunded: "Partially refunded",
+  disputed: "Disputed",
+  payNowShort: "Pay now",
   viewOrder: "View order",
   backHome: "Back to home",
   confirmationSent: "A confirmation was sent to {email}",
   pickupReminder: "Add a reminder",
-  prepareNote: "Your food is cooked fresh for pickup. Please arrive within your time slot.",
+  prepareNote:
+    "Your food is cooked fresh for pickup. Please arrive within your time slot.",
   thanks: "Thank you for supporting a home cook.",
 
   // orders
@@ -375,13 +401,15 @@ const en = {
   statusCancelled: "Cancelled",
   cancelOrder: "Cancel order",
   cancelOrderTitle: "Cancel this order?",
-  cancelOrderDesc: "Cancellations are free up to 24 hours before pickup. Your refund will be processed to the original payment method.",
+  cancelOrderDesc:
+    "Cancellations are free up to 24 hours before pickup. Your refund will be processed to the original payment method.",
   keepOrder: "Keep order",
   cancelConfirm: "Yes, cancel order",
   cancelWindowNote: "Free cancellation until {time}",
   reportProblem: "Report a problem",
   reportProblemTitle: "What went wrong?",
-  reportProblemDesc: "Tell us what happened and our support team will step in within one working day.",
+  reportProblemDesc:
+    "Tell us what happened and our support team will step in within one working day.",
   reportSubmit: "Send report",
   reportSent: "Report sent. We'll be in touch shortly.",
   leaveReview: "Leave a review",
@@ -445,14 +473,16 @@ const en = {
   privacyPolicy: "Privacy policy",
   deleteAccountDesc: "Permanently delete your Daarik account and data.",
   deleteAccountTitle: "Delete your account?",
-  deleteAccountWarning: "This removes your profile, favourites and order history. This action can't be undone.",
+  deleteAccountWarning:
+    "This removes your profile, favourites and order history. This action can't be undone.",
   keepAccount: "Keep my account",
   deleteConfirm: "Delete account",
   accountDeleted: "Account deletion requested",
   becomeCookProfile: "Cook with Daarik",
   becomeCookProfileDesc: "Share your recipes and earn from your kitchen.",
   installDaarik: "Install Daarik",
-  installDesc: "Add Daarik to your home screen for a faster, app-like experience.",
+  installDesc:
+    "Add Daarik to your home screen for a faster, app-like experience.",
   installed: "Installed",
   appVersion: "Daarik web app · v1.0",
   savedChanges: "Changes saved",
@@ -479,7 +509,8 @@ const en = {
   // cook landing
   cookLandingKicker: "Cook with Daarik",
   cookHeadline: "Your kitchen has a story worth sharing.",
-  cookSub: "List the dishes you love to cook, set your own pickup times, and earn from every order. Daarik handles the ordering, payments and customers.",
+  cookSub:
+    "List the dishes you love to cook, set your own pickup times, and earn from every order. Daarik handles the ordering, payments and customers.",
   startApplication: "Start your application",
   alreadyCook: "I already cook with Daarik",
   howItWorks: "How it works",
@@ -487,7 +518,8 @@ const en = {
   cookStep1: "Apply online",
   cookStep1Desc: "Tell us about you, your kitchen and the food you cook.",
   cookStep2: "Get verified",
-  cookStep2Desc: "Upload the documents required in your region. We review every application.",
+  cookStep2Desc:
+    "Upload the documents required in your region. We review every application.",
   cookStep3: "Plan your menu",
   cookStep3Desc: "Add dishes, set portions, prices and pickup windows.",
   cookStep4: "Cook & earn",
@@ -503,27 +535,35 @@ const en = {
   req3: "You have valid ID and a bank account in your name.",
   req4: "You're comfortable with allergens and clear labelling.",
   req5: "You agree to Daarik's cook terms and community guidelines.",
-  eligibilityNote: "Eligibility is confirmed during review. Daarik can't guarantee approval, income or legal permission to sell food — always check your local rules.",
+  eligibilityNote:
+    "Eligibility is confirmed during review. Daarik can't guarantee approval, income or legal permission to sell food — always check your local rules.",
   exampleEarnings: "An example month",
-  exampleEarningsNote: "Illustration only, not a promise of earnings. Your results depend on your menu, prices and availability.",
+  exampleEarningsNote:
+    "Illustration only, not a promise of earnings. Your results depend on your menu, prices and availability.",
   exampleGross: "Gross sales (40 orders × €14)",
   exampleCommission: "Daarik commission (15%)",
   exampleNet: "Estimated net before costs",
   faqTitle: "Cook questions",
   faq1q: "Do I need a professional kitchen?",
-  faq1a: "No. Many cooks start in their own home kitchen, but you must meet the registration, hygiene and food-safety rules that apply where you live.",
+  faq1a:
+    "No. Many cooks start in their own home kitchen, but you must meet the registration, hygiene and food-safety rules that apply where you live.",
   faq2q: "Who handles payments?",
-  faq2a: "Customers pay through Daarik. Payouts, commission and refunds are shown clearly in your earnings dashboard.",
+  faq2a:
+    "Customers pay through Daarik. Payouts, commission and refunds are shown clearly in your earnings dashboard.",
   faq3q: "Can I choose when I cook?",
-  faq3a: "Yes. You set cooking days, pickup slots, daily capacity, blocked dates and vacation mode.",
+  faq3a:
+    "Yes. You set cooking days, pickup slots, daily capacity, blocked dates and vacation mode.",
   faq4q: "How long does verification take?",
-  faq4a: "Most applications are reviewed within 5 working days once all documents are complete.",
+  faq4a:
+    "Most applications are reviewed within 5 working days once all documents are complete.",
   applyNow: "Apply to cook",
   noGuarantee: "No guaranteed earnings or automatic legal eligibility.",
-  cookTestimonial: "“I started with one couscous recipe. Now neighbours I've never met pick up my food every weekend.”",
+  cookTestimonial:
+    "“I started with one couscous recipe. Now neighbours I've never met pick up my food every weekend.”",
   cookTestimonialName: "Rana, home cook in Rotterdam",
   heroBadge: "12,000+ homemade meals shared",
-  cookFaqNote: "Still unsure? Read the cook guide or contact our cook support team.",
+  cookFaqNote:
+    "Still unsure? Read the cook guide or contact our cook support team.",
   applyTitle: "Become a home cook",
 
   // cook application
@@ -575,7 +615,8 @@ const en = {
   approved: "Approved",
   rejected: "Needs attention",
   applicationSubmitted: "Application submitted",
-  applicationSubmittedSub: "Our cook team will review your documents and email you within 5 working days.",
+  applicationSubmittedSub:
+    "Our cook team will review your documents and email you within 5 working days.",
   goDashboard: "Go to dashboard",
   progress: "Application progress",
   saveAndExit: "Save & exit",
@@ -658,7 +699,8 @@ const en = {
   resumeDish: "Resume dish",
   deleteDish: "Delete dish",
   deleteDishTitle: "Delete this dish?",
-  deleteDishDesc: "This removes the dish from your menu. Past orders keep their records.",
+  deleteDishDesc:
+    "This removes the dish from your menu. Past orders keep their records.",
   dishPaused: "Dish paused",
   dishResumed: "Dish is live again",
   dishDeleted: "Dish deleted",
@@ -716,7 +758,8 @@ const en = {
   previewSub: "This is how customers will see your dish.",
   publishDish: "Publish dish",
   saveDraft: "Save as draft",
-  draftSavedDesc: "Your dish is saved as a draft. Publish it when you're ready.",
+  draftSavedDesc:
+    "Your dish is saved as a draft. Publish it when you're ready.",
   dishPublished: "Your dish is live",
   dishPublishedDesc: "Neighbours can now find and pre-order it.",
   validationRequired: "Add the missing details to continue.",
@@ -737,6 +780,9 @@ const en = {
   allergensNone: "No allergens declared",
   dietaryNone: "No dietary labels",
   uploadPhoto: "Upload photo",
+  uploadingPhoto: "Uploading photo…",
+  photoUploadFailed: "Upload failed. Choose a JPG, PNG or WebP image.",
+  photoTooLarge: "This photo is too large (max 5 MB).",
   photoSelected: "Photo selected",
   editPhoto: "Change photo",
   stepLabel: "Step {current} of 6",
@@ -744,7 +790,8 @@ const en = {
   portionsAvailableLabel: "Portions available",
   priceIncludes: "Price includes packaging",
   saveAndPreview: "Save & preview",
-  dishDetailsNote: "Daarik reviews reported dishes but doesn't pre-approve every edit.",
+  dishDetailsNote:
+    "Daarik reviews reported dishes but doesn't pre-approve every edit.",
   pastePhoto: "Use this photo",
   samplePhotos: "Sample photos",
 
@@ -758,9 +805,11 @@ const en = {
   accept: "Accept",
   decline: "Decline",
   acceptOrderTitle: "Accept this order?",
-  acceptOrderDesc: "You'll commit to cooking {count} portions for pickup on {day} at {time}.",
+  acceptOrderDesc:
+    "You'll commit to cooking {count} portions for pickup on {day} at {time}.",
   declineOrderTitle: "Decline this order?",
-  declineOrderDesc: "The customer is refunded automatically. Please let us know why.",
+  declineOrderDesc:
+    "The customer is refunded automatically. Please let us know why.",
   declineReason: "Reason",
   reasonSoldOut: "Sold out",
   reasonTooBusy: "Too busy to cook",
@@ -799,6 +848,22 @@ const en = {
   cookingDaysSub: "Days customers can pre-order for pickup.",
   pickupSlots: "Pickup slots",
   pickupSlotsSub: "When customers can collect their food.",
+  slotsForDay: "Pickup slots for {day}",
+  copyToAllDays: "Copy to all days",
+  sameDayTitle: "Same-day pickup",
+  sameDayHint: "Customers close to you can order and collect today.",
+  sameDayRadiusLabel: "Within",
+  sameDayWithin: "Same-day pickup available within {km} km",
+  nextDayTitle: "Pickup tomorrow",
+  nextDayHint: "Customers can order today and collect tomorrow.",
+  ingredientsEnterHint: "Type an ingredient and press Enter or comma.",
+  pickAtLeastOneDay: "Select at least one cooking day.",
+  mapLocation: "Map location",
+  mapLocationHint: "Shown to customers as an approximate pin (about 1 km). Your exact address stays private.",
+  latitudeLabel: "Latitude",
+  longitudeLabel: "Longitude",
+  locationInvalid: "Enter a valid latitude and longitude.",
+  locationDenied: "Couldn't get your location. Enter it manually.",
   dailyCapacity: "Daily capacity",
   dailyCapacitySub: "Maximum portions you can cook in a day.",
   blockedDates: "Blocked dates",
@@ -852,7 +917,8 @@ const en = {
   periodMonth: "This month",
   periodLastMonth: "Last month",
   period90: "Last 90 days",
-  netNote: "Net earnings are gross sales minus commission and refunds. Ingredient and packaging costs are not included. Sales revenue is not the same as take-home pay.",
+  netNote:
+    "Net earnings are gross sales minus commission and refunds. Ingredient and packaging costs are not included. Sales revenue is not the same as take-home pay.",
   downloadStatement: "Download statement",
   payoutSettings: "Payout settings",
   bankAccount: "Bank account",
@@ -873,12 +939,60 @@ const en = {
   netShort: "Net",
   payoutSchedule: "Payout schedule",
   payoutScheduleDesc: "Completed pickups are settled the following Tuesday.",
-  commissionFootnote: "Commission is calculated on the dish price, excluding service fees.",
+  commissionFootnote:
+    "Commission is calculated on the dish price, excluding service fees.",
   thisMonthNet: "Net this month",
   salesBreakdown: "How your €{amount} in sales breaks down",
-  earningsInfo: "Only completed orders are paid out. Cancelled orders are refunded to the customer.",
+  earningsInfo:
+    "Only completed orders are paid out. Cancelled orders are refunded to the customer.",
   paidLabel: "Paid",
   pendingLabel: "Pending",
+
+  // stripe payouts (cook)
+  payoutSetupTitle: "Set up payouts",
+  payoutSetupDesc:
+    "Daarik uses Stripe to send your earnings straight to your Dutch bank account. You never need a Stripe dashboard.",
+  startOnboarding: "Start Stripe onboarding",
+  continueOnboarding: "Finish Stripe onboarding",
+  stripeStatus: "Stripe status",
+  stripeNotConnected: "Not connected yet",
+  stripePending: "Onboarding in progress",
+  stripeRequirementsDue: "Action needed",
+  stripeEnabled: "Verified",
+  stripeRestricted: "Restricted",
+  stripeDisabled: "Disabled",
+  requirementsDue: "Stripe still needs",
+  requirementsDueHint: "Open Stripe onboarding to add the missing information.",
+  complianceStatus: "Daarik compliance",
+  complianceApproved: "Approved",
+  compliancePending: "Under review",
+  complianceBlocked: "Blocked",
+  complianceNotStarted: "Not started",
+  complianceRejected: "Rejected",
+  complianceSuspended: "Suspended",
+  complianceGateNote:
+    "Stripe verification does not replace KVK, NVWA, food-safety or VAT checks. Daarik reviews those separately.",
+  canReceiveOrders: "Ready to receive orders",
+  cannotReceiveOrders:
+    "Orders are paused until your payouts and Daarik compliance are complete.",
+  availableBalance: "Available at Stripe",
+  pendingBalance: "Pending at Stripe",
+  releasedToStripe: "Released to your Stripe balance",
+  awaitingRelease: "Awaiting release",
+  releaseAfterDays: "Earnings become available {days} days after pickup.",
+  releaseOn: "Available on {date}",
+  releasePending: "Pending release",
+  releaseFailed: "Release failed",
+  releaseReversed: "Reversed",
+  orderEarnings: "Order earnings",
+  noOrdersYet: "No paid orders yet",
+  syncStripe: "Refresh Stripe status",
+  stripeSynced: "Stripe status refreshed",
+  payoutPolicy: "Payout policy",
+  payoutPolicyNote:
+    "Daarik sets the payout schedule for your account. Earnings go to your Stripe balance first, then to your bank.",
+  bankLast4: "Bank account ending {last4}",
+  payoutFailure: "Payout failed",
 
   // cook profile settings
   cookProfileTitle: "Cook profile",
@@ -888,11 +1002,13 @@ const en = {
   profilePhoto: "Profile photo",
   coverPhoto: "Cover photo",
   pickupInstructionsLabel: "Pickup instructions",
-  pickupInstructionsPh: "e.g. Ring the bell twice, I'm on the ground floor. Please don't ring after 20:00.",
+  pickupInstructionsPh:
+    "e.g. Ring the bell twice, I'm on the ground floor. Please don't ring after 20:00.",
   notificationSettings: "Notification settings",
   payoutSettingsShort: "Payouts",
   pauseSelling: "Pause selling",
-  pauseSellingDesc: "Temporarily stop accepting orders without deleting your dishes.",
+  pauseSellingDesc:
+    "Temporarily stop accepting orders without deleting your dishes.",
   accountManagement: "Account management",
   cuisinesOffered: "Cuisines you cook",
   languagesSpoken: "Languages you speak",
@@ -962,7 +1078,8 @@ const en = {
   adminPeriod: "This month",
   topCuisines: "Top cuisines",
   awaitingReview: "Awaiting review",
-  cookVerificationNote: "Review identity, food safety and address documents before approval.",
+  cookVerificationNote:
+    "Review identity, food safety and address documents before approval.",
   lastActive: "Last active",
   joined: "Joined",
   totalOrders: "Total orders",
@@ -1003,21 +1120,27 @@ const en = {
   termsTitle: "Terms of Service",
   privacyTitle: "Privacy Policy",
   lastUpdated: "Last updated October 2026",
-  legalNote: "This is a design prototype. The text below illustrates the structure of a real policy, not legal advice.",
-  legalIntro: "These terms explain how Daarik connects customers with independent home cooks in the Netherlands. By ordering, you agree to collect your food at the agreed pickup time and to treat cooks and their neighbours with respect.",
-  privacyIntro: "Daarik processes the personal data needed to run the marketplace: account details, orders, payments and messages. Cooks' exact home addresses are only shared with customers who have a confirmed order.",
+  legalNote:
+    "This is a design prototype. The text below illustrates the structure of a real policy, not legal advice.",
+  legalIntro:
+    "These terms explain how Daarik connects customers with independent home cooks in the Netherlands. By ordering, you agree to collect your food at the agreed pickup time and to treat cooks and their neighbours with respect.",
+  privacyIntro:
+    "Daarik processes the personal data needed to run the marketplace: account details, orders, payments and messages. Cooks' exact home addresses are only shared with customers who have a confirmed order.",
   cookieSettings: "Cookie settings",
   manageCookies: "Manage cookies",
   yourRights: "Your rights",
   contactPrivacy: "Contact our privacy team",
   backToHelp: "Back to help centre",
   legalPrototype: "Prototype content",
-  termsSections: "The service,Accounts,Orders and pickup,Payments and refunds,Cancellations,Cook obligations,Acceptable use,Liability,Contact",
-  privacySections: "Data we collect,How we use data,Legal bases,Sharing,Retention,Your rights,Cookies,Contact",
+  termsSections:
+    "The service,Accounts,Orders and pickup,Payments and refunds,Cancellations,Cook obligations,Acceptable use,Liability,Contact",
+  privacySections:
+    "Data we collect,How we use data,Legal bases,Sharing,Retention,Your rights,Cookies,Contact",
 
   // pwa
   installTitle: "Daarik in your pocket",
-  installSub: "Install the web app for a faster, full-screen experience — no app store needed.",
+  installSub:
+    "Install the web app for a faster, full-screen experience — no app store needed.",
   installButton: "Install Daarik",
   installBannerTitle: "Add Daarik to your home screen",
   installBannerSub: "Faster loading, full-screen and pickup reminders.",
@@ -1028,7 +1151,8 @@ const en = {
   installStep2: "Tap Share or the browser menu.",
   installStep3: "Choose “Add to Home Screen”.",
   offlineTitle: "You're offline",
-  offlineSub: "Your last viewed dishes are still available. Reconnect to place or manage orders.",
+  offlineSub:
+    "Your last viewed dishes are still available. Reconnect to place or manage orders.",
   retry: "Try again",
   offlineSaved: "Saved dishes are available offline",
   splashTagline: "A taste of home, wherever you are.",
@@ -1141,7 +1265,8 @@ const en = {
   safeAreas: "Safe-area aware",
   rtlReady: "RTL ready",
   responsiveNote: "Mobile-first · tablet & desktop layouts included",
-  prototypeFooter: "Daarik is a design prototype built with Next.js. No real orders, payments or cooks are involved.",
+  prototypeFooter:
+    "Daarik is a design prototype built with Next.js. No real orders, payments or cooks are involved.",
   sampleCookName: "Rana El Amri",
   sampleCustomerName: "Sarah",
   helpCenter: "Help centre",
@@ -1162,9 +1287,11 @@ const en = {
   citySearch: "Search a city or postcode",
   useMyLocation: "Use my location",
   currentCity: "Current city",
-  pickupCityNote: "Daarik is pickup-only. Choose the city where you'd like to collect.",
+  pickupCityNote:
+    "Daarik is pickup-only. Choose the city where you'd like to collect.",
   deliveryLocation: "Choose a delivery location",
-  deliveryLocationDescription: "Use your current location or search another place on the map.",
+  deliveryLocationDescription:
+    "Use your current location or search another place on the map.",
   deliverToCurrentLocation: "Delivery to your current location",
   deliverToAnotherLocation: "Deliver to another location",
   searchOnMap: "Search on the map",
@@ -1174,8 +1301,10 @@ const en = {
   locating: "Finding your location...",
   currentLocation: "Current location",
   locationUnavailable: "Location is unavailable in this browser.",
-  locationError: "We couldn't access your location. Check browser permissions and try again.",
-  locationSearchFailed: "We couldn't find that place. Try a nearby street or city.",
+  locationError:
+    "We couldn't access your location. Check browser permissions and try again.",
+  locationSearchFailed:
+    "We couldn't find that place. Try a nearby street or city.",
   mapInstructions: "Search for a place or tap the map to move the pin.",
   selectedLocation: "Selected location",
   cooksNearLocation: "Home cooks near {city}",
@@ -1253,7 +1382,8 @@ const en = {
   languageChanged: "Language updated",
   viewAllNotifications: "View all notifications",
   installPromptTitle: "A faster way to Daarik",
-  installPromptSub: "Add the web app to your home screen. Works without the app store.",
+  installPromptSub:
+    "Add the web app to your home screen. Works without the app store.",
   showInstallBanner: "Show install banner",
   hideInstallBanner: "Hide install banner",
   appIcon: "App icon",
@@ -1335,7 +1465,8 @@ const en = {
   finance: "Finance",
   content: "Content",
   operations: "Operations",
-  adminFooterNote: "Admin is desktop-first. Key actions remain usable on tablet.",
+  adminFooterNote:
+    "Admin is desktop-first. Key actions remain usable on tablet.",
   totalPayouts: "Total payouts",
   scheduled: "Scheduled",
   processingPayouts: "Processing",
@@ -1403,19 +1534,24 @@ const en = {
   fullRefund: "Full refund",
   generous: "Generous",
   halfRefund: "Half refund",
-  help1a: "Browse dishes, add them to your cart, choose a pickup time and pay. You'll get a confirmation with the pickup details.",
+  help1a:
+    "Browse dishes, add them to your cart, choose a pickup time and pay. You'll get a confirmation with the pickup details.",
   help1q: "How do I place an order?",
-  help2a: "Each order is for one cook. To order from another cook, place a separate order.",
+  help2a:
+    "Each order is for one cook. To order from another cook, place a separate order.",
   help2q: "Can I order from multiple cooks at once?",
-  help3a: "You can cancel free of charge up to 2 hours before pickup. After that, contact the cook.",
+  help3a:
+    "You can cancel free of charge up to 2 hours before pickup. After that, contact the cook.",
   help3q: "How do I cancel an order?",
   help4a: "Pay securely online when you check out. Cash is not accepted.",
   help4q: "How does payment work?",
   help5a: "Your card is charged at checkout. Refunds follow our refund policy.",
   help5q: "When am I charged?",
-  help6a: "Apply through the cook app, upload your documents and start selling once verified.",
+  help6a:
+    "Apply through the cook app, upload your documents and start selling once verified.",
   help6q: "How do I become a cook?",
-  help7a: "Use 'Forgot password' on the login screen and follow the email link.",
+  help7a:
+    "Use 'Forgot password' on the login screen and follow the email link.",
   help7q: "How do I reset my password?",
   help8a: "Contact support and we'll remove your data within 30 days.",
   help8q: "How do I delete my account?",
@@ -1430,7 +1566,8 @@ const en = {
   languageNote: "You can change this later in your profile.",
   last30days: "Last 30 days",
   last90days: "Last 90 days",
-  maintenanceConfirmDesc: "The marketplace will be read-only until you turn it off.",
+  maintenanceConfirmDesc:
+    "The marketplace will be read-only until you turn it off.",
   maintenanceConfirmTitle: "Enable maintenance mode?",
   maintenanceDesc: "Show a maintenance banner to all users",
   maintenanceEnabled: "Maintenance mode enabled",

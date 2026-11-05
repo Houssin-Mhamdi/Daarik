@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -8,6 +8,7 @@ import {
   CalendarClock,
   ChevronRight,
   Clock3,
+  CreditCard,
   MapPin,
   Package,
   ReceiptText,
@@ -18,17 +19,16 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/overlays";
 import { PageHeader } from "@/components/ui/misc";
 import { SegmentedTabs } from "@/components/ui/controls";
-import { OrderStatusBadge } from "@/components/app/order-status";
-import { useApp } from "@/components/providers/app-provider";
 import {
-  getCook,
-  getDish,
-  loc,
-  orderSubtotal,
-  pickupOptions,
-  type CustomerOrder,
-} from "@/lib/data";
-import { useMyOrdersQuery } from "@/lib/queries";
+  OrderStatusBadge,
+  PaymentStatusBadge,
+} from "@/components/app/order-status";
+import { useApp } from "@/components/providers/app-provider";
+import { loc, type CustomerOrder } from "@/lib/data";
+import {
+  useCreateCheckoutSessionMutation,
+  useMyOrdersQuery,
+} from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
 
 type Tab = "upcoming" | "completed" | "cancelled";
@@ -41,7 +41,7 @@ const tabFor = (order: CustomerOrder): Tab =>
       : "upcoming";
 
 export default function OrdersPage() {
-  const { t, lang, serviceFee } = useApp();
+  const { t } = useApp();
   const { data: myOrders = [] } = useMyOrdersQuery();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("upcoming");
@@ -154,8 +154,7 @@ export default function OrdersPage() {
                       : t("cancelled")}
                 </span>
                 <span className="hidden md:inline">
-                  {orders.length}{" "}
-                  {orders.length === 1 ? t("item") : t("items")}
+                  {orders.length} {orders.length === 1 ? t("item") : t("items")}
                 </span>
               </p>
               <button
@@ -202,7 +201,7 @@ export default function OrdersPage() {
             ) : null}
 
             <p className="mt-5 text-center text-[12.5px] text-muted-soft">
-              {t("demoNotice")}
+              {t("paymentsByStripe")}
             </p>
           </div>
         </div>
@@ -212,14 +211,38 @@ export default function OrdersPage() {
 }
 
 function OrderCard({ order, tab }: { order: CustomerOrder; tab: Tab }) {
-  const { t, lang, toast, serviceFee } = useApp();
-  const cook = getCook(order.cookId);
+  const { t, lang, toast, serviceFee, dishes, cooks, pickupOptions } = useApp();
+  const checkoutMutation = useCreateCheckoutSessionMutation();
+  const cook = order.cook ?? cooks.find((c) => c.id === order.cookId);
   const pickup = pickupOptions.find((option) => option.id === order.pickup);
   const lines = order.items
-    .map((item) => ({ item, dish: getDish(item.dishId) }))
+    .map((item) => ({
+      item,
+      dish: dishes.find((d) => d.id === item.dishId),
+    }))
     .filter((line) => line.dish);
-  const total = orderSubtotal(order.items) + serviceFee;
+  const computedSubtotal = lines.reduce(
+    (sum, line) => sum + (line.dish?.price ?? 0) * line.item.qty,
+    0,
+  );
+  const total = order.total ?? computedSubtotal + serviceFee;
   const firstDish = lines[0]?.dish;
+  const needsPayment =
+    order.paymentStatus === "REQUIRES_PAYMENT" ||
+    order.paymentStatus === "FAILED";
+
+  const payNow = async () => {
+    try {
+      const session = await checkoutMutation.mutateAsync({
+        orderCode: order.code,
+      });
+      window.location.assign(session.url);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : t("paymentFailed"), {
+        variant: "error",
+      });
+    }
+  };
 
   return (
     <article className="overflow-hidden rounded-[22px] border border-line bg-white shadow-card transition hover:shadow-lift">
@@ -244,6 +267,8 @@ function OrderCard({ order, tab }: { order: CustomerOrder; tab: Tab }) {
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
+                    loading="lazy"
+                    decoding="async"
                     src={firstDish.image}
                     alt={loc(firstDish.name, lang)}
                     className="size-full rounded-2xl object-cover"
@@ -258,9 +283,7 @@ function OrderCard({ order, tab }: { order: CustomerOrder; tab: Tab }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="line-clamp-1 text-[15px] font-semibold text-charcoal">
-                {lines
-                  .map((line) => loc(line.dish!.name, lang))
-                  .join(" · ")}
+                {lines.map((line) => loc(line.dish!.name, lang)).join(" · ")}
               </p>
               <p className="mt-0.5 text-[12.5px] text-muted">
                 {t("from")} {cook?.name.split(" ")[0]} ·{" "}
@@ -319,6 +342,16 @@ function OrderCard({ order, tab }: { order: CustomerOrder; tab: Tab }) {
               {t("orderAgain")}
             </button>
           </>
+        ) : needsPayment ? (
+          <button
+            type="button"
+            disabled={checkoutMutation.isPending}
+            onClick={payNow}
+            className="flex h-8 items-center gap-1.5 rounded-full bg-terracotta px-3 text-[12.5px] font-semibold text-white transition hover:bg-terracotta-600 disabled:opacity-50"
+          >
+            <CreditCard className="size-3" />
+            {t("payNow", { amount: formatPrice(total, lang) })}
+          </button>
         ) : (
           <Link
             href={`/orders/${order.id}`}
@@ -329,7 +362,13 @@ function OrderCard({ order, tab }: { order: CustomerOrder; tab: Tab }) {
           </Link>
         )}
         <span className="ms-auto text-[12px] text-muted-soft">
-          {order.paid ? t("paid") : t("refunded")}
+          {order.paymentStatus ? (
+            <PaymentStatusBadge status={order.paymentStatus} />
+          ) : order.paid ? (
+            t("paid")
+          ) : (
+            t("refunded")
+          )}
         </span>
       </div>
     </article>

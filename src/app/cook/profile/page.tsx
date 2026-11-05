@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,7 +16,6 @@ import {
   Info,
   MapPin,
   Pause,
-  Pencil,
   ShieldCheck,
   Star,
   Store,
@@ -31,13 +30,41 @@ import { ConfirmDialog, Sheet } from "@/components/ui/overlays";
 import { Card, SettingRow } from "@/components/ui/misc";
 import { CookMobileHeader } from "@/components/cook/cook-mobile-header";
 import { useApp } from "@/components/providers/app-provider";
-import { cookUser, cuisines, getCook, loc } from "@/lib/data";
+import { loc } from "@/lib/data";
+import {
+  useCookDashboardQuery,
+  useCookPayoutSettingsQuery,
+  useUpdateCookProfileMutation,
+} from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 export default function CookProfilePage() {
-  const { t, lang, toast } = useApp();
+  const { t, lang, toast, user, cuisines } = useApp();
   const router = useRouter();
-  const cook = getCook("rana")!;
+  const { data: dashboard } = useCookDashboardQuery();
+  const { data: payoutSettings } = useCookPayoutSettingsQuery();
+  const updateProfile = useUpdateCookProfileMutation();
+  const cook = dashboard?.cook ?? {
+    id: user.id || "",
+    name: user.name,
+    avatar: user.avatar || "",
+    cover: "",
+    city: user.city || "",
+    area: { nl: "", en: "", ar: "" },
+    cuisineIds: [],
+    rating: 0,
+    reviewCount: 0,
+    verified: false,
+    languages: [],
+    bio: { nl: "", en: "", ar: "" },
+    since: "",
+    orders: 0,
+    response: { nl: "", en: "", ar: "" },
+    pickupArea: { nl: "", en: "", ar: "" },
+    specialties: { nl: "", en: "", ar: "" },
+    instructions: { nl: "", en: "", ar: "" },
+    yearsCooking: 0,
+  };
   const [name, setName] = useState(cook.name);
   const [bio, setBio] = useState(cook.bio[lang]);
   const [instructions, setInstructions] = useState(cook.instructions[lang]);
@@ -48,11 +75,92 @@ export default function CookProfilePage() {
   const [reviews, setReviews] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
+
+  const saveLocation = async () => {
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    if (
+      !lat.trim() ||
+      !lng.trim() ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      Math.abs(latitude) > 90 ||
+      Math.abs(longitude) > 180
+    ) {
+      toast(t("locationInvalid"), { variant: "error" });
+      return;
+    }
+    try {
+      await updateProfile.mutateAsync({ latitude, longitude });
+      setEditOpen(false);
+      toast(t("profileSaved"));
+    } catch {
+      toast(t("loadError"), { variant: "error" });
+    }
+  };
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast(t("locationDenied"), { variant: "error" });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLat(pos.coords.latitude.toFixed(5));
+        setLng(pos.coords.longitude.toFixed(5));
+      },
+      () => toast(t("locationDenied"), { variant: "error" }),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  useEffect(() => {
+    const c = dashboard?.cook;
+    if (!c) return;
+    queueMicrotask(() => {
+      setLat(typeof c.latitude === "number" ? String(c.latitude) : "");
+      setLng(typeof c.longitude === "number" ? String(c.longitude) : "");
+    });
+  }, [dashboard?.cook]);
+  useEffect(() => {
+    const activeCook = dashboard?.cook;
+    if (!activeCook) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setName(activeCook.name);
+      setBio(activeCook.bio[lang] || "");
+      setInstructions(activeCook.instructions[lang] || "");
+      setCuisineIds(activeCook.cuisineIds);
+    });
+    return () => {
+      active = false;
+    };
+  }, [dashboard?.cook, lang]);
+
+  const saveProfile = async () => {
+    try {
+      await updateProfile.mutateAsync({
+        name,
+        bio: { ...cook.bio, [lang]: bio },
+        instructions: { ...cook.instructions, [lang]: instructions },
+        cuisineIds,
+      });
+      toast(t("profileSaved"));
+    } catch {
+      toast(t("loadError"), { variant: "error" });
+    }
+  };
 
   return (
     <div className="pb-8 md:pb-14">
       <div className="mx-auto w-full max-w-[480px] px-4 md:max-w-[1120px] md:px-8 md:pt-10">
-        <CookMobileHeader title={t("cookProfileTitle")} subtitle={t("cookProfileSub")} />
+        <CookMobileHeader
+          title={t("cookProfileTitle")}
+          subtitle={t("cookProfileSub")}
+        />
 
         <div className="hidden items-end justify-between gap-4 md:flex">
           <div>
@@ -62,10 +170,12 @@ export default function CookProfilePage() {
             <h1 className="mt-1.5 font-display text-[34px] font-semibold leading-tight text-charcoal">
               {t("cookProfileTitle")}
             </h1>
-            <p className="mt-1 text-[14.5px] text-muted">{t("cookProfileSub")}</p>
+            <p className="mt-1 text-[14.5px] text-muted">
+              {t("cookProfileSub")}
+            </p>
           </div>
           <div className="flex gap-2">
-            <Link href="/cook/rana">
+            <Link href={`/cook/${cook.id}`}>
               <Button variant="outline" size="sm">
                 <Eye className="size-3.5" />
                 {t("previewProfile")}
@@ -73,7 +183,8 @@ export default function CookProfilePage() {
             </Link>
             <Button
               size="sm"
-              onClick={() => toast(t("profileSaved"))}
+              loading={updateProfile.isPending}
+              onClick={saveProfile}
             >
               <Check className="size-3.5" />
               {t("saveProfile")}
@@ -88,6 +199,8 @@ export default function CookProfilePage() {
               <div className="relative h-28">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src={cook.cover}
                   alt=""
                   className="size-full object-cover"
@@ -101,7 +214,9 @@ export default function CookProfilePage() {
                 <div className="relative inline-block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={cookUser.avatar}
+                    loading="lazy"
+                    decoding="async"
+                    src={cook.avatar}
                     alt={name}
                     className="size-[68px] rounded-full border-4 border-white object-cover"
                   />
@@ -155,7 +270,7 @@ export default function CookProfilePage() {
                   {t("publicPreviewNote")}
                 </p>
                 <Link
-                  href="/cook/rana"
+                  href={`/cook/${cook.id}`}
                   className="mt-3 flex h-10 items-center justify-center gap-1.5 rounded-xl border border-line text-[13px] font-semibold text-charcoal"
                 >
                   {t("viewPublicPage")}
@@ -179,18 +294,27 @@ export default function CookProfilePage() {
                 {t("publicProfile")}
               </h2>
               <Card className="space-y-4 p-4">
-                <Field label={t("dishName").replace(t("dishName"), t("fullName"))} htmlFor="cook-name">
+                <Field
+                  label={t("dishName").replace(t("dishName"), t("fullName"))}
+                  htmlFor="cook-name"
+                >
                   <Input
                     id="cook-name"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                   />
                 </Field>
-                <Field label={t("kitchenStory")} htmlFor="cook-bio" hint={`${bio.length}/320`}>
+                <Field
+                  label={t("kitchenStory")}
+                  htmlFor="cook-bio"
+                  hint={`${bio.length}/320`}
+                >
                   <Textarea
                     id="cook-bio"
                     value={bio}
-                    onChange={(event) => setBio(event.target.value.slice(0, 320))}
+                    onChange={(event) =>
+                      setBio(event.target.value.slice(0, 320))
+                    }
                     rows={4}
                   />
                 </Field>
@@ -271,7 +395,7 @@ export default function CookProfilePage() {
                 <SettingRow
                   icon={<MapPin className="size-4" />}
                   title={t("kitchenAddress")}
-                  description={`${cookUser.name.split(" ")[0]} · ${cook.pickupArea[lang]}, ${cook.city}`}
+                  description={`${cook.name.split(" ")[0]} · ${cook.pickupArea[lang]}, ${cook.city}`}
                   right={
                     <span className="flex items-center gap-1 text-[11.5px] font-medium text-olive-600">
                       <ShieldCheck className="size-3" />
@@ -283,7 +407,9 @@ export default function CookProfilePage() {
                 <SettingRow
                   icon={<Banknote className="size-4" />}
                   title={t("payoutSettingsShort")}
-                  description={t("accountEnding", { last4: "2109" })}
+                  description={t("accountEnding", {
+                    last4: payoutSettings?.bank?.ibanLast4 || "—",
+                  })}
                   href="/cook/earnings"
                 />
                 <SettingRow
@@ -344,7 +470,9 @@ export default function CookProfilePage() {
               <span
                 className={cn(
                   "grid size-9 shrink-0 place-items-center rounded-xl",
-                  paused ? "bg-saffron-50 text-[#8a5d13]" : "bg-olive-50 text-olive-600",
+                  paused
+                    ? "bg-saffron-50 text-[#8a5d13]"
+                    : "bg-olive-50 text-olive-600",
                 )}
               >
                 <Pause className="size-4" />
@@ -411,10 +539,7 @@ export default function CookProfilePage() {
             </section>
 
             <div className="grid gap-2 sm:grid-cols-2">
-              <Button
-                className="h-11"
-                onClick={() => toast(t("profileSaved"))}
-              >
+              <Button className="h-11" onClick={() => toast(t("profileSaved"))}>
                 <Check className="size-4" />
                 {t("saveProfile")}
               </Button>
@@ -440,13 +565,7 @@ export default function CookProfilePage() {
         title={t("kitchenAddress")}
         description={t("kitchenAddressNote")}
         footer={
-          <Button
-            className="w-full"
-            onClick={() => {
-              setEditOpen(false);
-              toast(t("profileSaved"));
-            }}
-          >
+          <Button className="w-full" onClick={saveLocation}>
             {t("saveChanges")}
           </Button>
         }
@@ -463,6 +582,35 @@ export default function CookProfilePage() {
               <Input id="kitchen-city" defaultValue="Rotterdam" />
             </Field>
           </div>
+          <p className="pt-1 text-[13px] font-semibold text-charcoal">
+            {t("mapLocation")}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label={t("latitudeLabel")} htmlFor="kitchen-lat">
+              <Input
+                id="kitchen-lat"
+                inputMode="decimal"
+                value={lat}
+                onChange={(e) => setLat(e.target.value)}
+              />
+            </Field>
+            <Field label={t("longitudeLabel")} htmlFor="kitchen-lng">
+              <Input
+                id="kitchen-lng"
+                inputMode="decimal"
+                value={lng}
+                onChange={(e) => setLng(e.target.value)}
+              />
+            </Field>
+          </div>
+          <Button variant="outline" size="sm" onClick={useCurrentLocation}>
+            <MapPin className="size-3.5" />
+            {t("useMyLocation")}
+          </Button>
+          <p className="flex items-start gap-2 rounded-2xl bg-cream-100 p-3 text-[12px] leading-relaxed text-muted">
+            <Info className="mt-0.5 size-3.5 shrink-0 text-terracotta" />
+            {t("mapLocationHint")}
+          </p>
           <p className="flex items-start gap-2 rounded-2xl bg-cream-100 p-3 text-[12px] leading-relaxed text-muted">
             <Info className="mt-0.5 size-3.5 shrink-0 text-terracotta" />
             {t("exactAddress")}

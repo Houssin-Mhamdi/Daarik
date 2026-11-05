@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,43 +17,31 @@ import {
   ShoppingBag,
   Smartphone,
   UserRound,
-  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input, Field, Label } from "@/components/ui/input";
+import { Input, Field } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/overlays";
 import { StickyActionBar } from "@/components/ui/misc";
 import { PickupPicker } from "@/components/app/pickup-picker";
 import { useApp } from "@/components/providers/app-provider";
+import { loc } from "@/lib/data";
 import {
-  currentUser,
-  getCook,
-  getDish,
-  loc,
-  orderSubtotal,
-  pickupOptions,
-} from "@/lib/data";
-import { useCreatePaymentIntentMutation } from "@/lib/queries";
+  useCreateCheckoutSessionMutation,
+  useCreateOrderMutation,
+} from "@/lib/queries";
+import { getAccessToken } from "@/lib/api";
 import { cn, formatPrice } from "@/lib/utils";
 
-const idealBanks = [
-  { id: "ing", name: "ING" },
-  { id: "rabobank", name: "Rabobank" },
-  { id: "abn_amro", name: "ABN AMRO" },
-  { id: "bunq", name: "bunq" },
-  { id: "sns_bank", name: "SNS Bank" },
-  { id: "asn_bank", name: "ASN Bank" },
-  { id: "knab", name: "Knab" },
-  { id: "triodos_bank", name: "Triodos Bank" },
-  { id: "revolut", name: "Revolut" },
-];
-
-const steps = ["stepContact", "stepPickup", "stepPayment", "stepReview"] as const;
+const steps = [
+  "stepContact",
+  "stepPickup",
+  "stepPayment",
+  "stepReview",
+] as const;
 const payments = [
   { id: "ideal", key: "ideal", icon: Smartphone, sub: "iDEAL" },
   { id: "card", key: "card", icon: CreditCard, sub: "Visa · Mastercard" },
-  { id: "bancontact", key: "bancontact", icon: Wallet, sub: "Bancontact" },
 ] as const;
 
 export default function CheckoutPage() {
@@ -62,49 +50,70 @@ export default function CheckoutPage() {
     t,
     lang,
     dir,
+    dishes,
+    cooks,
     cart,
     cartCookId,
     pickup,
     pickupTime,
+    pickupOptions,
     cartNote,
     serviceFee,
-    placeOrder,
+    clearCart,
     toast,
+    user,
   } = useApp();
   const [step, setStep] = useState(0);
-  const [firstName, setFirstName] = useState(currentUser.firstName);
-  const [lastName, setLastName] = useState("de Vries");
-  const [email, setEmail] = useState(currentUser.email);
-  const [phone, setPhone] = useState(currentUser.phone);
+  const [contactOverrides, setContactOverrides] = useState<{
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+  }>({});
+  const firstName = contactOverrides.firstName ?? user.firstName ?? "";
+  const lastName =
+    contactOverrides.lastName ??
+    (user.name ? user.name.split(/\s+/).slice(1).join(" ") : "");
+  const email = contactOverrides.email ?? user.email ?? "";
+  const phone = contactOverrides.phone ?? user.phone ?? "";
+  const setFirstName = (value: string) =>
+    setContactOverrides((previous) => ({ ...previous, firstName: value }));
+  const setLastName = (value: string) =>
+    setContactOverrides((previous) => ({ ...previous, lastName: value }));
+  const setEmail = (value: string) =>
+    setContactOverrides((previous) => ({ ...previous, email: value }));
+  const setPhone = (value: string) =>
+    setContactOverrides((previous) => ({ ...previous, phone: value }));
   const [payment, setPayment] = useState<string>("ideal");
-  const [idealBank, setIdealBank] = useState<string>("ing");
   const [terms, setTerms] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [paying, setPaying] = useState(false);
-  const [cardNumber, setCardNumber] = useState("");
-  const createIntentMutation = useCreatePaymentIntentMutation();
-  const [stripeIntent, setStripeIntent] = useState<{
-    paymentIntentId: string;
-    payoutRouting: "STRIPE_CONNECT" | "BANK_TRANSFER";
-    cookPayoutDestination: string;
-  } | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [pendingOrderCode, setPendingOrderCode] = useState<string | null>(null);
+  const createOrderMutation = useCreateOrderMutation();
+  const createSessionMutation = useCreateCheckoutSessionMutation();
 
   const lines = cart
-    .map((line) => ({ line, dish: getDish(line.dishId) }))
+    .map((line) => ({
+      line,
+      dish: dishes.find((d) => d.id === line.dishId),
+    }))
     .filter((item) => item.dish);
-  const cook = cartCookId ? getCook(cartCookId) : undefined;
-  const subtotal = orderSubtotal(cart);
+  const cook = cartCookId ? cooks.find((c) => c.id === cartCookId) : undefined;
+  const subtotal = lines.reduce(
+    (sum, item) => sum + (item.dish?.price ?? 0) * item.line.qty,
+    0,
+  );
   const total = subtotal + serviceFee;
   const option = pickupOptions.find((item) => item.id === pickup);
 
-  const availablePickups = useMemo(() => {
-    if (!lines.length) return [];
-    return pickupOptions
-      .filter((item) =>
-        lines.every((line) => line.dish?.pickup.includes(item.id)),
-      )
-      .map((item) => item.id);
-  }, [lines]);
+  const availablePickups = lines.length
+    ? pickupOptions
+        .filter((item) =>
+          lines.every((line) => line.dish?.pickup.includes(item.id)),
+        )
+        .map((item) => item.id)
+    : [];
 
   useEffect(() => {
     if (!cart.length && !paying) {
@@ -138,14 +147,12 @@ export default function CheckoutPage() {
     if (step === 0) {
       if (!firstName.trim()) next.firstName = t("requiredField");
       if (!lastName.trim()) next.lastName = t("requiredField");
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = t("invalidEmail");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        next.email = t("invalidEmail");
       if (phone.replace(/\D/g, "").length < 9) next.phone = t("invalidPhone");
     }
     if (step === 2) {
       if (!terms) next.terms = t("requiredField");
-      if (payment === "card" && cardNumber.replace(/\s/g, "").length < 12) {
-        next.card = t("requiredField");
-      }
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -157,47 +164,71 @@ export default function CheckoutPage() {
       return;
     }
     if (step < steps.length - 1) {
-      const nextStep = step + 1;
-      setStep(nextStep);
-      if (nextStep === 2 || nextStep === 3) {
-        createIntentMutation
-          .mutateAsync({
-            amount: total,
-            cookId: cartCookId ?? "rana",
-            paymentMethod: (payment as "ideal" | "card" | "bancontact") || "ideal",
-            idealBank: payment === "ideal" ? idealBank : undefined,
-            items: cart.map((line) => ({ dishId: line.dishId, qty: line.qty })),
-          })
-          .then((res) => {
-            setStripeIntent({
-              paymentIntentId: res.paymentIntentId,
-              payoutRouting: res.payoutRouting,
-              cookPayoutDestination: res.breakdown.cookPayoutDestination,
-            });
-          })
-          .catch(() => {});
-      }
+      setStep(step + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
+    void payNow();
+  };
+
+  /**
+   * Order first, then pay on Stripe. The order is created once and reused if
+   * the customer comes back, so a cancelled payment never leaves duplicates.
+   */
+  const payNow = async () => {
     if (!terms) {
       toast(t("validationErrors"), { variant: "error" });
       return;
     }
+    if (!getAccessToken()) {
+      router.push("/login?next=/checkout");
+      return;
+    }
+
     setPaying(true);
-    setTimeout(() => {
-      placeOrder({
-        cookId: cartCookId ?? "",
-        items: cart.map((line) => ({ dishId: line.dishId, qty: line.qty })),
-        pickup,
-        pickupTime,
-        total,
-        email,
-        payment,
-        note: cartNote || undefined,
+    setPayError(null);
+    try {
+      let code = pendingOrderCode;
+      if (!code) {
+        const created = await createOrderMutation.mutateAsync({
+          items: cart.map((line) => ({ dishId: line.dishId, qty: line.qty })),
+          pickup,
+          pickupTime,
+          customerName: `${firstName} ${lastName}`.trim(),
+          customerEmail: email,
+          customerPhone: phone,
+          note: cartNote || undefined,
+          paymentMethod:
+            payment === "card"
+              ? "CARD"
+              : payment === "bancontact"
+                ? "BANCONTACT"
+                : "IDEAL",
+        });
+        code = created.code;
+        setPendingOrderCode(code);
+      }
+
+      const session = await createSessionMutation.mutateAsync({
+        orderCode: code,
+        paymentMethod:
+          payment === "card"
+            ? "card"
+            : payment === "bancontact"
+              ? "bancontact"
+              : "ideal",
       });
-      router.push("/order-confirmation");
-    }, 1100);
+
+      clearCart();
+      // Full navigation: Stripe Checkout is a hosted page on stripe.com.
+      window.location.assign(session.url);
+    } catch (error) {
+      setPaying(false);
+      const message =
+        error instanceof Error ? error.message : t("paymentFailed");
+      setPayError(message);
+      toast(message, { variant: "error" });
+    }
   };
 
   const back = () => {
@@ -223,6 +254,8 @@ export default function CheckoutPage() {
         <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-cream/60 p-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            loading="lazy"
+            decoding="async"
             src={cook.avatar}
             alt={cook.name}
             className="size-9 rounded-full object-cover"
@@ -316,7 +349,9 @@ export default function CheckoutPage() {
             aria-label={t("back")}
             className="-ms-2 grid size-10 place-items-center rounded-full text-charcoal transition hover:bg-cream-100"
           >
-            <ArrowLeft className={cn("size-5", dir === "rtl" && "rotate-180")} />
+            <ArrowLeft
+              className={cn("size-5", dir === "rtl" && "rotate-180")}
+            />
           </button>
           <div>
             <h1 className="font-sans text-[18px] font-semibold text-charcoal md:font-display md:text-[36px]">
@@ -328,7 +363,7 @@ export default function CheckoutPage() {
           </div>
           <span className="ms-auto flex items-center gap-1 rounded-full border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold text-muted">
             <Lock className="size-3 text-olive" />
-            {t("demoMode")}
+            {t("securedByStripe")}
           </span>
         </div>
 
@@ -339,7 +374,10 @@ export default function CheckoutPage() {
               const complete = index < step;
               const active = index === step;
               return (
-                <div key={item} className="flex flex-1 items-center last:flex-none">
+                <div
+                  key={item}
+                  className="flex flex-1 items-center last:flex-none"
+                >
                   <button
                     type="button"
                     onClick={() => {
@@ -394,11 +432,18 @@ export default function CheckoutPage() {
                     <h2 className="text-[16px] font-semibold text-charcoal">
                       {t("contactInfo")}
                     </h2>
-                    <p className="text-[12.5px] text-muted">{t("contactSub")}</p>
+                    <p className="text-[12.5px] text-muted">
+                      {t("contactSub")}
+                    </p>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <Field label={t("firstName")} htmlFor="firstName" error={errors.firstName} required>
+                  <Field
+                    label={t("firstName")}
+                    htmlFor="firstName"
+                    error={errors.firstName}
+                    required
+                  >
                     <Input
                       id="firstName"
                       value={firstName}
@@ -406,7 +451,12 @@ export default function CheckoutPage() {
                       autoComplete="given-name"
                     />
                   </Field>
-                  <Field label={t("lastName")} htmlFor="lastName" error={errors.lastName} required>
+                  <Field
+                    label={t("lastName")}
+                    htmlFor="lastName"
+                    error={errors.lastName}
+                    required
+                  >
                     <Input
                       id="lastName"
                       value={lastName}
@@ -481,6 +531,8 @@ export default function CheckoutPage() {
                   <div className="mt-3 flex items-center gap-2.5 rounded-2xl border border-line p-2.5">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
+                      loading="lazy"
+                      decoding="async"
                       src={cook.avatar}
                       alt={cook.name}
                       className="size-9 rounded-full object-cover"
@@ -508,7 +560,9 @@ export default function CheckoutPage() {
                     <h2 className="text-[16px] font-semibold text-charcoal">
                       {t("paymentMethod")}
                     </h2>
-                    <p className="text-[12.5px] text-muted">{t("paymentSub")}</p>
+                    <p className="text-[12.5px] text-muted">
+                      {t("paymentSub")}
+                    </p>
                   </div>
                 </div>
                 <div className="mt-4 space-y-2">
@@ -554,7 +608,10 @@ export default function CheckoutPage() {
                           )}
                         >
                           {active ? (
-                            <Check className="size-3 text-white" strokeWidth={3} />
+                            <Check
+                              className="size-3 text-white"
+                              strokeWidth={3}
+                            />
                           ) : null}
                         </span>
                       </button>
@@ -562,53 +619,10 @@ export default function CheckoutPage() {
                   })}
                 </div>
 
-                {payment === "ideal" ? (
-                  <div className="mt-3 rounded-2xl border border-line bg-cream/40 p-3">
-                    <Label htmlFor="ideal-bank">iDEAL · Select your Dutch bank</Label>
-                    <select
-                      id="ideal-bank"
-                      value={idealBank}
-                      onChange={(e) => setIdealBank(e.target.value)}
-                      className="mt-1.5 h-11 w-full rounded-xl border border-line bg-white px-3 text-[15px] font-medium text-charcoal outline-none focus:border-terracotta focus:ring-4 focus:ring-terracotta/10"
-                    >
-                      {idealBanks.map((bank) => (
-                        <option key={bank.id} value={bank.id}>
-                          {bank.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                {payment === "card" ? (
-                  <div className="mt-3 rounded-2xl border border-line bg-cream/40 p-3">
-                    <Label htmlFor="card">{t("card")}</Label>
-                    <Input
-                      id="card"
-                      value={cardNumber}
-                      onChange={(event) => setCardNumber(event.target.value)}
-                      placeholder="4242 4242 4242 4242"
-                      inputMode="numeric"
-                      className={cn(errors.card && "border-[#b3402f]")}
-                    />
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <Input placeholder="MM / YY" inputMode="numeric" />
-                      <Input placeholder="CVC" inputMode="numeric" />
-                    </div>
-                  </div>
-                ) : null}
-
-                {stripeIntent ? (
-                  <div className="mt-3 rounded-2xl border border-olive/30 bg-olive-50/60 p-3 text-[13px] text-charcoal">
-                    <p className="font-semibold text-olive-700">
-                      Stripe PaymentIntent Ready · {stripeIntent.paymentIntentId}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-muted">
-                      Cook payout routing: {stripeIntent.cookPayoutDestination}
-                    </p>
-                  </div>
-                ) : null}
-
+                <div className="mt-3 flex items-start gap-2 rounded-2xl border border-line bg-cream/40 p-3 text-[12.5px] leading-relaxed text-muted">
+                  <Lock className="mt-0.5 size-3.5 shrink-0 text-olive" />
+                  {t("stripeRedirectNote")}
+                </div>
                 <div className="mt-4">
                   <Checkbox
                     checked={terms}
@@ -625,8 +639,14 @@ export default function CheckoutPage() {
 
                 <div className="mt-3 flex items-start gap-1.5 rounded-2xl bg-cream-100 p-3 text-[12px] leading-relaxed text-muted">
                   <Lock className="mt-0.5 size-3 shrink-0 text-olive" />
-                  {t("demoNotice")}
+                  {t("paymentsByStripe")}
                 </div>
+
+                {payError ? (
+                  <div className="mt-3 rounded-2xl border border-[#b3402f]/30 bg-[#b3402f]/5 p-3 text-[12.5px] leading-relaxed text-[#b3402f]">
+                    {payError}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -727,9 +747,14 @@ export default function CheckoutPage() {
                   <div className="mt-3 space-y-2.5">
                     {lines.map(({ line, dish }) =>
                       dish ? (
-                        <div key={line.dishId} className="flex items-center gap-2.5">
+                        <div
+                          key={line.dishId}
+                          className="flex items-center gap-2.5"
+                        >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
+                            loading="lazy"
+                            decoding="async"
                             src={dish.image}
                             alt={loc(dish.name, lang)}
                             className="size-11 rounded-xl object-cover"
@@ -808,7 +833,9 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <aside className="hidden md:block md:sticky md:top-24">{summary}</aside>
+          <aside className="hidden md:block md:sticky md:top-24">
+            {summary}
+          </aside>
         </div>
       </div>
 
@@ -822,11 +849,7 @@ export default function CheckoutPage() {
               {formatPrice(total, lang)}
             </p>
           </div>
-          <Button
-            className="h-12 flex-1"
-            loading={paying}
-            onClick={next}
-          >
+          <Button className="h-12 flex-1" loading={paying} onClick={next}>
             {paying
               ? t("paying")
               : step === steps.length - 1

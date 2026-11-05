@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -22,33 +22,38 @@ import { ConfirmDialog, EmptyState, Sheet } from "@/components/ui/overlays";
 import { FilterChip, Card } from "@/components/ui/misc";
 import { CookMobileHeader } from "@/components/cook/cook-mobile-header";
 import { useApp } from "@/components/providers/app-provider";
-import { dishesByCook, loc, type Dish } from "@/lib/data";
+import { loc, type Dish } from "@/lib/data";
+import {
+  useCookDashboardQuery,
+  useDeleteDishMutation,
+  useUpdateDishMutation,
+} from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
 
 type Status = "live" | "paused" | "draft";
 type Filter = "all" | "live" | "paused" | "draft";
 
-const statusFor = (dish: Dish, index: number): Status =>
-  dish.id === "brik" ? "paused" : dish.id === "tajine-veg" ? "draft" : "live";
-
 export default function CookDishesPage() {
   const { t, lang, toast } = useApp();
-  const seed = useMemo(() => dishesByCook("rana"), []);
-  const [statuses, setStatuses] = useState<Record<string, Status>>(() =>
-    Object.fromEntries(seed.map((dish, index) => [dish.id, statusFor(dish, index)])),
-  );
+  const { data: dashboard } = useCookDashboardQuery();
+  const updateDishMutation = useUpdateDishMutation();
+  const deleteDishMutation = useDeleteDishMutation();
+  const [statuses, setStatuses] = useState<Record<string, Status>>({});
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [menuDish, setMenuDish] = useState<Dish | null>(null);
   const [deleteDish, setDeleteDish] = useState<Dish | null>(null);
 
-  const dishes = useMemo(
-    () => dishesByCook("rana").filter((dish) => Boolean(statuses[dish.id])),
-    [statuses],
+  const dishes: Dish[] = useMemo(
+    () => (dashboard?.dishes ?? []) as Dish[],
+    [dashboard?.dishes],
   );
 
+  const getStatus = (dish: Dish): Status =>
+    statuses[dish.id] ?? dish.status ?? "live";
+
   const filtered = dishes.filter((dish) => {
-    const status = statuses[dish.id];
+    const status = getStatus(dish);
     if (filter !== "all" && status !== filter) return false;
     if (!query.trim()) return true;
     return loc(dish.name, lang).toLowerCase().includes(query.toLowerCase());
@@ -56,13 +61,17 @@ export default function CookDishesPage() {
 
   const counts = {
     all: dishes.length,
-    live: dishes.filter((dish) => statuses[dish.id] === "live").length,
-    paused: dishes.filter((dish) => statuses[dish.id] === "paused").length,
-    draft: dishes.filter((dish) => statuses[dish.id] === "draft").length,
+    live: dishes.filter((dish) => getStatus(dish) === "live").length,
+    paused: dishes.filter((dish) => getStatus(dish) === "paused").length,
+    draft: dishes.filter((dish) => getStatus(dish) === "draft").length,
   };
 
   function setStatus(dish: Dish, status: Status) {
     setStatuses((prev) => ({ ...prev, [dish.id]: status }));
+    updateDishMutation.mutate({
+      id: dish.id,
+      body: { status: status.toUpperCase() },
+    });
     setMenuDish(null);
   }
 
@@ -166,7 +175,7 @@ export default function CookDishesPage() {
             {/* Mobile cards */}
             <div className="mt-3 space-y-3 md:hidden">
               {filtered.map((dish) => {
-                const status = statuses[dish.id];
+                const status = getStatus(dish);
                 const sold = dish.portions - dish.portionsLeft;
                 const percent = Math.round((sold / dish.portions) * 100);
                 return (
@@ -181,6 +190,8 @@ export default function CookDishesPage() {
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
+                          loading="lazy"
+                          decoding="async"
                           src={dish.image}
                           alt={loc(dish.name, lang)}
                           className="size-full object-cover"
@@ -267,7 +278,11 @@ export default function CookDishesPage() {
                         onClick={() => {
                           const next = status === "live" ? "paused" : "live";
                           setStatus(dish, next);
-                          toast(next === "live" ? t("dishResumed") : t("dishPaused"));
+                          toast(
+                            next === "live"
+                              ? t("dishResumed")
+                              : t("dishPaused"),
+                          );
                         }}
                         className="flex h-8 items-center gap-1 rounded-full px-2 text-[12.5px] font-semibold text-muted"
                       >
@@ -293,25 +308,45 @@ export default function CookDishesPage() {
               <table className="w-full text-start">
                 <thead>
                   <tr className="border-b border-line bg-cream/50 text-[12px] uppercase tracking-[0.1em] text-muted">
-                    <th className="px-5 py-3 text-start font-semibold">{t("dishes")}</th>
-                    <th className="px-3 py-3 text-start font-semibold">{t("status")}</th>
-                    <th className="px-3 py-3 text-start font-semibold">{t("price")}</th>
-                    <th className="px-3 py-3 text-start font-semibold">{t("portionsSold", { sold: "", total: "" }).replace(/\s*of\s*$/, "")}</th>
-                    <th className="px-3 py-3 text-start font-semibold">{t("availabilityLabel")}</th>
-                    <th className="px-5 py-3 text-end font-semibold">{t("edit")}</th>
+                    <th className="px-5 py-3 text-start font-semibold">
+                      {t("dishes")}
+                    </th>
+                    <th className="px-3 py-3 text-start font-semibold">
+                      {t("status")}
+                    </th>
+                    <th className="px-3 py-3 text-start font-semibold">
+                      {t("price")}
+                    </th>
+                    <th className="px-3 py-3 text-start font-semibold">
+                      {t("portionsSold", { sold: "", total: "" }).replace(
+                        /\s*of\s*$/,
+                        "",
+                      )}
+                    </th>
+                    <th className="px-3 py-3 text-start font-semibold">
+                      {t("availabilityLabel")}
+                    </th>
+                    <th className="px-5 py-3 text-end font-semibold">
+                      {t("edit")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line/60">
                   {filtered.map((dish) => {
-                    const status = statuses[dish.id];
+                    const status = getStatus(dish);
                     const sold = dish.portions - dish.portionsLeft;
                     const percent = Math.round((sold / dish.portions) * 100);
                     return (
-                      <tr key={dish.id} className="group transition hover:bg-cream/30">
+                      <tr
+                        key={dish.id}
+                        className="group transition hover:bg-cream/30"
+                      >
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-3">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
+                              loading="lazy"
+                              decoding="async"
                               src={dish.image}
                               alt={loc(dish.name, lang)}
                               className="size-11 rounded-xl object-cover"
@@ -324,7 +359,8 @@ export default function CookDishesPage() {
                                 {loc(dish.name, lang)}
                               </Link>
                               <p className="mt-0.5 text-[12px] text-muted">
-                                {dish.serves} {t("people")} · {loc(dish.prepTime, lang)}
+                                {dish.serves} {t("people")} ·{" "}
+                                {loc(dish.prepTime, lang)}
                               </p>
                             </div>
                           </div>
@@ -371,14 +407,19 @@ export default function CookDishesPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                const next = status === "live" ? "paused" : "live";
+                                const next =
+                                  status === "live" ? "paused" : "live";
                                 setStatus(dish, next);
                                 toast(
-                                  next === "live" ? t("dishResumed") : t("dishPaused"),
+                                  next === "live"
+                                    ? t("dishResumed")
+                                    : t("dishPaused"),
                                 );
                               }}
                               aria-label={
-                                status === "live" ? t("pauseDish") : t("resumeDish")
+                                status === "live"
+                                  ? t("pauseDish")
+                                  : t("resumeDish")
                               }
                               className="grid size-8 place-items-center rounded-full text-muted transition hover:bg-cream hover:text-charcoal"
                             >
@@ -438,18 +479,18 @@ export default function CookDishesPage() {
             <button
               type="button"
               onClick={() => {
-                const next = statuses[menuDish.id] === "live" ? "paused" : "live";
+                const next = getStatus(menuDish) === "live" ? "paused" : "live";
                 setStatus(menuDish, next);
                 toast(next === "live" ? t("dishResumed") : t("dishPaused"));
               }}
               className="flex h-12 w-full items-center gap-2.5 rounded-2xl border border-line bg-white px-3.5 text-[14.5px] font-semibold text-charcoal"
             >
-              {statuses[menuDish.id] === "live" ? (
+              {getStatus(menuDish) === "live" ? (
                 <Pause className="size-4 text-saffron" />
               ) : (
                 <Play className="size-4 text-olive" />
               )}
-              {statuses[menuDish.id] === "live"
+              {getStatus(menuDish) === "live"
                 ? t("pauseDish")
                 : t("resumeDish")}
             </button>
@@ -480,11 +521,7 @@ export default function CookDishesPage() {
         onClose={() => setDeleteDish(null)}
         onConfirm={() => {
           if (deleteDish) {
-            setStatuses((prev) => {
-              const next = { ...prev };
-              delete next[deleteDish.id];
-              return next;
-            });
+            deleteDishMutation.mutate(deleteDish.id);
             toast(t("dishDeleted"));
           }
           setDeleteDish(null);
