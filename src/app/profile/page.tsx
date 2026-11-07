@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -14,6 +14,7 @@ import {
   FileText,
   Globe2,
   Heart,
+  Loader2,
   LogOut,
   MapPin,
   Package,
@@ -37,7 +38,9 @@ import { langMeta } from "@/lib/i18n";
 import {
   useCurrentUserQuery,
   useUpdateUserProfileMutation,
+  useUploadImageMutation,
 } from "@/lib/queries";
+import { errorMessage } from "@/lib/utils";
 
 export default function ProfilePage() {
   const {
@@ -53,6 +56,33 @@ export default function ProfilePage() {
   const router = useRouter();
   const { data: currentUser, isPending: authPending } = useCurrentUserQuery();
   const updateProfile = useUpdateUserProfileMutation();
+  const uploadAvatar = useUploadImageMutation("avatars");
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string>("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  async function handleAvatarSelect(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast(t("photoUploadFailed"), { variant: "error" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast(t("photoTooLarge"), { variant: "error" });
+      return;
+    }
+    setUploadingAvatar(true);
+    try {
+      const uploaded = await uploadAvatar.mutateAsync(file);
+      setAvatarPreview(uploaded.url);
+      await updateProfile.mutateAsync({ avatar: uploaded.url });
+      toast(t("photoSelected"));
+    } catch (err) {
+      toast(errorMessage(err, t("photoUploadFailed")), { variant: "error" });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
   const [languageOpen, setLanguageOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
@@ -115,11 +145,23 @@ export default function ProfilePage() {
             <div className="overflow-hidden rounded-[24px] border border-line bg-white shadow-card">
               <div className="h-20 bg-[linear-gradient(120deg,#f6ddd2_0%,#efe4d2_55%,#e6eadb_100%)]" />
               <div className="-mt-8 px-4 pb-4">
-                <div className="grid size-[68px] place-items-center rounded-full border-4 border-white bg-terracotta font-display text-[26px] font-bold text-white shadow-sm">
-                  {isAuthenticated
-                    ? (name || email || "U").slice(0, 1).toUpperCase()
-                    : "?"}
-                </div>
+                {avatarPreview || user.avatar ? (
+                  <Image
+                    src={avatarPreview || user.avatar || "/img/daarik-logo.png"}
+                    alt={name}
+                    width={68}
+                    height={68}
+                    loading="lazy"
+                    unoptimized
+                    className="size-[68px] rounded-full border-4 border-white object-cover shadow-sm"
+                  />
+                ) : (
+                  <div className="grid size-[68px] place-items-center rounded-full border-4 border-white bg-terracotta font-display text-[26px] font-bold text-white shadow-sm">
+                    {isAuthenticated
+                      ? (name || email || "U").slice(0, 1).toUpperCase()
+                      : "?"}
+                  </div>
+                )}
                 <h2 className="mt-2.5 font-display text-[21px] font-semibold leading-tight text-charcoal">
                   {isAuthenticated ? name || email : t("signIn")}
                 </h2>
@@ -524,10 +566,21 @@ export default function ProfilePage() {
         }
       >
         <div className="flex flex-col items-center">
+          <input
+            ref={avatarFileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              void handleAvatarSelect(file);
+              event.target.value = "";
+            }}
+          />
           <div className="relative">
-            {user.avatar ? (
+            {avatarPreview || user.avatar ? (
               <Image
-                src={user.avatar || "/img/daarik-logo.png"}
+                src={avatarPreview || user.avatar || "/img/daarik-logo.png"}
                 alt={name}
                 width={76}
                 height={76}
@@ -542,11 +595,16 @@ export default function ProfilePage() {
             )}
             <button
               type="button"
-              onClick={() => toast(t("photoSelected"))}
+              disabled={uploadingAvatar}
+              onClick={() => avatarFileRef.current?.click()}
               aria-label={t("profilePhotoHint")}
               className="absolute -bottom-1 -end-1 grid size-7 place-items-center rounded-full border-2 border-white bg-terracotta text-white"
             >
-              <Pencil className="size-3" />
+              {uploadingAvatar ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Pencil className="size-3" />
+              )}
             </button>
           </div>
           <p className="mt-2 text-[12px] text-muted">{t("profilePhotoHint")}</p>

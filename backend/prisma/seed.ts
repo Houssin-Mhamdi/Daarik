@@ -10,6 +10,7 @@ import {
   ApplicationStatus,
 } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
+import { buildDishSearchText } from "../src/common/dish-search";
 
 const prisma = new PrismaClient();
 const L = (nl: string, en: string, ar: string) => ({ nl, en, ar });
@@ -605,7 +606,8 @@ async function main() {
 
   const dishMap: Record<string, string> = {};
   for (const d of dishesSeed) {
-    const { cookSlug, ...dishData } = d;
+    const { cookSlug, ...rawDish } = d;
+    const dishData = { ...rawDish, searchText: buildDishSearchText(rawDish) };
     const created = await prisma.dish.upsert({
       where: { slug: d.slug },
       update: { ...dishData, cookId: cookMap[cookSlug] },

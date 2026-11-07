@@ -276,6 +276,7 @@ export function normalizeCook(value: unknown): Cook {
     yearsCooking: numberValue(raw.yearsCooking),
     latitude: typeof raw.latitude === "number" ? raw.latitude : undefined,
     longitude: typeof raw.longitude === "number" ? raw.longitude : undefined,
+    kitchenOpen: raw.kitchenOpen !== false,
   };
 }
 
@@ -382,6 +383,9 @@ export function useUpdateUserProfileMutation() {
       darnaApi.users.updateProfile(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.authMe });
+      qc.invalidateQueries({ queryKey: queryKeys.cookProfile });
+      qc.invalidateQueries({ queryKey: queryKeys.cookDashboard });
+      qc.invalidateQueries({ queryKey: ["cooks"] });
     },
   });
 }
@@ -487,6 +491,29 @@ export function useCookQuery(id: string) {
       };
     },
     enabled: Boolean(id),
+  });
+}
+
+export function useUploadImageMutation(
+  defaultFolder: "dishes" | "cooks" | "avatars" | "documents" | "uploads" = "uploads",
+) {
+  return useMutation({
+    mutationFn: (
+      input:
+        | File
+        | {
+            file: File;
+            folder?: "dishes" | "cooks" | "avatars" | "documents" | "uploads";
+          },
+    ) => {
+      if (input instanceof File) {
+        return darnaApi.uploads.uploadImage(input, defaultFolder);
+      }
+      return darnaApi.uploads.uploadImage(
+        input.file,
+        input.folder ?? defaultFolder,
+      );
+    },
   });
 }
 
@@ -699,6 +726,7 @@ export function useUpdateCookProfileMutation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.cookProfile });
       qc.invalidateQueries({ queryKey: queryKeys.cookDashboard });
+      qc.invalidateQueries({ queryKey: queryKeys.authMe });
       qc.invalidateQueries({ queryKey: ["cooks"] });
     },
   });

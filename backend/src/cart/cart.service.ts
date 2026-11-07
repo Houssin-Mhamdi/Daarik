@@ -88,6 +88,13 @@ export class CartService {
       throw new BadRequestException("This dish is sold out");
     }
 
+    if (!dish.cook.kitchenOpen) {
+      throw new ConflictException({
+        code: "COOK_NOT_ORDERABLE",
+        message: "This kitchen is on a break and is not accepting orders right now.",
+      });
+    }
+
     const currentItems = await this.prisma.cartItem.findMany({
       where: { userId },
       include: { dish: { include: { cook: true } } },

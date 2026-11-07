@@ -519,7 +519,15 @@ export default function CheckoutPage() {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <PickupPicker available={availablePickups} compact />
+                  <PickupPicker
+                    available={availablePickups}
+                    dishes={lines
+                      .map((item) => item.dish)
+                      .filter((item): item is NonNullable<typeof item> =>
+                        Boolean(item),
+                      )}
+                    compact
+                  />
                 </div>
                 <div className="mt-4 rounded-2xl bg-terracotta-50 p-3">
                   <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-terracotta-700">

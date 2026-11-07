@@ -119,7 +119,9 @@ export default function DishPage() {
   }
 
   const favorite = isFavorite(dish.id);
-  const soldOut = dish.portionsLeft <= 0;
+  const kitchenClosed = cook?.kitchenOpen === false;
+  const soldOut = dish.portionsLeft <= 0 || kitchenClosed;
+  const soldOutLabel = kitchenClosed ? t("kitchenClosedBadge") : t("soldOut");
   const max = Math.max(1, dish.portionsLeft);
 
   const share = async () => {
@@ -369,7 +371,11 @@ export default function DishPage() {
                   </span>
                 </div>
                 <div className="mt-3">
-                  <PickupPicker available={dish.pickup} compact />
+                  <PickupPicker
+                    available={dish.pickup}
+                    dishes={[dish]}
+                    compact
+                  />
                 </div>
                 <p className="mt-3 flex items-center gap-1.5 text-[12.5px] text-muted">
                   <MapPin className="size-3.5 shrink-0 text-terracotta" />
@@ -492,7 +498,7 @@ export default function DishPage() {
               </p>
 
               <div className="mt-4 rounded-2xl bg-cream/70 p-3">
-                <PickupPicker available={dish.pickup} compact />
+                <PickupPicker available={dish.pickup} dishes={[dish]} compact />
               </div>
 
               <div className="mt-4 flex items-center justify-between">
@@ -514,7 +520,7 @@ export default function DishPage() {
                 onClick={add}
               >
                 {soldOut
-                  ? t("soldOut")
+                  ? soldOutLabel
                   : `${t("addToCart")} · ${formatPrice(dish.price * qty, lang)}`}
               </Button>
               <Link
@@ -560,7 +566,7 @@ export default function DishPage() {
           </button>
           <Button className="h-12 flex-1" disabled={soldOut} onClick={add}>
             {soldOut ? (
-              t("soldOut")
+              soldOutLabel
             ) : added ? (
               <>
                 <span className="grid size-5 place-items-center rounded-full bg-white/20">

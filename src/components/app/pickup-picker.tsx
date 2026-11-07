@@ -1,11 +1,42 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { CalendarDays, Clock } from "lucide-react";
 import { useApp } from "@/components/providers/app-provider";
 import type { Dish } from "@/lib/data";
+import { cookPoint, coordsForCity, distanceKm, type GeoPoint } from "@/lib/cities";
 import { slotsForOption } from "@/lib/pickup";
-import { cn } from "@/lib/utils";
+import { cityMatches, cn } from "@/lib/utils";
+
+const LOCATION_STORAGE_KEY = "darna.delivery-location";
+
+function readCustomerLocation(fallbackCity?: string): {
+  point: GeoPoint | null;
+  city: string;
+} {
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem(LOCATION_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          lat?: number;
+          lng?: number;
+          city?: string;
+        };
+        if (Number.isFinite(parsed.lat) && Number.isFinite(parsed.lng)) {
+          return {
+            point: { lat: Number(parsed.lat), lng: Number(parsed.lng) },
+            city: parsed.city || fallbackCity || "",
+          };
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const city = fallbackCity || "";
+  return { point: city ? coordsForCity(city) : null, city };
+}
 
 export function PickupPicker({
   available,
@@ -23,14 +54,51 @@ export function PickupPicker({
   const {
     t,
     lang,
+    cooks,
+    user,
     pickup,
     setPickup,
     pickupTime,
     setPickupTime,
     pickupOptions,
   } = useApp();
+  const [customerLoc, setCustomerLoc] = useState<{
+    point: GeoPoint | null;
+    city: string;
+  }>({ point: null, city: "" });
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setCustomerLoc(readCustomerLocation(user.city));
+    });
+  }, [user.city]);
+
+  const isSameDayWithinRadius = (dish: Dish): boolean => {
+    const schedule = dish.schedule;
+    if (!schedule?.sameDay) return false;
+    const cook = cooks.find((c) => c.id === dish.cookId);
+    if (!cook) return true;
+    const cookCoords = cookPoint(cook);
+    if (customerLoc.point && cookCoords) {
+      return (
+        distanceKm(customerLoc.point, cookCoords) <= schedule.sameDayRadiusKm
+      );
+    }
+    if (customerLoc.city && cook.city) {
+      return cityMatches(customerLoc.city, cook.city);
+    }
+    return true;
+  };
+
   const slotsFor = (option: (typeof pickupOptions)[number]) => {
     const isToday = option.id === pickupOptions[0]?.id;
+    if (
+      isToday &&
+      dishes?.length &&
+      dishes.some((dish) => dish.schedule && !isSameDayWithinRadius(dish))
+    ) {
+      return [];
+    }
     const lists = (dishes ?? [])
       .filter((dish) => dish.schedule)
       .map((dish) => slotsForOption(dish.schedule, option, isToday));

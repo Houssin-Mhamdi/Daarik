@@ -275,7 +275,15 @@ export default function CartPage() {
                 </span>
               </div>
               <div className="mt-3">
-                <PickupPicker available={availablePickups} compact />
+                <PickupPicker
+                  available={availablePickups}
+                  dishes={lines
+                    .map((item) => item.dish)
+                    .filter((item): item is NonNullable<typeof item> =>
+                      Boolean(item),
+                    )}
+                  compact
+                />
               </div>
               <p className="mt-3 flex items-start gap-1.5 text-[12.5px] leading-relaxed text-muted">
                 <MapPin className="mt-0.5 size-3.5 shrink-0 text-terracotta" />

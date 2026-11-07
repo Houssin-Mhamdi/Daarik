@@ -1,4 +1,4 @@
-import type { Dish, Localized, PickupOption } from "@/lib/data";
+import type { Localized, PickupOption } from "@/lib/data";
 
 export const WEEKDAY_KEYS = [
   "sun",
@@ -92,9 +92,12 @@ export function parseSchedule(raw: Record<string, unknown>): PickupSchedule {
     }
   }
   const legacyDays = Array.isArray(raw.pickup)
-    ? (raw.pickup as unknown[]).filter((d): d is string =>
-        WEEKDAY_KEYS.includes(d as (typeof WEEKDAY_KEYS)[number]),
-      )
+    ? (raw.pickup as unknown[])
+        .filter((d): d is string => typeof d === "string")
+        .map((d) => d.split("-")[0].toLowerCase())
+        .filter((d) =>
+          WEEKDAY_KEYS.includes(d as (typeof WEEKDAY_KEYS)[number]),
+        )
     : [];
   for (const day of legacyDays) {
     if (!windows[day]) windows[day] = DEFAULT_PICKUP_SLOTS;
@@ -133,7 +136,12 @@ export function slotsForOption(
   isToday: boolean,
   now = new Date(),
 ) {
-  const base = schedule?.windows[weekdayOf(option.id)] ?? option.slots;
+  const dayKey = weekdayOf(option.id);
+  const firstWindow = schedule
+    ? Object.values(schedule.windows).find((list) => list.length > 0)
+    : undefined;
+  const base =
+    schedule?.windows[dayKey] ?? firstWindow ?? option.slots ?? DEFAULT_PICKUP_SLOTS;
   if (!isToday) return base;
   const limit = now.getHours() * 60 + now.getMinutes() + SAME_DAY_LEAD_MINUTES;
   return base.filter((slot) => {

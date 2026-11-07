@@ -38,7 +38,9 @@ export function DishCard({
   const cook = cooks.find((c) => c.id === dish.cookId);
   const cuisine = cuisines.find((item) => item.id === dish.cuisineId);
   const favorite = isFavorite(dish.id);
-  const soldOut = dish.portionsLeft <= 0;
+  const kitchenClosed = cook?.kitchenOpen === false;
+  const soldOut = dish.portionsLeft <= 0 || kitchenClosed;
+  const soldOutLabel = kitchenClosed ? t("kitchenClosedBadge") : t("soldOut");
   const lowStock = dish.portionsLeft > 0 && dish.portionsLeft <= 3;
 
   const heart = (
@@ -242,7 +244,7 @@ export function DishCard({
               </div>
               <div className="flex items-center gap-2">
                 <span className="hidden text-[12.5px] font-medium text-muted sm:block">
-                  {soldOut ? t("soldOut") : t("addToCart")}
+                  {soldOut ? soldOutLabel : t("addToCart")}
                 </span>
                 {addButton}
               </div>
@@ -292,7 +294,7 @@ export function DishCard({
         {soldOut ? (
           <div className="absolute inset-0 grid place-items-center bg-charcoal/35 backdrop-blur-[1px]">
             <span className="rounded-full bg-white/95 px-3 py-1.5 text-[13px] font-bold text-charcoal">
-              {t("soldOut")}
+              {soldOutLabel}
             </span>
           </div>
         ) : null}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -29,8 +29,12 @@ import { Input, Textarea, Field, Select } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/controls";
 import { Card } from "@/components/ui/misc";
 import { useApp } from "@/components/providers/app-provider";
-import { useApplyCookMutation, useMyCookApplicationQuery } from "@/lib/queries";
-import { cn } from "@/lib/utils";
+import {
+  useApplyCookMutation,
+  useMyCookApplicationQuery,
+  useUploadImageMutation,
+} from "@/lib/queries";
+import { cn, errorMessage } from "@/lib/utils";
 
 type Doc = { id: string; label: string; hint: string; icon: typeof FileText };
 
@@ -103,7 +107,12 @@ export default function CookApplyPage() {
     terms: false,
   });
   const [uploaded, setUploaded] = useState<Record<string, boolean>>({});
+  const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({});
+  const [uploadedNames, setUploadedNames] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<string | null>(null);
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const docFileInputRef = useRef<HTMLInputElement>(null);
+  const uploadDocMutation = useUploadImageMutation("documents");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const steps = [
@@ -164,6 +173,7 @@ export default function CookApplyPage() {
           bio: about.trim(),
           hygieneCertificate: Boolean(checks.hygiene),
           idVerified: false,
+          kitchenPhotos: Object.values(uploadedUrls).filter(Boolean),
         });
         setSubmitted(true);
         toast(t("applicationSubmitted"));
@@ -178,12 +188,36 @@ export default function CookApplyPage() {
   }
 
   function upload(id: string) {
+    setActiveDocId(id);
+    docFileInputRef.current?.click();
+  }
+
+  async function handleDocFileSelect(file: File | undefined) {
+    const id = activeDocId;
+    if (!file || !id) return;
+    if (!file.type.startsWith("image/")) {
+      toast(t("photoUploadFailed"), { variant: "error" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast(t("photoTooLarge"), { variant: "error" });
+      return;
+    }
     setUploading(id);
-    setTimeout(() => {
+    try {
+      const res = await uploadDocMutation.mutateAsync({
+        file,
+        folder: "documents",
+      });
       setUploaded((prev) => ({ ...prev, [id]: true }));
-      setUploading(null);
+      setUploadedUrls((prev) => ({ ...prev, [id]: res.url }));
+      setUploadedNames((prev) => ({ ...prev, [id]: file.name }));
       toast(t("uploaded"));
-    }, 850);
+    } catch (err) {
+      toast(errorMessage(err, t("photoUploadFailed")), { variant: "error" });
+    } finally {
+      setUploading(null);
+    }
   }
 
   const isApproved = existingApplication?.status === "APPROVED";
@@ -593,6 +627,17 @@ export default function CookApplyPage() {
 
             {step === 3 ? (
               <div className="space-y-3">
+                <input
+                  ref={docFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    void handleDocFileSelect(file);
+                    event.target.value = "";
+                  }}
+                />
                 {docs.map((doc) => {
                   const done = Boolean(uploaded[doc.id]);
                   const Icon = doc.icon;
@@ -622,9 +667,9 @@ export default function CookApplyPage() {
                         <p className="text-[14.5px] font-semibold text-charcoal">
                           {t(doc.label)}
                         </p>
-                        <p className="mt-0.5 text-[12.5px] text-muted">
+                        <p className="mt-0.5 truncate text-[12.5px] text-muted">
                           {done
-                            ? `${doc.id === "docId" ? "id-scan.pdf" : doc.id === "docHealth" ? "food-safety.pdf" : "address.pdf"} · 1.2 MB`
+                            ? uploadedNames[doc.id] || t("uploaded")
                             : doc.hint}
                         </p>
                       </div>

@@ -76,6 +76,13 @@ export class OrdersService {
 
     const cook = dishes[0].dish.cook;
 
+    if (!cook.kitchenOpen) {
+      throw new ConflictException({
+        code: "COOK_NOT_ORDERABLE",
+        message: "This kitchen is on a break and is not accepting orders right now.",
+      });
+    }
+
     // A cook can only sell when BOTH gates are open: Stripe payouts enabled and
     // Daarik compliance approved. Stripe KYC is not a food-safety check.
     if (

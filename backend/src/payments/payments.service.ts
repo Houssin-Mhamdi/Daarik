@@ -535,6 +535,11 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const accountId = await this.requireCookReady(order.cook);
+    if (!order.cook.kitchenOpen) {
+      throw new ConflictException(
+        "This kitchen is on a break and is not accepting orders right now.",
+      );
+    }
     const settings = await this.getSettings();
 
     if (order.totalCents < settings.minOrderCents) {

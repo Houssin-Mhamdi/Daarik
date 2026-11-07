@@ -2,6 +2,7 @@ import {
   IsArray,
   IsBoolean,
   IsEmail,
+  IsIn,
   IsInt,
   IsNumber,
   IsObject,
@@ -11,6 +12,7 @@ import {
   MaxLength,
   Min,
 } from "class-validator";
+import { NL_CITIES } from "../../common/nl-cities";
 
 export class ApplyCookDto {
   @IsString()
@@ -87,6 +89,7 @@ export class UpdateCookProfileDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(NL_CITIES)
   city?: string;
 
   @IsOptional()

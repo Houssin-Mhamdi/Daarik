@@ -235,13 +235,19 @@ export class CooksService {
     specialties: string | null;
     bio: string | null;
     yearsCooking: number;
+    kitchenPhotos?: string[];
   }) {
     if (!application.userId) return null;
+
+    const firstPhoto = application.kitchenPhotos?.[0];
 
     // Promote user role to COOK so they can access all cook endpoints
     await this.prisma.user.update({
       where: { id: application.userId },
-      data: { role: "COOK" },
+      data: {
+        role: "COOK",
+        ...(firstPhoto ? { avatar: firstPhoto } : {}),
+      },
     });
 
     const localized = (value: string) => ({ nl: value, en: value, ar: value });
@@ -258,11 +264,19 @@ export class CooksService {
         verified: true,
         complianceStatus: ComplianceStatus.APPROVED,
         complianceCheckedAt: new Date(),
+        ...(firstPhoto ? { avatar: firstPhoto } : {}),
+        ...(application.kitchenPhotos?.[1]
+          ? { cover: application.kitchenPhotos[1] }
+          : {}),
       },
       create: {
         slug: `${baseSlug || "cook"}-${application.userId.slice(-8)}`,
         userId: application.userId,
         name: application.name,
+        ...(firstPhoto ? { avatar: firstPhoto } : {}),
+        ...(application.kitchenPhotos?.[1]
+          ? { cover: application.kitchenPhotos[1] }
+          : {}),
         city: application.city,
         area: localized(application.city),
         cuisineIds: application.cuisine ? [application.cuisine] : [],
@@ -354,6 +368,11 @@ export class CooksService {
 
   async updateMyProfile(userId: string, dto: UpdateCookProfileDto) {
     const cook = await this.getCookForUser(userId);
+    if (dto.avatar !== undefined) {
+      await this.prisma.user
+        .update({ where: { id: userId }, data: { avatar: dto.avatar } })
+        .catch(() => undefined);
+    }
     return this.prisma.cookProfile.update({
       where: { id: cook.id },
       data: dto as any,

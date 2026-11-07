@@ -1,25 +1,17 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
   ArrowRight,
-  BadgeCheck,
-  Bell,
-  CalendarCheck,
   ChevronDown,
-  ChefHat,
   MapPin,
-  Search,
   Sparkles,
   Star,
   Sun,
-  UserRound,
-  UtensilsCrossed,
 } from "lucide-react";
 import { SectionHeading } from "@/components/ui/misc";
-import { Badge } from "@/components/ui/badge";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { DishCard } from "@/components/app/dish-card";
 import { CookCard } from "@/components/app/cook-card";
@@ -28,104 +20,44 @@ import { SearchBar } from "@/components/app/search-bar";
 import { NotificationsSheet } from "@/components/app/notifications-sheet";
 import { LanguageSheet } from "@/components/app/language-sheet";
 import { InstallPrompt } from "@/components/app/install-prompt";
+import { BecomeCookBanner, BecomeCookCard } from "@/components/home/become-cook";
+import { EmptyNotice } from "@/components/home/empty-notice";
+import { HeroDishCard } from "@/components/home/hero-dish-card";
+import { HowItWorks } from "@/components/home/how-it-works";
+import { MobileHeader } from "@/components/home/mobile-header";
+import { OffersCarousel } from "@/components/home/offers-carousel";
+import { TopCooksList } from "@/components/home/top-cooks-list";
 import { useApp } from "@/components/providers/app-provider";
+import { useGreeting } from "@/hooks/use-greeting";
+import { useHomeFeed } from "@/hooks/use-home-feed";
+import { useRotatingIndex } from "@/hooks/use-rotating-index";
+import { useSearchArea } from "@/hooks/use-search-area";
 import { loc } from "@/lib/data";
 import { useNotificationsQuery } from "@/lib/queries";
-import { cityMatches, cn, formatPrice } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 export default function HomePage() {
-  const { t, lang, dishes, cooks, cuisines, isAuthenticated, user } = useApp();
+  const { t, lang, cooks, cuisines, isAuthenticated, user } = useApp();
   const { data: notifications = [] } = useNotificationsQuery();
-  const [greeting, setGreeting] = useState<
-    "greetingMorning" | "greetingAfternoon" | "greetingEvening"
-  >("greetingAfternoon");
-  const [city, setCity] = useState("");
-  const [cityReady, setCityReady] = useState(false);
+  const { city, area, ready, setCity, setArea } = useSearchArea();
+  const { nearbyCooks, nearbyDishes, family, weekendPicks, heroList, offers } =
+    useHomeFeed(city, area);
+  const greeting = useGreeting();
+
   const [cityOpen, setCityOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const unread = notifications.filter((item) => item.unread).length;
-
-  const nearbyCooks = useMemo(
-    () => cooks.filter((cook) => cityMatches(cook.city, city)),
-    [cooks, city],
-  );
-  const nearbyDishes = useMemo(() => {
-    const nearbyCookIds = new Set(nearbyCooks.map((cook) => cook.id));
-    return dishes.filter((dish) => nearbyCookIds.has(dish.cookId));
-  }, [dishes, nearbyCooks]);
-  const family = useMemo(
-    () => nearbyDishes.filter((dish) => dish.family).slice(0, 6),
-    [nearbyDishes],
-  );
-  const weekendPicks = useMemo(
-    () =>
-      nearbyDishes.filter((dish) => dish.weekend || dish.featured).slice(0, 4),
-    [nearbyDishes],
-  );
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      let saved = "";
-      try {
-        const raw = window.localStorage.getItem("darna.delivery-location");
-        saved = raw ? (JSON.parse(raw) as { city?: string }).city || "" : "";
-      } catch {
-        saved = "";
-      }
-      setCity((current) => current || saved || "Rotterdam");
-      setCityReady(true);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const hour = new Date().getHours();
-      setGreeting(
-        hour < 12
-          ? "greetingMorning"
-          : hour < 18
-            ? "greetingAfternoon"
-            : "greetingEvening",
-      );
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  const heroList = useMemo(() => {
-    const seen = new Set<string>();
-    const picks = [...nearbyDishes, ...dishes].filter((dish) => {
-      if (!(dish.featured || dish.weekend) || seen.has(dish.cookId)) return false;
-      seen.add(dish.cookId);
-      return true;
-    });
-    return picks.length ? picks : nearbyDishes.slice(0, 1);
-  }, [nearbyDishes, dishes]);
-  const [heroIndex, setHeroIndex] = useState(0);
-  const [offerIndex, setOfferIndex] = useState(0);
-  const offers = useMemo(() => heroList.slice(0, 8), [heroList]);
   const [heroPaused, setHeroPaused] = useState(false);
+  const heroIndex = useRotatingIndex(heroList.length, heroPaused);
 
-  useEffect(() => {
-    if (heroPaused || heroList.length < 2) return;
-    const timer = window.setInterval(
-      () => setHeroIndex((index) => index + 1),
-      5000,
-    );
-    return () => window.clearInterval(timer);
-  }, [heroPaused, heroList.length]);
-
-  const heroDish = heroList.length
-    ? heroList[heroIndex % heroList.length]
-    : undefined;
+  const unread = notifications.filter((item) => item.unread).length;
+  const heroDish = heroList[heroIndex];
   const heroCook = heroDish
     ? cooks.find((cook) => cook.id === heroDish.cookId)
     : undefined;
   const favouriteCooks = nearbyCooks.slice(0, 4);
 
-  if (!cityReady) {
+  if (!ready) {
     return (
       <div className="mx-auto w-full max-w-[1240px] px-4 py-6 md:px-8 md:py-10">
         <PageSkeleton />
@@ -135,57 +67,15 @@ export default function HomePage() {
 
   return (
     <div className="pb-6 md:pb-0">
-      {/* Mobile header */}
+      {/* Mobile */}
       <div className="md:hidden">
-        <div className="flex items-center justify-between px-4 pb-1 pt-[max(10px,env(safe-area-inset-top,0px))]">
-          <button
-            type="button"
-            onClick={() => setCityOpen(true)}
-            className="flex h-10 items-center gap-1.5 rounded-full border border-line bg-white/80 px-3 text-[14px] font-semibold text-charcoal shadow-sm backdrop-blur"
-          >
-            <MapPin className="size-3.5 text-terracotta" />
-            {city}
-            <ChevronDown className="size-3 text-muted" />
-          </button>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLangOpen(true)}
-              className="grid size-10 place-items-center rounded-full border border-line bg-white/80 text-[12.5px] font-bold text-charcoal shadow-sm backdrop-blur"
-              aria-label={t("languageSwitch")}
-            >
-              {lang.toUpperCase()}
-            </button>
-            <button
-              type="button"
-              onClick={() => setNotifOpen(true)}
-              className="relative grid size-10 place-items-center rounded-full border border-line bg-white/80 text-charcoal shadow-sm backdrop-blur"
-              aria-label={t("notifications")}
-            >
-              <Bell className="size-[18px]" />
-              {unread > 0 ? (
-                <span className="absolute end-2.5 top-2.5 size-1.5 rounded-full bg-terracotta ring-2 ring-white" />
-              ) : null}
-            </button>
-            {isAuthenticated ? (
-              <Link
-                href="/profile"
-                aria-label={t("profile")}
-                className="grid size-10 place-items-center overflow-hidden rounded-full border-2 border-white bg-terracotta text-[14px] font-bold text-white shadow-sm"
-              >
-                {(user.firstName || user.name || "U").slice(0, 1).toUpperCase()}
-              </Link>
-            ) : (
-              <Link
-                href="/login"
-                aria-label={t("signIn")}
-                className="grid size-10 place-items-center rounded-full border border-line bg-white/80 text-charcoal shadow-sm backdrop-blur"
-              >
-                <UserRound className="size-[18px]" />
-              </Link>
-            )}
-          </div>
-        </div>
+        <MobileHeader
+          city={city}
+          unread={unread}
+          onCity={() => setCityOpen(true)}
+          onLanguage={() => setLangOpen(true)}
+          onNotifications={() => setNotifOpen(true)}
+        />
 
         <div className="px-4">
           <div className="mt-4 flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.16em] text-terracotta">
@@ -206,7 +96,6 @@ export default function HomePage() {
           <SearchBar />
         </div>
 
-        {/* Featured carousel */}
         <div className="mt-5">
           <div className="flex items-center justify-between px-4">
             <p className="text-[12.5px] font-bold uppercase tracking-[0.18em] text-muted-soft">
@@ -220,102 +109,7 @@ export default function HomePage() {
               <ArrowRight className="size-3 rtl:rotate-180" />
             </Link>
           </div>
-          <div
-            onScroll={(event) => {
-              const el = event.currentTarget;
-              const first = el.firstElementChild as HTMLElement | null;
-              if (!first) return;
-              const step = first.offsetWidth + 12;
-              const raw = Math.abs(el.scrollLeft) / step;
-              setOfferIndex(Math.round(raw));
-            }}
-            className="-mx-0 mt-2.5 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-2 no-scrollbar"
-          >
-            {offers.length > 0 ? (
-              offers.map((dish, index) => {
-                const cook = cooks.find((item) => item.id === dish.cookId);
-                return (
-                  <Link
-                    key={dish.id}
-                    href={`/dish/${dish.id}`}
-                    className="group relative block h-[236px] w-[82%] max-w-[340px] shrink-0 snap-center overflow-hidden rounded-[26px] bg-charcoal shadow-card"
-                  >
-                    <Image
-                      src={dish.image || "/img/daarik-logo.png"}
-                      alt={loc(dish.name, lang)}
-                      fill
-                      sizes="82vw"
-                      loading={index === 0 ? "eager" : "lazy"}
-                      unoptimized
-                      className="object-cover transition duration-700 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/35 to-transparent" />
-                    <div className="absolute inset-x-3 top-3 flex items-center justify-between">
-                      <Badge variant="glass" size="sm">
-                        <Sparkles className="size-2.5 text-terracotta" />
-                        {dish.weekend ? t("weekendSpecial") : t("liveNow")}
-                      </Badge>
-                      <span className="flex items-center gap-0.5 rounded-full bg-charcoal/50 px-2 py-1 text-[12px] font-semibold text-white backdrop-blur">
-                        <Star className="size-2.5 fill-saffron text-saffron" />
-                        {dish.rating.toFixed(1)}
-                      </span>
-                    </div>
-                    <div className="absolute inset-x-3 bottom-3">
-                      <p className="line-clamp-1 font-display text-[22px] leading-tight text-white">
-                        {loc(dish.name, lang)}
-                      </p>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <Image
-                          src={cook?.avatar || "/img/daarik-logo.png"}
-                          alt={cook?.name ?? ""}
-                          width={22}
-                          height={22}
-                          unoptimized
-                          className="size-[22px] rounded-full border border-white/70 object-cover"
-                        />
-                        <p className="line-clamp-1 text-[12.5px] text-white/80">
-                          {cook?.name} · {cook?.city}
-                        </p>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="text-[17px] font-semibold text-white">
-                          {formatPrice(dish.price, lang)}
-                          <span className="ms-1 text-[11.5px] font-normal text-white/70">
-                            {t("perPortion")}
-                          </span>
-                        </span>
-                        <span className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[12px] font-bold text-charcoal">
-                          {dish.portionsLeft <= 3
-                            ? t("onlyLeft", { count: dish.portionsLeft })
-                            : t("preOrder")}
-                          <ArrowRight className="size-2.5 rtl:rotate-180" />
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })
-            ) : (
-              <p className="w-full rounded-2xl border border-line bg-white px-4 py-5 text-sm text-muted">
-                {t("noCooksAtLocation")}
-              </p>
-            )}
-          </div>
-          {offers.length > 1 ? (
-            <div className="mt-1 flex justify-center gap-1.5">
-              {offers.map((dish, index) => (
-                <span
-                  key={dish.id}
-                  className={cn(
-                    "h-1.5 rounded-full transition-all",
-                    index === Math.min(offerIndex, offers.length - 1)
-                      ? "w-5 bg-terracotta"
-                      : "w-1.5 bg-line",
-                  )}
-                />
-              ))}
-            </div>
-          ) : null}
+          <OffersCarousel offers={offers} />
         </div>
 
         <div className="mt-4 flex gap-2 overflow-x-auto px-4 pb-1 no-scrollbar">
@@ -350,9 +144,7 @@ export default function HomePage() {
               <CookCard key={cook.id} cook={cook} variant="compact" />
             ))
           ) : (
-            <p className="w-full rounded-2xl border border-line bg-white px-4 py-5 text-sm text-muted">
-              {t("noCooksAtLocation")}
-            </p>
+            <EmptyNotice className="w-full" />
           )}
         </div>
 
@@ -370,9 +162,7 @@ export default function HomePage() {
               ))}
             </div>
           ) : (
-            <p className="rounded-2xl border border-line bg-white px-4 py-5 text-sm text-muted">
-              {t("noCooksAtLocation")}
-            </p>
+            <EmptyNotice />
           )}
         </div>
 
@@ -397,9 +187,7 @@ export default function HomePage() {
               </div>
             </>
           ) : (
-            <p className="rounded-2xl border border-line bg-white px-4 py-5 text-sm text-muted">
-              {t("noCooksAtLocation")}
-            </p>
+            <EmptyNotice />
           )}
         </div>
 
@@ -416,73 +204,23 @@ export default function HomePage() {
                 .slice(0, 2)
                 .map((cook) => <CookCard key={cook.id} cook={cook} />)
             ) : (
-              <p className="col-span-full rounded-2xl border border-line bg-white px-4 py-5 text-sm text-muted">
-                {t("noCooksAtLocation")}
-              </p>
+              <EmptyNotice className="col-span-full" />
             )}
           </div>
         </div>
 
         <div className="mt-7 px-4">
-          <div className="relative overflow-hidden rounded-[26px] bg-olive px-5 py-5 text-cream shadow-card">
-            <div className="absolute -end-8 -top-10 size-32 rounded-full border-[18px] border-white/10" />
-            <div className="relative">
-              <span className="flex size-9 items-center justify-center rounded-full bg-white/15">
-                <ChefHat className="size-[18px]" />
-              </span>
-              <h3 className="mt-3 max-w-[230px] font-display text-[25px] leading-tight">
-                {t("becomeCookTitle")}
-              </h3>
-              <p className="mt-1.5 max-w-[250px] text-[13.5px] leading-relaxed text-cream/80">
-                {t("becomeCookSub")}
-              </p>
-              <Link
-                href="/cook"
-                className="mt-4 inline-flex h-10 items-center gap-1.5 rounded-full bg-cream px-4 text-[14px] font-semibold text-olive-600"
-              >
-                {t("becomeCookCta")}
-                <ArrowRight className="size-3.5 rtl:rotate-180" />
-              </Link>
-            </div>
-          </div>
+          <BecomeCookCard />
         </div>
-
         <div className="mt-6 px-4">
           <InstallPrompt />
         </div>
-
         <div className="mt-7 px-4">
-          <div className="rounded-[24px] border border-line bg-white/70 p-4">
-            <p className="text-[12.5px] font-bold uppercase tracking-[0.18em] text-muted-soft">
-              {t("howItWorksTitle")}
-            </p>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              {[
-                { icon: Search, label: t("search") },
-                { icon: CalendarCheck, label: t("preOrder") },
-                { icon: UtensilsCrossed, label: t("pickup") },
-              ].map((step) => (
-                <div
-                  key={step.label}
-                  className="flex flex-col items-center gap-1.5"
-                >
-                  <span className="grid size-9 place-items-center rounded-full bg-cream-100 text-terracotta">
-                    <step.icon className="size-4" />
-                  </span>
-                  <span className="text-[12.5px] font-semibold text-charcoal">
-                    {step.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-center text-[12px] text-muted">
-              {t("pickupOnly")} · {t("madeIn")}
-            </p>
-          </div>
+          <HowItWorks />
         </div>
       </div>
 
-      {/* Desktop hero */}
+      {/* Desktop */}
       <div className="hidden md:block">
         <div className="mx-auto max-w-[1240px] px-8">
           <div className="grid grid-cols-[1.05fr_1fr] items-center gap-12 pb-4 pt-10">
@@ -547,72 +285,7 @@ export default function HomePage() {
               onMouseLeave={() => setHeroPaused(false)}
             >
               {heroDish && heroCook ? (
-                <>
-                  <Link
-                    key={heroDish.id}
-                    href={`/dish/${heroDish.id}`}
-                    className="group relative block animate-fade-in overflow-hidden rounded-[32px] bg-charcoal shadow-lift"
-                  >
-                    <Image
-                      src={heroDish.image || "/img/couscous.jpg"}
-                      alt={loc(heroDish.name, lang)}
-                      width={1200}
-                      height={420}
-                      priority
-                      unoptimized
-                      className="h-[420px] w-full object-cover transition duration-700 group-hover:scale-[1.03]"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-charcoal/85 via-charcoal/10 to-transparent" />
-                    <div className="absolute inset-x-6 top-6 flex items-center justify-between">
-                      <Badge variant="glass" size="sm">
-                        <Sparkles className="size-3 text-terracotta" />
-                        {t("weekendSpecial")}
-                      </Badge>
-                      <span className="flex items-center gap-1 rounded-full bg-charcoal/45 px-2.5 py-1.5 text-[13px] font-semibold text-white backdrop-blur">
-                        <Star className="size-3 fill-saffron text-saffron" />
-                        {heroDish.rating.toFixed(1)} · {heroDish.reviewCount}{" "}
-                        {t("reviews")}
-                      </span>
-                    </div>
-                    <div className="absolute inset-x-6 bottom-6">
-                      <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-white/70">
-                        {t("cookKitchen", {
-                          name: heroCook?.name.split(" ")[0] ?? "",
-                        })}
-                      </p>
-                      <p className="mt-1 font-display text-[32px] leading-tight text-white">
-                        {loc(heroDish.name, lang)}
-                      </p>
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className="flex items-center gap-2">
-                          <Image
-                            src={heroCook?.avatar || "/img/daarik-logo.png"}
-                            alt={heroCook?.name ?? ""}
-                            width={36}
-                            height={36}
-                            loading="lazy"
-                            unoptimized
-                            className="size-9 rounded-full border-2 border-white/80 object-cover"
-                          />
-                          <span className="text-[14px] text-white/85">
-                            {heroCook?.name}
-                            <span className="mt-0.5 block text-[12px] text-white/60">
-                              {heroCook?.area[lang]} · {heroCook?.city}
-                            </span>
-                          </span>
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <span className="text-[21px] font-semibold text-white">
-                            {formatPrice(heroDish.price, lang)}
-                          </span>
-                          <span className="grid size-11 place-items-center rounded-full bg-white text-charcoal transition group-hover:bg-terracotta group-hover:text-white">
-                            <ArrowRight className="size-5 rtl:rotate-180" />
-                          </span>
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                </>
+                <HeroDishCard dish={heroDish} cook={heroCook} />
               ) : (
                 <div className="grid min-h-105 place-items-center rounded-4xl border border-line bg-white px-8 text-center text-sm text-muted shadow-card">
                   {t("noCooksAtLocation")}
@@ -625,10 +298,7 @@ export default function HomePage() {
             <div className="flex items-center gap-6">
               {[
                 { value: String(nearbyCooks.length), label: t("cooksNearYou") },
-                {
-                  value: String(nearbyDishes.length),
-                  label: t("dishesNearYou"),
-                },
+                { value: String(nearbyDishes.length), label: t("dishesNearYou") },
                 { value: "€12", label: t("avgOrder") },
                 { value: "4.9", label: t("rating") },
               ].map((stat) => (
@@ -658,9 +328,7 @@ export default function HomePage() {
                   <CookCard key={cook.id} cook={cook} />
                 ))
               ) : (
-                <p className="col-span-full rounded-2xl border border-line bg-white px-4 py-5 text-sm text-muted">
-                  {t("noCooksAtLocation")}
-                </p>
+                <EmptyNotice className="col-span-full" />
               )}
             </div>
           </div>
@@ -687,54 +355,13 @@ export default function HomePage() {
                   </div>
                 </>
               ) : (
-                <p className="rounded-2xl border border-line bg-white px-4 py-5 text-sm text-muted">
-                  {t("noCooksAtLocation")}
-                </p>
+                <EmptyNotice />
               )}
             </div>
             <div>
-              <SectionHeading
-                title={t("topCooks")}
-                subtitle={t("topCooksSub")}
-              />
+              <SectionHeading title={t("topCooks")} subtitle={t("topCooksSub")} />
               <div className="space-y-3">
-                {nearbyCooks.length > 0 ? (
-                  nearbyCooks.slice(0, 3).map((cook) => (
-                    <Link
-                      key={cook.id}
-                      href={`/cook/${cook.id}`}
-                      className="group flex items-center gap-3 rounded-2xl border border-line bg-white p-3 shadow-card transition hover:border-line-strong"
-                    >
-                      <Image
-                        src={cook.avatar || "/img/daarik-logo.png"}
-                        alt={cook.name}
-                        width={48}
-                        height={48}
-                        loading="lazy"
-                        unoptimized
-                        className="size-12 rounded-full object-cover"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-1 text-[14.5px] font-semibold text-charcoal">
-                          {cook.name}
-                          <BadgeCheck className="size-3.5 fill-olive text-white" />
-                        </span>
-                        <span className="block truncate text-[12.5px] text-muted">
-                          {loc(cook.specialties, lang)}
-                        </span>
-                        <span className="mt-0.5 flex items-center gap-1 text-[12px] text-muted">
-                          <Star className="size-2.5 fill-saffron text-saffron" />
-                          {cook.rating.toFixed(1)} · {cook.area[lang]}
-                        </span>
-                      </span>
-                      <ArrowRight className="size-4 text-muted-soft transition group-hover:text-terracotta rtl:rotate-180" />
-                    </Link>
-                  ))
-                ) : (
-                  <p className="rounded-2xl border border-line bg-white px-4 py-5 text-sm text-muted">
-                    {t("noCooksAtLocation")}
-                  </p>
-                )}
+                <TopCooksList cooks={nearbyCooks.slice(0, 3)} />
               </div>
               <div className="mt-4">
                 <InstallPrompt />
@@ -756,74 +383,11 @@ export default function HomePage() {
                 ))}
               </div>
             ) : (
-              <p className="rounded-2xl border border-line bg-white px-4 py-5 text-sm text-muted">
-                {t("noCooksAtLocation")}
-              </p>
+              <EmptyNotice />
             )}
           </div>
 
-          <div className="relative mt-10 overflow-hidden rounded-[32px] bg-olive px-10 py-9 text-cream">
-            <div className="absolute -end-16 -top-24 size-72 rounded-full border-[34px] border-white/10" />
-            <div className="absolute -bottom-20 end-40 size-48 rounded-full border-[24px] border-white/5" />
-            <div className="relative flex items-center justify-between gap-8">
-              <div>
-                <span className="flex size-11 items-center justify-center rounded-full bg-white/12">
-                  <ChefHat className="size-5" />
-                </span>
-                <h3 className="mt-4 max-w-[480px] font-display text-[36px] leading-tight">
-                  {t("becomeCookTitle")}
-                </h3>
-                <p className="mt-2 max-w-[440px] text-[15px] leading-relaxed text-cream/75">
-                  {t("becomeCookSub")}
-                </p>
-                <div className="mt-5 flex items-center gap-3">
-                  <Link
-                    href="/cook"
-                    className="inline-flex h-11 items-center gap-2 rounded-full bg-cream px-5 text-[15px] font-semibold text-olive-600"
-                  >
-                    {t("becomeCookCta")}
-                    <ArrowRight className="size-4 rtl:rotate-180" />
-                  </Link>
-                  <Link
-                    href="/help"
-                    className="text-[14px] font-semibold text-cream/75 underline-offset-4 hover:text-cream hover:underline"
-                  >
-                    {t("learnMore")}
-                  </Link>
-                </div>
-              </div>
-              <div className="flex items-center gap-6">
-                <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur">
-                  <p className="text-[12px] uppercase tracking-[0.14em] text-cream/60">
-                    {t("exampleNet")}
-                  </p>
-                  <p className="mt-1 font-display text-[28px]">€476</p>
-                  <p className="text-[12px] text-cream/60">
-                    {t("exampleEarningsNote")}
-                  </p>
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <div className="flex -space-x-2 rtl:space-x-reverse">
-                    {nearbyCooks.slice(0, 3).map((cook) => (
-                      <Image
-                        key={cook.id}
-                        src={cook.avatar || "/img/daarik-logo.png"}
-                        alt={cook.name}
-                        width={36}
-                        height={36}
-                        loading="lazy"
-                        unoptimized
-                        className="size-9 rounded-full border-2 border-olive object-cover"
-                      />
-                    ))}
-                  </div>
-                  <span className="text-[12px] text-cream/60">
-                    {t("cooksNearYou")}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <BecomeCookBanner cooks={nearbyCooks} />
         </div>
       </div>
 
@@ -834,13 +398,10 @@ export default function HomePage() {
         onClose={() => setCityOpen(false)}
         currentCity={city}
         onCityChange={setCity}
+        onAreaChange={setArea}
       />
-
       <LanguageSheet open={langOpen} onClose={() => setLangOpen(false)} />
-      <NotificationsSheet
-        open={notifOpen}
-        onClose={() => setNotifOpen(false)}
-      />
+      <NotificationsSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
     </div>
   );
 }

@@ -38,6 +38,11 @@ export function CookCard({
             unoptimized
             className="size-[68px] rounded-full object-cover p-[3px] ring-2 ring-terracotta/40 ring-offset-2 ring-offset-cream transition group-hover:ring-terracotta"
           />
+          {cook.kitchenOpen === false ? (
+            <span className="absolute -top-1 start-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-saffron px-1.5 py-0.5 text-[9.5px] font-bold text-charcoal">
+              {t("kitchenClosedBadge")}
+            </span>
+          ) : null}
           {cook.verified ? (
             <span className="absolute -bottom-0.5 -end-0.5 grid size-5 place-items-center rounded-full bg-white">
               <BadgeCheck className="size-4 fill-olive text-white" />
@@ -110,7 +115,7 @@ export function CookCard({
               {dishes.length} {t("dishes")}
             </span>
             <span className="ms-auto rounded-full bg-white/15 px-2.5 py-1 text-[11.5px] font-semibold uppercase tracking-[0.1em] backdrop-blur">
-              {t("pickupOnly")}
+              {cook.kitchenOpen === false ? t("kitchenClosedBadge") : t("pickupOnly")}
             </span>
           </div>
         </div>
@@ -153,11 +158,17 @@ export function CookCard({
             unoptimized
             className="size-12 rounded-full border-[3px] border-white object-cover"
           />
-          <span className="mb-0.5 rounded-full bg-olive-50 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-olive-600">
-            {cook.cuisineIds.length > 1
-              ? t("cuisines")
-              : t("verifiedCook")}
-          </span>
+          {cook.kitchenOpen === false ? (
+            <span className="mb-0.5 rounded-full bg-saffron/20 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-[#8a5d13]">
+              {t("kitchenClosedBadge")}
+            </span>
+          ) : (
+            <span className="mb-0.5 rounded-full bg-olive-50 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-olive-600">
+              {cook.cuisineIds.length > 1
+                ? t("cuisines")
+                : t("verifiedCook")}
+            </span>
+          )}
         </div>
         <p className="mt-1.5 flex items-center gap-1 text-[15px] font-semibold text-charcoal">
           <span className="truncate">{cook.name}</span>

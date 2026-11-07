@@ -345,6 +345,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (dishId: string, qty = 1) => {
       const dish = findDish(dishId);
       if (!dish) return;
+      if (liveCooks.find((c) => c.id === dish.cookId)?.kitchenOpen === false) {
+        toast(translate(lang, "kitchenClosedBadge"));
+        return;
+      }
       const currentCook = cart.length ? findDish(cart[0].dishId)?.cookId : null;
       if (currentCook && currentCook !== dish.cookId) {
         setPendingSwitch({ dishId, qty });
@@ -373,7 +377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         darnaApi.cart.addItem({ dishId, qty }).catch(() => {});
       }
     },
-    [cart, findDish, lang, toast],
+    [cart, liveCooks, findDish, lang, toast],
   );
 
   const confirmSwitch = useCallback(() => {

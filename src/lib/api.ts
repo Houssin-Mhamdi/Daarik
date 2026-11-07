@@ -353,29 +353,40 @@ export const darnaApi = {
       }),
     myEarnings: () => apiRequest<unknown>("/cooks/me/earnings"),
   },
-  dishes: {
-    list: (params?: Record<string, string>) => {
-      const qs = new URLSearchParams(params ?? {}).toString();
-      return apiRequest<unknown[]>(`/dishes${qs ? `?${qs}` : ""}`);
-    },
-    uploadImage: async (file: File) => {
+  uploads: {
+    uploadImage: async (
+      file: File,
+      folder: "dishes" | "cooks" | "avatars" | "documents" | "uploads" = "uploads",
+    ) => {
       const form = new FormData();
       form.append("file", file);
+      form.append("folder", folder);
       const token = getAccessToken();
-      const res = await fetch(`${API_BASE_URL}/uploads/image`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: form,
-      });
+      const res = await fetch(
+        `${API_BASE_URL}/uploads/image?folder=${encodeURIComponent(folder)}`,
+        {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: form,
+        },
+      );
       const body = (await res.json().catch(() => ({}))) as {
         url?: string;
+        storage?: "r2" | "local";
         message?: string;
       };
       if (!res.ok || !body.url) {
         throw new Error(body.message || `Upload failed (${res.status})`);
       }
-      return { url: body.url };
+      return { url: body.url, storage: body.storage };
     },
+  },
+  dishes: {
+    list: (params?: Record<string, string>) => {
+      const qs = new URLSearchParams(params ?? {}).toString();
+      return apiRequest<unknown[]>(`/dishes${qs ? `?${qs}` : ""}`);
+    },
+    uploadImage: async (file: File) => darnaApi.uploads.uploadImage(file, "dishes"),
     get: (id: string) => apiRequest<unknown>(`/dishes/${id}`),
     create: (body: Record<string, unknown>) =>
       apiRequest<unknown>("/dishes", {

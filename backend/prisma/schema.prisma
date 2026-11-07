@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
 }
 
 enum Role {
@@ -206,8 +208,8 @@ model CookProfile {
   favoritedBy   FavoriteCook[]
   disputes      Dispute[]
 
-  @@index([slug])
-  @@index([city])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([city(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([status])
 }
 
@@ -279,9 +281,13 @@ model Dish {
   reviews      Review[]
   favoritedBy  FavoriteDish[]
 
+  /// Lowercased name/description/cuisine used for search (see buildDishSearchText).
+  searchText   String     @default("")
+
   @@index([cookId])
   @@index([cuisineId])
   @@index([status])
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 model PickupOption {
@@ -386,7 +392,8 @@ model Order {
   @@index([customerId])
   @@index([cookId])
   @@index([status])
-  @@index([code])
+  @@index([code(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([customerName(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 model OrderItem {

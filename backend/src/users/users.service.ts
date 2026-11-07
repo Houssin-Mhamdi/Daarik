@@ -79,6 +79,11 @@ export class UsersService {
           (dto.name ? dto.name.trim().split(/\s+/)[0] : undefined),
       },
     });
+    if (dto.avatar !== undefined) {
+      await this.prisma.cookProfile
+        .update({ where: { userId }, data: { avatar: dto.avatar } })
+        .catch(() => undefined);
+    }
     const { passwordHash, refreshTokenHash, ...safe } = updated;
     return safe;
   }

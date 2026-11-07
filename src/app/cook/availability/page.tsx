@@ -173,6 +173,7 @@ export default function CookAvailabilityPage() {
                 checked={vacation}
                 onCheckedChange={(value) => {
                   setVacation(value);
+                  updateAvailability.mutate({ kitchenOpen: !value });
                   toast(value ? t("vacationOn") : t("vacationOff"), {
                     variant: value ? "info" : "success",
                   });

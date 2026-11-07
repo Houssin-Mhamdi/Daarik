@@ -77,6 +77,7 @@ export type Cook = {
   yearsCooking: number;
   latitude?: number;
   longitude?: number;
+  kitchenOpen?: boolean;
 };
 
 export type Dish = {

@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect } from "react";
 import L, { type LatLngExpression } from "leaflet";
 import {
+  Circle,
   MapContainer,
   Marker,
   TileLayer,
@@ -36,12 +37,24 @@ const locationIcon = L.divIcon({
   iconAnchor: [11, 11],
 });
 
-function RecenterMap({ point }: { point: MapPoint | null }) {
+function RecenterMap({
+  point,
+  radiusKm,
+}: {
+  point: MapPoint | null;
+  radiusKm?: number | null;
+}) {
   const map = useMap();
 
   useEffect(() => {
-    if (point) map.flyTo([point.lat, point.lng], 14, { duration: 0.45 });
-  }, [map, point]);
+    if (!point) return;
+    if (radiusKm) {
+      const bounds = L.latLng(point.lat, point.lng).toBounds(radiusKm * 2000);
+      map.flyToBounds(bounds, { duration: 0.45, padding: [12, 12] });
+    } else {
+      map.flyTo([point.lat, point.lng], 14, { duration: 0.45 });
+    }
+  }, [map, point, radiusKm]);
 
   return null;
 }
@@ -64,10 +77,12 @@ export default function LocationMap({
   point,
   onSelect,
   pins = [],
+  radiusKm = null,
 }: {
   point: MapPoint | null;
   onSelect: (point: MapPoint) => void;
   pins?: CookPin[];
+  radiusKm?: number | null;
 }) {
   return (
     <MapContainer
@@ -124,7 +139,20 @@ export default function LocationMap({
       {point ? (
         <Marker position={[point.lat, point.lng]} icon={locationIcon} />
       ) : null}
-      <RecenterMap point={point} />
+      {point && radiusKm ? (
+        <Circle
+          center={[point.lat, point.lng]}
+          radius={radiusKm * 1000}
+          pathOptions={{
+            color: "#b94f39",
+            weight: 2,
+            fillColor: "#b94f39",
+            fillOpacity: 0.12,
+          }}
+          interactive={false}
+        />
+      ) : null}
+      <RecenterMap point={point} radiusKm={radiusKm} />
       <MapClickHandler onSelect={onSelect} />
     </MapContainer>
   );

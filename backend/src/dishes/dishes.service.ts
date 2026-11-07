@@ -5,6 +5,7 @@ import {
 } from "@nestjs/common";
 import { DishStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { buildDishSearchText } from "../common/dish-search";
 import { CreateDishDto, ReportDishDto, UpdateDishDto } from "./dto/dish.dto";
 
 @Injectable()
@@ -22,9 +23,18 @@ export class DishesService {
     family?: string;
     availableOnly?: string;
   }) {
+    const q = query.q?.trim().toLowerCase();
     const dishes = await this.prisma.dish.findMany({
       where: {
         status: DishStatus.LIVE,
+        ...(q
+          ? {
+              OR: [
+                { searchText: { contains: q } },
+                { cook: { name: { contains: q, mode: "insensitive" } } },
+              ],
+            }
+          : {}),
         ...(query.cuisine ? { cuisineId: query.cuisine } : {}),
         ...(query.dietary ? { dietary: { has: query.dietary } } : {}),
         ...(query.pickup ? { pickup: { has: query.pickup } } : {}),
@@ -59,29 +69,7 @@ export class DishesService {
       orderBy: [{ featured: "desc" }, { rating: "desc" }],
     });
 
-    const q = query.q?.trim().toLowerCase();
-    const filtered = q
-      ? dishes.filter((d) => {
-          const nameObj = (d.name ?? {}) as Record<string, string>;
-          const descObj = (d.desc ?? {}) as Record<string, string>;
-          const haystack = [
-            nameObj.nl,
-            nameObj.en,
-            nameObj.ar,
-            descObj.nl,
-            descObj.en,
-            descObj.ar,
-            d.cook?.name,
-            d.cuisineId,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-          return haystack.includes(q);
-        })
-      : dishes;
-
-    return filtered.map((d) => this.mapPublicDish(d));
+    return dishes.map((d) => this.mapPublicDish(d));
   }
 
   async findOnePublic(idOrSlug: string) {
@@ -178,6 +166,7 @@ export class DishesService {
         badge: dto.badge,
         prepTime: dto.prepTime ?? { nl: "1 uur", en: "1 hour", ar: "ساعة" },
         status: dto.status ?? DishStatus.LIVE,
+        searchText: buildDishSearchText(dto),
       },
     });
 
@@ -196,9 +185,25 @@ export class DishesService {
       throw new ForbiddenException("This dish belongs to another kitchen");
     }
 
+    const searchable =
+      dto.name !== undefined || dto.desc !== undefined || dto.cuisineId !== undefined;
     const updated = await this.prisma.dish.update({
       where: { id: dish.id },
-      data: dto as any,
+      data: {
+        ...(dto as any),
+        ...(dto.ingredients !== undefined
+          ? { ingredients: dto.ingredients.map((i) => ({ ...i })) }
+          : {}),
+        ...(searchable
+          ? {
+              searchText: buildDishSearchText({
+                name: dto.name ?? dish.name,
+                desc: dto.desc ?? dish.desc,
+                cuisineId: dto.cuisineId ?? dish.cuisineId,
+              }),
+            }
+          : {}),
+      },
     });
     return this.mapPublicDish(updated);
   }

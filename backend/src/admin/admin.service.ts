@@ -15,6 +15,7 @@ import {
   TransferStatus,
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { buildDishSearchText } from "../common/dish-search";
 import { PaymentsService } from "../payments/payments.service";
 import { toEuros } from "../payments/money";
 import { CreateDishDto } from "../dishes/dto/dish.dto";
@@ -431,6 +432,7 @@ export class AdminService {
         badge: dto.badge,
         prepTime: dto.prepTime ?? { nl: "1 uur", en: "1 hour", ar: "ساعة" },
         status: dto.status ?? DishStatus.LIVE,
+        searchText: buildDishSearchText(dto),
       },
     });
   }

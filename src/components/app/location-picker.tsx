@@ -18,16 +18,25 @@ import {
 } from "lucide-react";
 import { CookCard } from "@/components/app/cook-card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/overlays";
 import { useApp } from "@/components/providers/app-provider";
-import { cityMatches } from "@/lib/utils";
-import { coordsForCity } from "@/lib/cities";
+import { cityMatches, cn } from "@/lib/utils";
+import {
+  CITY_COORDS,
+  CITY_NAMES,
+  RADIUS_OPTIONS_KM,
+  cookPoint,
+  cooksWithin,
+} from "@/lib/cities";
 import type { CookPin, MapPoint } from "./location-map";
+
+export type SearchArea = MapPoint & { radiusKm: number };
 
 type DeliveryLocation = MapPoint & {
   city: string;
   label: string;
+  radiusKm?: number;
 };
 
 type PlaceResult = {
@@ -48,6 +57,7 @@ const LocationMap = dynamic(() => import("./location-map"), {
 
 const LOCATION_STORAGE_KEY = "darna.delivery-location";
 const LOCATION_REQUESTED_KEY = "darna.location-requested";
+const DEFAULT_RADIUS_KM = 10;
 
 function cityFromAddress(address?: Record<string, string>) {
   return (
@@ -98,15 +108,18 @@ export function LocationPicker({
   onClose,
   currentCity,
   onCityChange,
+  onAreaChange,
 }: {
   open: boolean;
   onClose: () => void;
   currentCity: string;
   onCityChange: Dispatch<SetStateAction<string>>;
+  onAreaChange?: (area: SearchArea | null) => void;
 }) {
   const { t, lang, cooks } = useApp();
   const [mode, setMode] = useState<"options" | "map">("options");
   const [location, setLocation] = useState<DeliveryLocation | null>(null);
+  const [radiusKm, setRadiusKm] = useState<number>(DEFAULT_RADIUS_KM);
   const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlaceResult[]>([]);
@@ -120,11 +133,7 @@ export function LocationPicker({
   const pins = useMemo<CookPin[]>(() => {
     const byKey = new Map<string, CookPin>();
     for (const cook of cooks) {
-      const exact =
-        typeof cook.latitude === "number" && typeof cook.longitude === "number"
-          ? { lat: cook.latitude, lng: cook.longitude }
-          : null;
-      const coords = exact ?? coordsForCity(cook.city);
+      const coords = cookPoint(cook);
       if (!coords) continue;
       const key = `${coords.lat.toFixed(4)},${coords.lng.toFixed(4)}`;
       const pin = byKey.get(key) ?? { city: cook.city, ...coords, cooks: [] };
@@ -139,13 +148,11 @@ export function LocationPicker({
     return [...byKey.values()];
   }, [cooks, lang]);
 
-  const nearbyCooks = useMemo(
-    () =>
-      location?.city
-        ? cooks.filter((cook) => cityMatches(cook.city, location.city))
-        : [],
-    [cooks, location],
-  );
+  const nearbyCooks = useMemo(() => {
+    if (!location) return [];
+    if (radiusKm) return cooksWithin(cooks, location, radiusKm);
+    return cooks.filter((cook) => cityMatches(cook.city, location.city));
+  }, [cooks, location, radiusKm]);
 
   useEffect(() => {
     let active = true;
@@ -162,9 +169,12 @@ export function LocationPicker({
         ) {
           const restoreTimer = window.setTimeout(() => {
             if (!active) return;
+            const radius = parsed.radiusKm ?? DEFAULT_RADIUS_KM;
             setLocation(parsed);
             setMapPoint(parsed);
+            setRadiusKm(radius);
             onCityChange(parsed.city);
+            onAreaChange?.({ lat: parsed.lat, lng: parsed.lng, radiusKm: radius });
           }, 0);
           return () => {
             active = false;
@@ -200,10 +210,12 @@ export function LocationPicker({
           ...point,
           city: place?.city || t("currentLocation"),
           label: place?.label || t("currentLocation"),
+          radiusKm: DEFAULT_RADIUS_KM,
         };
         setLocation(nextLocation);
         setMapPoint(point);
         onCityChange(nextLocation.city);
+        onAreaChange?.({ ...point, radiusKm: DEFAULT_RADIUS_KM });
         window.localStorage.setItem(
           LOCATION_STORAGE_KEY,
           JSON.stringify(nextLocation),
@@ -216,7 +228,7 @@ export function LocationPicker({
     return () => {
       active = false;
     };
-  }, [onCityChange, t]);
+  }, [onCityChange, onAreaChange, t]);
 
   useEffect(
     () => () => {
@@ -233,14 +245,22 @@ export function LocationPicker({
   };
 
   const commitLocation = (nextLocation: DeliveryLocation) => {
-    setLocation(nextLocation);
-    setMapPoint(nextLocation);
-    onCityChange(nextLocation.city || nextLocation.label.split(",")[0]);
-    window.localStorage.setItem(
-      LOCATION_STORAGE_KEY,
-      JSON.stringify(nextLocation),
-    );
+    const saved = { ...nextLocation, radiusKm };
+    setLocation(saved);
+    setMapPoint(saved);
+    onCityChange(saved.city || saved.label.split(",")[0]);
+    onAreaChange?.({ lat: saved.lat, lng: saved.lng, radiusKm });
+    window.localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(saved));
     closePicker();
+  };
+
+  const chooseCity = (name: string) => {
+    const coords = CITY_COORDS[name];
+    if (!coords) return;
+    setError("");
+    setResults([]);
+    setMapPoint(coords);
+    setLocation({ ...coords, city: name, label: `${name}, Nederland` });
   };
 
   const useCurrentLocation = () => {
@@ -481,8 +501,62 @@ export function LocationPicker({
             </div>
           ) : null}
 
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div>
+              <p className="mb-1 text-[12px] font-bold uppercase tracking-[0.12em] text-muted">
+                {t("chooseCity")}
+              </p>
+              <Select
+                aria-label={t("chooseCity")}
+                value={
+                  CITY_NAMES.find(
+                    (name) => location && cityMatches(name, location.city),
+                  ) ?? ""
+                }
+                onChange={(event) => chooseCity(event.target.value)}
+                className="h-11 rounded-xl text-sm"
+              >
+                <option value="" disabled>
+                  {t("chooseCity")}
+                </option>
+                {CITY_NAMES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <p className="mb-1 text-[12px] font-bold uppercase tracking-[0.12em] text-muted">
+                {t("searchRadius")}
+              </p>
+              <div className="flex gap-1.5">
+                {RADIUS_OPTIONS_KM.map((km) => (
+                  <button
+                    key={km}
+                    type="button"
+                    onClick={() => setRadiusKm(km)}
+                    className={cn(
+                      "h-11 min-w-11 rounded-xl border px-2.5 text-[13px] font-semibold transition",
+                      radiusKm === km
+                        ? "border-charcoal bg-charcoal text-cream"
+                        : "border-line bg-white text-charcoal",
+                    )}
+                  >
+                    {km} km
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <div className="h-65 overflow-hidden rounded-2xl border border-line bg-cream-100 md:h-80">
-            <LocationMap point={mapPoint} onSelect={selectMapPoint} pins={pins} />
+            <LocationMap
+              point={mapPoint}
+              onSelect={selectMapPoint}
+              pins={pins}
+              radiusKm={radiusKm}
+            />
           </div>
 
           {error ? (
