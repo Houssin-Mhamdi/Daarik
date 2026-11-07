@@ -173,7 +173,7 @@ export default function CookProfilePage() {
         <div className="relative z-10 -mt-8 rounded-t-[28px] bg-cream px-4 pb-2 pt-0 md:mt-0 md:rounded-none md:bg-transparent md:px-0">
           <div className="md:grid md:grid-cols-[1fr_360px] md:gap-8 md:items-start">
             <div>
-              <div className="flex items-end gap-3">
+              <div className="flex flex-wrap items-end gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   loading="lazy"
@@ -183,18 +183,18 @@ export default function CookProfilePage() {
                   className="-mt-8 size-[76px] rounded-full border-4 border-cream object-cover shadow-card md:mt-5 md:size-[92px]"
                 />
                 <div className="min-w-0 flex-1 pb-1 md:pb-0">
-                  <h1 className="flex items-center gap-1.5 font-display text-[27px] leading-tight text-charcoal md:text-[34px]">
-                    {cook.name}
+                  <h1 className="flex min-w-0 flex-wrap items-center gap-1.5 font-display text-[27px] leading-tight text-charcoal md:text-[34px]">
+                    <span className="min-w-0 wrap-break-word">{cook.name}</span>
                     {cook.verified ? (
                       <BadgeCheck className="size-5 shrink-0 fill-olive text-white" />
                     ) : null}
                   </h1>
-                  <p className="mt-0.5 flex items-center gap-1 text-[13.5px] text-muted">
-                    <MapPin className="size-3.5 text-terracotta" />
+                  <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[13.5px] text-muted">
+                    <MapPin className="size-3.5 shrink-0 text-terracotta" />
                     {cook.area[lang]} · {cook.city}
                   </p>
                 </div>
-                <span className="mb-2 flex items-center gap-1 rounded-full border border-line bg-white px-2.5 py-1.5 text-[13.5px] font-semibold text-charcoal shadow-sm">
+                <span className="mb-2 flex shrink-0 items-center gap-1 rounded-full border border-line bg-white px-2.5 py-1.5 text-[13.5px] font-semibold text-charcoal shadow-sm">
                   <Star className="size-3.5 fill-saffron text-saffron" />
                   {cook.rating.toFixed(1)}
                   <span className="font-normal text-muted">
@@ -259,25 +259,10 @@ export default function CookProfilePage() {
                 </span>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 md:hidden">
-                <Button variant="secondary" className="flex-1" onClick={save}>
-                  <Heart
-                    className={cn(
-                      "size-4",
-                      saved && "fill-terracotta text-terracotta",
-                    )}
-                  />
-                  {saved ? t("saved") : t("saveCook")}
-                </Button>
-                <Button className="flex-1" onClick={() => setMessageOpen(true)}>
-                  <MessageCircle className="size-4" />
-                  {t("messageCook")}
-                </Button>
-              </div>
-
               {/* Tabs */}
               <div className="mt-5">
                 <SegmentedTabs
+                  scrollable
                   tabs={[
                     {
                       value: "dishesTab",

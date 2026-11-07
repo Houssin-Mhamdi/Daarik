@@ -231,8 +231,8 @@ export function SegmentedTabs<T extends string>({
     <div
       role="tablist"
       className={cn(
-        "flex items-center gap-1 rounded-full bg-cream-100 p-1",
-        scrollable && "overflow-x-auto no-scrollbar",
+        "flex min-w-0 items-center gap-1 rounded-full bg-cream-100 p-1",
+        scrollable && "max-w-full overflow-x-auto no-scrollbar",
         className,
       )}
     >
@@ -246,7 +246,8 @@ export function SegmentedTabs<T extends string>({
             aria-selected={active}
             onClick={() => onChange(tab.value)}
             className={cn(
-              "flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[15px] font-semibold transition-all",
+              "flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[15px] font-semibold transition-all",
+              !scrollable && "flex-1",
               active
                 ? "bg-white text-charcoal shadow-sm"
                 : "text-muted hover:text-charcoal",
