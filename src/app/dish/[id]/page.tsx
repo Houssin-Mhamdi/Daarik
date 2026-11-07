@@ -150,8 +150,8 @@ export default function DishPage() {
   return (
     <div className="pb-28 md:pb-0">
       <div className="mx-auto w-full max-w-[1240px] md:px-8">
-        <div className="grid items-start gap-8 md:grid-cols-[1fr_380px] md:pt-8">
-          <div>
+        <div className="grid min-w-0 grid-cols-1 items-start gap-8 md:grid-cols-[minmax(0,1fr)_380px] md:pt-8">
+          <div className="min-w-0">
             {/* Hero */}
             <div className="relative -mx-0 h-[320px] overflow-hidden md:h-[440px] md:rounded-[32px]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -286,24 +286,24 @@ export default function DishPage() {
               </div>
 
               <div className="mt-5 grid grid-cols-3 gap-2 rounded-2xl border border-line bg-white p-3 text-center">
-                <div>
-                  <p className="text-[12px] uppercase tracking-[0.1em] text-muted-soft">
+                <div className="min-w-0">
+                  <p className="max-w-full wrap-break-word text-[11px] uppercase tracking-normal text-muted-soft">
                     {t("pickup")}
                   </p>
                   <p className="mt-0.5 text-[13.5px] font-semibold text-charcoal">
                     {t("pickupOnly")}
                   </p>
                 </div>
-                <div className="border-x border-line">
-                  <p className="text-[12px] uppercase tracking-[0.1em] text-muted-soft">
+                <div className="min-w-0 border-x border-line">
+                  <p className="max-w-full wrap-break-word text-[11px] uppercase tracking-normal text-muted-soft">
                     {t("portionsLeft")}
                   </p>
                   <p className="mt-0.5 text-[13.5px] font-semibold text-charcoal">
                     {dish.portionsLeft} / {dish.portions}
                   </p>
                 </div>
-                <div>
-                  <p className="text-[12px] uppercase tracking-[0.1em] text-muted-soft">
+                <div className="min-w-0">
+                  <p className="max-w-full wrap-break-word text-[11px] uppercase tracking-normal text-muted-soft">
                     {t("rating")}
                   </p>
                   <p className="mt-0.5 flex items-center justify-center gap-1 text-[13.5px] font-semibold text-charcoal">
@@ -362,8 +362,8 @@ export default function DishPage() {
               </section>
 
               <section className="mt-6 rounded-[22px] border border-line bg-white p-4 shadow-card">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[18px] font-semibold text-charcoal">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="min-w-0 text-[18px] font-semibold text-charcoal">
                     {t("availablePickup")}
                   </h2>
                   <span className="rounded-full bg-terracotta-50 px-2.5 py-1 text-[11.5px] font-bold uppercase tracking-[0.1em] text-terracotta-700">
@@ -557,7 +557,7 @@ export default function DishPage() {
             onClick={() => setQtyOpen(true)}
             className="flex h-12 shrink-0 items-center gap-2 rounded-full border border-line bg-white px-3"
           >
-            <span className="text-[13px] font-medium text-muted">
+            <span className="max-[360px]:hidden text-[13px] font-medium text-muted">
               {t("quantity")}
             </span>
             <span className="grid size-6 place-items-center rounded-full bg-cream-100 text-[14px] font-bold text-charcoal">
@@ -577,7 +577,7 @@ export default function DishPage() {
             ) : (
               <>
                 {t("addToCart")}
-                <span className="ms-1 font-semibold">
+                <span className="ms-1 font-semibold max-[360px]:hidden">
                   {formatPrice(dish.price * qty, lang)}
                 </span>
               </>
