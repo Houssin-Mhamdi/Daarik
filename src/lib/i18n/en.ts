@@ -129,6 +129,7 @@ const en = {
   homeSub: "Homemade dishes from cooks in your neighbourhood.",
   featuredKicker: "This weekend's table",
   weekendSpecial: "Weekend special",
+  weekendSpecialHint: "Show this dish in the homepage's weekend picks.",
   nearbyKitchens: "Nearby kitchens",
   nearbyKitchensSub: "Fresh from home kitchens around you",
   topCooks: "Meet the cooks",

@@ -128,6 +128,8 @@ const ar: Partial<Record<EnKeys, string>> = {
   homeSub: "أطباق منزلية من طهاة في حيّك.",
   featuredKicker: "مائدة نهاية الأسبوع",
   weekendSpecial: "عرض نهاية الأسبوع",
+  weekendSpecialHint:
+    "اعرض هذا الطبق ضمن اختيارات نهاية الأسبوع في الصفحة الرئيسية.",
   nearbyKitchens: "مطابخ قريبة منك",
   nearbyKitchensSub: "طازج من مطابخ منزلية حولك",
   topCooks: "تعرّف على الطهاة",

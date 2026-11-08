@@ -128,6 +128,7 @@ const nl: Partial<Record<EnKeys, string>> = {
   homeSub: "Homemade gerechten van koks bij jou in de buurt.",
   featuredKicker: "De tafel van dit weekend",
   weekendSpecial: "Weekendspecial",
+  weekendSpecialHint: "Toon dit gerecht bij de weekendtips op de homepage.",
   nearbyKitchens: "Keukens bij jou in de buurt",
   nearbyKitchensSub: "Vers uit huiskeukens om je heen",
   topCooks: "Ontmoet de koks",

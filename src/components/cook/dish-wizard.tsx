@@ -116,6 +116,7 @@ export function DishWizard({ dish }: { dish?: Dish }) {
     dish?.schedule?.sameDayRadiusKm ?? 5,
   );
   const [nextDay, setNextDay] = useState(dish?.schedule?.nextDay ?? true);
+  const [weekend, setWeekend] = useState(dish?.weekend ?? false);
   const [activeDay, setActiveDay] = useState<string>(
     () => WEEK_ORDER.find((d) => dish?.schedule?.windows?.[d]) ?? "",
   );
@@ -230,6 +231,7 @@ export function DishWizard({ dish }: { dish?: Dish }) {
       sameDayPickup: sameDay,
       sameDayRadiusKm: sameDayRadius,
       nextDayPickup: nextDay,
+      weekend,
       prepTime: { nl: prepTime, en: prepTime, ar: prepTime },
     };
 
@@ -788,6 +790,25 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                       );
                     })}
                   </div>
+                </Card>
+
+                <Card className="p-4 md:p-5">
+                  <label className="flex items-start justify-between gap-3">
+                    <span>
+                      <span className="block text-[16px] font-semibold text-charcoal">
+                        {t("weekendSpecial")}
+                      </span>
+                      <span className="mt-0.5 block text-[12.5px] text-muted">
+                        {t("weekendSpecialHint")}
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={weekend}
+                      onChange={(event) => setWeekend(event.target.checked)}
+                      className="mt-1 size-5 shrink-0 accent-[#c65d3a]"
+                    />
+                  </label>
                 </Card>
 
                 <Card className="p-4 md:p-5">
