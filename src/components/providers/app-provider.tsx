@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   translate,
   isRtl,
@@ -27,6 +28,7 @@ import {
 import { darnaApi, getAccessToken, type CatalogCuisine } from "@/lib/api";
 import { buildPickupOptions } from "@/lib/pickup";
 import {
+  queryKeys,
   useCatalogQuery,
   useCooksQuery,
   useCreateOrderMutation,
@@ -103,7 +105,7 @@ type AppContextValue = {
   cart: CartLine[];
   cartCount: number;
   cartCookId: string | null;
-  addToCart: (dishId: string, qty?: number) => void;
+  addToCart: (dishId: string, qty?: number, dish?: Dish) => boolean;
   setQty: (dishId: string, qty: number) => void;
   removeFromCart: (dishId: string) => void;
   clearCart: () => void;
@@ -159,6 +161,7 @@ function readStored<T>(key: string, fallback: T): T {
 let toastSeq = 0;
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const { data: liveDishes = [] } = useDishesQuery();
   const { data: liveCooks = [] } = useCooksQuery();
   const { data: catalog } = useCatalogQuery();
@@ -342,17 +345,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [logoutMutation]);
 
   const addToCart = useCallback(
-    (dishId: string, qty = 1) => {
-      const dish = findDish(dishId);
-      if (!dish) return;
+    (dishId: string, qty = 1, dishFallback?: Dish) => {
+      const dish = findDish(dishId) ?? dishFallback;
+      if (!dish) {
+        toast(translate(lang, "dishNotFound"), { variant: "error" });
+        return false;
+      }
+      queryClient.setQueryData<Dish[]>(queryKeys.dishes(), (current = []) =>
+        current.some((item) => item.id === dish.id)
+          ? current
+          : [...current, dish],
+      );
       if (liveCooks.find((c) => c.id === dish.cookId)?.kitchenOpen === false) {
         toast(translate(lang, "kitchenClosedBadge"));
-        return;
+        return false;
       }
-      const currentCook = cart.length ? findDish(cart[0].dishId)?.cookId : null;
+      const currentDishes =
+        queryClient.getQueryData<Dish[]>(queryKeys.dishes()) ?? liveDishes;
+      const currentCook = cart.length
+        ? (currentDishes.find((item) => item.id === cart[0].dishId)?.cookId ??
+          null)
+        : null;
       if (currentCook && currentCook !== dish.cookId) {
         setPendingSwitch({ dishId, qty });
-        return;
+        return false;
       }
       setCart((prev) => {
         const existing = prev.find((line) => line.dishId === dishId);
@@ -363,7 +379,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   ...line,
                   qty: Math.min(
                     line.qty + qty,
-                    findDish(dishId)?.portionsLeft ?? 99,
+                    findDish(dishId)?.portionsLeft ?? dish.portionsLeft ?? 99,
                   ),
                 }
               : line,
@@ -376,8 +392,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (getAccessToken()) {
         darnaApi.cart.addItem({ dishId, qty }).catch(() => {});
       }
+      return true;
     },
-    [cart, liveCooks, findDish, lang, toast],
+    [cart, liveCooks, liveDishes, findDish, lang, queryClient, toast],
   );
 
   const confirmSwitch = useCallback(() => {

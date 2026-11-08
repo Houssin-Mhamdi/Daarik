@@ -85,7 +85,7 @@ export function DishCard({
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        addToCart(dish.id);
+        addToCart(dish.id, 1, dish);
       }}
       aria-label={t("addToCart")}
       className={cn(

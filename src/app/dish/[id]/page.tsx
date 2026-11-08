@@ -141,8 +141,9 @@ export default function DishPage() {
   };
 
   const add = () => {
-    addToCart(dish.id, qty);
+    const addedToCart = addToCart(dish.id, qty, dish);
     setQtyOpen(false);
+    if (!addedToCart) return;
     setAdded(true);
     setTimeout(() => setAdded(false), 1600);
   };
