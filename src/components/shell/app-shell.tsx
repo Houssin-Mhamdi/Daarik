@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: sessionUser, isPending: authPending } = useCurrentUserQuery();
   const isCookUser = !authPending && sessionUser?.role === "COOK";
   const { data: cookApplication, isPending: applicationPending } =
-    useMyCookApplicationQuery(isCookUser);
+    useMyCookApplicationQuery(isCookUser, sessionUser?.email);
   const {
     t,
     lang,
@@ -94,9 +94,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const requiresCookApplication =
     isCookUser && !applicationPending && cookApplication?.status !== "APPROVED";
+  const cookRouteDenied = cook && !authPending && sessionUser?.role !== "COOK";
 
   useEffect(() => {
-    if (requiresCookApplication && pathname !== "/cook/apply") {
+    if (cookRouteDenied) {
+      router.replace(
+        sessionUser?.role === "ADMIN"
+          ? "/admin"
+          : sessionUser
+            ? "/cook"
+            : "/login",
+      );
+    } else if (requiresCookApplication && pathname !== "/cook/apply") {
       router.replace("/cook/apply");
     } else if (
       isCookUser &&
@@ -111,9 +120,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     applicationPending,
     isCookUser,
     pathname,
+    cookRouteDenied,
     requiresCookApplication,
     router,
+    sessionUser,
   ]);
+
+  if (cook && (authPending || cookRouteDenied)) {
+    return (
+      <div className="grid min-h-dvh place-items-center text-sm text-muted">
+        {t("loading")}
+      </div>
+    );
+  }
 
   if (
     isCookUser &&

@@ -316,16 +316,14 @@ export function useLoginMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: { email: string; password: string }) => {
-      const res = await darnaApi.auth.login(body);
-      setAuthTokens(res.accessToken, res.refreshToken);
-      return res;
+      return darnaApi.auth.login(body);
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      await qc.cancelQueries();
+      qc.removeQueries();
+      window.localStorage.removeItem("darna.cookApplicationEmail");
+      setAuthTokens(data.accessToken, data.refreshToken);
       qc.setQueryData(queryKeys.authMe, data.user);
-      qc.invalidateQueries({ queryKey: queryKeys.cart });
-      qc.invalidateQueries({ queryKey: queryKeys.favorites });
-      qc.invalidateQueries({ queryKey: queryKeys.orders });
-      qc.invalidateQueries({ queryKey: queryKeys.cookDashboard });
     },
   });
 }
@@ -342,14 +340,14 @@ export function useRegisterMutation() {
       preferredLang?: "nl" | "en" | "ar";
       role?: "CUSTOMER" | "COOK";
     }) => {
-      const res = await darnaApi.auth.register(body);
-      setAuthTokens(res.accessToken, res.refreshToken);
-      return res;
+      return darnaApi.auth.register(body);
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      await qc.cancelQueries();
+      qc.removeQueries();
+      window.localStorage.removeItem("darna.cookApplicationEmail");
+      setAuthTokens(data.accessToken, data.refreshToken);
       qc.setQueryData(queryKeys.authMe, data.user);
-      qc.invalidateQueries({ queryKey: queryKeys.cart });
-      qc.invalidateQueries({ queryKey: queryKeys.favorites });
     },
   });
 }
@@ -366,12 +364,13 @@ export function useLogoutMutation() {
         // Ignore 401 / network errors on logout when token is already expired
       } finally {
         clearAuthTokens();
+        window.localStorage.removeItem("darna.cookApplicationEmail");
       }
     },
-    onSettled: () => {
+    onSettled: async () => {
+      await qc.cancelQueries();
+      qc.removeQueries();
       qc.setQueryData(queryKeys.authMe, null);
-      qc.invalidateQueries({ queryKey: queryKeys.cart });
-      qc.invalidateQueries({ queryKey: queryKeys.orders });
     },
   });
 }
