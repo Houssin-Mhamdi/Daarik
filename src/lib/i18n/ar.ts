@@ -1181,6 +1181,7 @@ const ar: Partial<Record<EnKeys, string>> = {
   howItWorksTitle: "كيف تعمل دارك",
   howItWorksSteps: "اعثر على طبق، اطلب مسبقًا، استلم",
   browseCuisines: "تصفح حسب المطبخ",
+  allNetherlands: "كل هولندا",
   searchResultsFor: "نتائج «{query}»",
   searchMinChars: "اكتب 3 أحرف على الأقل للبحث",
   searchDishesTitle: "أطباق",

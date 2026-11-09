@@ -5,7 +5,7 @@ import type { SearchArea } from "@/components/app/location-picker";
 
 const STORAGE_KEY = "darna.delivery-location";
 const DEFAULT_RADIUS_KM = 10;
-const FALLBACK_CITY = "Rotterdam";
+const FALLBACK_CITY = ""; // empty = all Netherlands
 
 type StoredLocation = {
   city?: string;

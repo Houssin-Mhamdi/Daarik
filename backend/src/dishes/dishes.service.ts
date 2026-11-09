@@ -17,6 +17,7 @@ export class DishesService {
     dietary?: string;
     pickup?: string;
     cookId?: string;
+    city?: string;
     q?: string;
     featured?: string;
     weekend?: string;
@@ -31,6 +32,15 @@ export class DishesService {
   }) {
     const q = query.q?.trim().toLowerCase();
     const page = Math.max(1, Number(query.page) || 1);
+
+    const cookFilter = {
+      ...(query.cookId
+        ? { OR: [{ id: query.cookId }, { slug: query.cookId }] }
+        : {}),
+      ...(query.city
+        ? { city: { equals: query.city, mode: "insensitive" as const } }
+        : {}),
+    };
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 0));
     const usePaging = limit > 0;
 
@@ -54,13 +64,7 @@ export class DishesService {
       ...(query.sameDay === "true" ? { sameDayPickup: true } : {}),
       ...(query.priceMin ? { price: { gte: Number(query.priceMin) } } : {}),
       ...(query.priceMax ? { price: { lte: Number(query.priceMax) } } : {}),
-      ...(query.cookId
-        ? {
-            cook: {
-              OR: [{ id: query.cookId }, { slug: query.cookId }],
-            },
-          }
-        : {}),
+      ...(Object.keys(cookFilter).length ? { cook: cookFilter } : {}),
     };
 
     const orderBy =

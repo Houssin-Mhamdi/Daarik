@@ -380,6 +380,33 @@ export function LocationPicker({
         <div className="space-y-3 pt-1">
           <button
             type="button"
+            onClick={() => {
+              try {
+                window.localStorage.removeItem(LOCATION_STORAGE_KEY);
+              } catch {
+                /* ignore */
+              }
+              onCityChange("");
+              onAreaChange?.(null);
+              closePicker();
+            }}
+            className="flex min-h-16 w-full items-center gap-3 rounded-2xl border border-line bg-white p-4 text-start transition hover:border-terracotta/50 hover:bg-terracotta-50/40"
+          >
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-cream-100 text-muted">
+              <MapPin className="size-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-semibold text-charcoal">
+                {t("allNetherlands")}
+              </span>
+              <span className="mt-0.5 block text-[13px] text-muted">
+                {t("browseAll")}
+              </span>
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={useCurrentLocation}
             disabled={isLocating}
             className="flex min-h-16 w-full items-center gap-3 rounded-2xl border border-line bg-white p-4 text-start transition hover:border-terracotta/50 hover:bg-terracotta-50/40 disabled:opacity-70"

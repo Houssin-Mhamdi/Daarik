@@ -1223,6 +1223,7 @@ const nl: Partial<Record<EnKeys, string>> = {
   howItWorksTitle: "Zo werkt Daarik",
   howItWorksSteps: "Vind een gerecht, bestel vooraf, haal op",
   browseCuisines: "Bekijk per keuken",
+  allNetherlands: "Heel Nederland",
   searchResultsFor: "Resultaten voor “{query}”",
   searchMinChars: "Typ minimaal 3 tekens om te zoeken",
   searchDishesTitle: "Gerechten",

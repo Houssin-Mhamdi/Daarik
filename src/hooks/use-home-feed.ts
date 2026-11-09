@@ -14,7 +14,9 @@ export function useHomeFeed(city: string, area: SearchArea | null) {
     () =>
       area
         ? cooksWithin(cooks, area, area.radiusKm)
-        : cooks.filter((cook) => cityMatches(cook.city, city)),
+        : city
+          ? cooks.filter((cook) => cityMatches(cook.city, city))
+          : cooks,
     [cooks, city, area],
   );
 

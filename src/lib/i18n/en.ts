@@ -1226,6 +1226,7 @@ const en = {
   howItWorksTitle: "How Daarik works",
   howItWorksSteps: "Find a dish, pre-order, pick up",
   browseCuisines: "Browse by cuisine",
+  allNetherlands: "All of the Netherlands",
   searchResultsFor: "Results for “{query}”",
   searchMinChars: "Type at least 3 characters to search",
   searchDishesTitle: "Dishes",

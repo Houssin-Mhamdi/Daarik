@@ -18,6 +18,8 @@ import { Sheet, EmptyState } from "@/components/ui/overlays";
 import { DishCardSkeleton } from "@/components/ui/skeleton";
 import { DishCard } from "@/components/app/dish-card";
 import { useApp } from "@/components/providers/app-provider";
+import { LocationPicker } from "@/components/app/location-picker";
+import { useSearchArea } from "@/hooks/use-search-area";
 import { useDishesPaginatedQuery } from "@/lib/queries";
 import { Pagination } from "@/components/ui/pagination";
 
@@ -58,6 +60,8 @@ export default function ExplorePage() {
   const [sortOpen, setSortOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const { city, setCity, setArea } = useSearchArea();
+  const [locationOpen, setLocationOpen] = useState(false);
 
   const [draftCuisine, setDraftCuisine] = useState("all");
   const [draftPrice, setDraftPrice] = useState<PriceFilter>(null);
@@ -90,11 +94,12 @@ export default function ExplorePage() {
     useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
-  }, [query, cuisine, price, availability, diet, sort]);
+  }, [query, cuisine, price, availability, diet, sort, city]);
 
   const params = useMemo(() => {
     const p: Record<string, string> = { page: String(page), limit: "12" };
     if (query.trim()) p.q = query.trim();
+    if (city) p.city = city;
     if (cuisine !== "all") p.cuisine = cuisine;
     if (diet.length) p.dietary = diet[0];
     if (availability === "weekend") p.weekend = "true";
@@ -111,7 +116,7 @@ export default function ExplorePage() {
     else if (sort === "priceHigh") p.sort = "priceHigh";
     else if (sort === "rating") p.sort = "rating";
     return p;
-  }, [page, query, cuisine, price, availability, diet, sort]);
+  }, [page, query, city, cuisine, price, availability, diet, sort]);
 
   const paginated = useDishesPaginatedQuery(params);
   const filtered = paginated.data?.items ?? [];
@@ -183,10 +188,11 @@ export default function ExplorePage() {
           </div>
           <button
             type="button"
+            onClick={() => setLocationOpen(true)}
             className="flex h-9 items-center gap-1.5 rounded-full border border-line bg-white px-3 text-[13.5px] font-semibold text-charcoal shadow-sm"
           >
             <MapPin className="size-3.5 text-terracotta" />
-            Rotterdam
+            {city || t("allNetherlands")}
             <ChevronDown className="size-3 text-muted" />
           </button>
         </div>
@@ -523,6 +529,14 @@ export default function ExplorePage() {
           })}
         </div>
       </Sheet>
+
+      <LocationPicker
+        open={locationOpen}
+        onClose={() => setLocationOpen(false)}
+        currentCity={city}
+        onCityChange={setCity}
+        onAreaChange={setArea}
+      />
     </div>
   );
 }
