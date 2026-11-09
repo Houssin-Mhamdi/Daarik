@@ -30,7 +30,7 @@ export function MobileHeader({
         className="flex h-10 items-center gap-1.5 rounded-full border border-line bg-white/80 px-3 text-[14px] font-semibold text-charcoal shadow-sm backdrop-blur"
       >
         <MapPin className="size-3.5 text-terracotta" />
-        {city}
+        {city || t("allNetherlands")}
         <ChevronDown className="size-3 text-muted" />
       </button>
       <div className="flex items-center gap-2">

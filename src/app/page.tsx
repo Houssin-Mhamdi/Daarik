@@ -231,7 +231,7 @@ export default function HomePage() {
                 className="inline-flex items-center gap-1.5 rounded-full border border-terracotta/25 bg-terracotta-50 px-3 py-1.5 text-[12.5px] font-bold uppercase tracking-[0.14em] text-terracotta-700"
               >
                 <Sparkles className="size-3" />
-                {t("homemadeNear")} · {city}
+                {t("homemadeNear")} · {city || t("allNetherlands")}
                 <ChevronDown className="size-3" />
               </button>
               <h1 className="mt-5 max-w-[540px] font-display text-[52px] leading-[1.03] tracking-[-0.03em] text-charcoal">

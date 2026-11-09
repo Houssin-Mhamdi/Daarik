@@ -55,7 +55,7 @@ const LocationMap = dynamic(() => import("./location-map"), {
   ),
 });
 
-const LOCATION_STORAGE_KEY = "darna.delivery-location";
+const LOCATION_STORAGE_KEY = "darna.location";
 const LOCATION_REQUESTED_KEY = "darna.location-requested";
 const DEFAULT_RADIUS_KM = 10;
 

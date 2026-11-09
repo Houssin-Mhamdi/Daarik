@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { SearchArea } from "@/components/app/location-picker";
 
-const STORAGE_KEY = "darna.delivery-location";
+const STORAGE_KEY = "darna.location";
 const DEFAULT_RADIUS_KM = 10;
 const FALLBACK_CITY = ""; // empty = all Netherlands
 
