@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { SegmentedTabs } from "@/components/ui/controls";
 import { ConfirmDialog, Sheet } from "@/components/ui/overlays";
+import { Pagination } from "@/components/ui/pagination";
 import { useApp } from "@/components/providers/app-provider";
 import {
   AdminCard,
@@ -32,7 +33,7 @@ import {
   Th,
 } from "@/components/admin/admin-ui";
 import {
-  useAdminOrdersQuery,
+  useAdminOrdersPaginatedQuery,
   useAdminUpdateOrderStatusMutation,
   type AdminOrderRecord,
 } from "@/lib/queries";
@@ -69,7 +70,20 @@ export default function AdminOrdersPage() {
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [cancelCode, setCancelCode] = useState<string | null>(null);
-  const { data: apiOrders = [], isPending, isError } = useAdminOrdersQuery();
+  const [page, setPage] = useState(1);
+  const { data: paginated, isPending, isError } = useAdminOrdersPaginatedQuery({
+    status: filter === "all" ? undefined : filter,
+    q: query.trim() || undefined,
+    page: String(page),
+    limit: "15",
+  });
+  const apiOrders = paginated?.items ?? [];
+  const total = paginated?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / 15));
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, query]);
   const updateOrderStatusMutation = useAdminUpdateOrderStatusMutation();
 
   const orders = useMemo<AdminOrder[]>(
@@ -96,18 +110,7 @@ export default function AdminOrdersPage() {
     return base;
   }, [orders]);
 
-  const filtered = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    return orders.filter((order) => {
-      const matchesFilter = filter === "all" || order.status === filter;
-      const matchesQuery =
-        !text ||
-        order.code.toLowerCase().includes(text) ||
-        order.customer.toLowerCase().includes(text) ||
-        order.cook.toLowerCase().includes(text);
-      return matchesFilter && matchesQuery;
-    });
-  }, [filter, orders, query]);
+  const filtered = orders;
 
   const selected = orders.find((order) => order.code === selectedCode) ?? null;
   const cancelTarget =
@@ -304,7 +307,8 @@ export default function AdminOrdersPage() {
             {t("loading")}
           </div>
         ) : (
-          <AdminTable>
+          <>
+            <AdminTable>
             <thead>
               <tr>
                 <Th>{t("orderId")}</Th>
@@ -361,6 +365,10 @@ export default function AdminOrdersPage() {
               ))}
             </tbody>
           </AdminTable>
+          {filtered.length > 0 ? (
+            <Pagination page={page} totalPages={totalPages} onPage={setPage} className="mt-4" />
+          ) : null}
+          </>
         )}
 
         {filtered.length === 0 ? (

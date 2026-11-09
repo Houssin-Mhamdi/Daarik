@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedTabs } from "@/components/ui/controls";
 import { ConfirmDialog, EmptyState, Sheet } from "@/components/ui/overlays";
+import { Pagination } from "@/components/ui/pagination";
 import { Card } from "@/components/ui/misc";
 import { CookMobileHeader } from "@/components/cook/cook-mobile-header";
 import { useApp } from "@/components/providers/app-provider";
@@ -24,7 +25,7 @@ import {
   type CookOrder,
 } from "@/lib/data";
 import {
-  useCookOrdersQuery,
+  useCookOrdersPaginatedQuery,
   useUpdateCookOrderStatusMutation,
 } from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
@@ -42,7 +43,22 @@ const tabKey: Record<Tab, string> = {
 
 export default function CookOrdersPage() {
   const { t, lang, toast } = useApp();
-  const { data: queriedOrders = [] } = useCookOrdersQuery();
+  const [tab, setTab] = useState<Tab>("incoming");
+  const [page, setPage] = useState(1);
+  const tabStatusMap: Record<Tab, string> = {
+    incoming: "confirmed",
+    preparing: "preparing",
+    ready: "ready",
+    completed: "completed",
+  };
+  const { data: paginated } = useCookOrdersPaginatedQuery({
+    status: tabStatusMap[tab],
+    page: String(page),
+    limit: "8",
+  });
+  const queriedOrders = paginated?.items ?? [];
+  const total = paginated?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / 8));
   const updateStatusMutation = useUpdateCookOrderStatusMutation();
   const [statusOverrides, setStatusOverrides] = useState<Record<string, Status>>({});
   const [declinedIds, setDeclinedIds] = useState<string[]>([]);
@@ -55,17 +71,17 @@ export default function CookOrdersPage() {
         ),
     [queriedOrders, statusOverrides, declinedIds],
   );
-  const [tab, setTab] = useState<Tab>("incoming");
   const [acceptOrder, setAcceptOrder] = useState<CookOrder | null>(null);
   const [declineOrder, setDeclineOrder] = useState<CookOrder | null>(null);
   const [declineReason, setDeclineReason] = useState("soldOut");
   const [messageOrder, setMessageOrder] = useState<CookOrder | null>(null);
   const [message, setMessage] = useState("");
 
-  const filtered = useMemo(
-    () => orders.filter((order) => order.status === tab),
-    [orders, tab],
-  );
+  const filtered = orders;
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab]);
 
   const counts = useMemo(
     () =>
@@ -152,7 +168,8 @@ export default function CookOrdersPage() {
             description={emptyFor[tab].sub}
           />
         ) : (
-          <div className="mt-3 grid gap-3 md:grid-cols-2 md:gap-4">
+          <>
+            <div className="mt-3 grid gap-3 md:grid-cols-2 md:gap-4">
             {filtered.map((order) => (
               <OrderCard
                 key={order.id}
@@ -167,6 +184,10 @@ export default function CookOrdersPage() {
               />
             ))}
           </div>
+          {filtered.length > 0 ? (
+            <Pagination page={page} totalPages={totalPages} onPage={setPage} className="mt-4" />
+          ) : null}
+          </>
         )}
 
         <div className="mt-4 rounded-2xl bg-cream-100/80 p-3.5">

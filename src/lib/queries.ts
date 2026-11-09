@@ -683,6 +683,29 @@ export function useMyOrdersQuery(params?: {
   });
 }
 
+export function useMyOrdersPaginatedQuery(params?: {
+  tab?: string;
+  page?: string;
+  limit?: string;
+}) {
+  return useQuery({
+    queryKey: [...queryKeys.orders, "paginated", params ?? {}],
+    queryFn: async () => {
+      const token = getAccessToken();
+      if (!token)
+        return { items: [] as CustomerOrder[], total: 0, page: 1, limit: 6 };
+      const result = await darnaApi.orders.myOrders(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return {
+        items: items as CustomerOrder[],
+        total: Array.isArray(result) ? items.length : (result?.total ?? items.length),
+        page: Array.isArray(result) ? 1 : (result?.page ?? 1),
+        limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
+      };
+    },
+  });
+}
+
 export function useOrderQuery(id: string) {
   return useQuery({
     queryKey: queryKeys.order(id),
@@ -810,6 +833,29 @@ export function useCookOrdersQuery(params?: {
   });
 }
 
+export function useCookOrdersPaginatedQuery(params?: {
+  status?: string;
+  page?: string;
+  limit?: string;
+}) {
+  return useQuery({
+    queryKey: [...queryKeys.cookOrders(params?.status), "paginated", params ?? {}],
+    queryFn: async () => {
+      const token = getAccessToken();
+      if (!token)
+        return { items: [] as CookOrder[], total: 0, page: 1, limit: 10 };
+      const result = await darnaApi.orders.cookOrders(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return {
+        items: items as CookOrder[],
+        total: Array.isArray(result) ? items.length : (result?.total ?? items.length),
+        page: Array.isArray(result) ? 1 : (result?.page ?? 1),
+        limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
+      };
+    },
+  });
+}
+
 export function useUpdateCookOrderStatusMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -883,6 +929,29 @@ export function useAdminOrdersQuery(params?: {
       const result = await darnaApi.admin.orders(params);
       const items = Array.isArray(result) ? result : (result?.items ?? []);
       return items as AdminOrderRecord[];
+    },
+  });
+}
+
+export function useAdminOrdersPaginatedQuery(params?: {
+  status?: string;
+  q?: string;
+  page?: string;
+  limit?: string;
+}) {
+  return useQuery({
+    queryKey: [...queryKeys.adminOrders(params), "paginated"],
+    queryFn: async () => {
+      if (!getAccessToken())
+        return { items: [] as AdminOrderRecord[], total: 0, page: 1, limit: 10 };
+      const result = await darnaApi.admin.orders(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return {
+        items: items as AdminOrderRecord[],
+        total: Array.isArray(result) ? items.length : (result?.total ?? items.length),
+        page: Array.isArray(result) ? 1 : (result?.page ?? 1),
+        limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
+      };
     },
   });
 }
@@ -1042,6 +1111,29 @@ export function useAdminDishesQuery(params?: {
   });
 }
 
+export function useAdminDishesPaginatedQuery(params?: {
+  filter?: string;
+  q?: string;
+  page?: string;
+  limit?: string;
+}) {
+  return useQuery({
+    queryKey: [...queryKeys.adminDishes(params), "paginated"],
+    queryFn: async () => {
+      if (!getAccessToken())
+        return { items: [] as AdminDishRecord[], total: 0, page: 1, limit: 10 };
+      const result = await darnaApi.admin.dishes(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return {
+        items: items as AdminDishRecord[],
+        total: Array.isArray(result) ? items.length : (result?.total ?? items.length),
+        page: Array.isArray(result) ? 1 : (result?.page ?? 1),
+        limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
+      };
+    },
+  });
+}
+
 export function useAdminModerateDishMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -1111,6 +1203,29 @@ export function useAdminDisputesQuery(params?: {
       const result = await darnaApi.admin.disputes(params);
       const items = Array.isArray(result) ? result : (result?.items ?? []);
       return items as AdminDisputeRecord[];
+    },
+  });
+}
+
+export function useAdminDisputesPaginatedQuery(params?: {
+  status?: string;
+  page?: string;
+  limit?: string;
+}) {
+  return useQuery({
+    queryKey: [...queryKeys.adminDisputes(params?.status), "paginated", params ?? {}],
+    queryFn: async () => {
+      const token = getAccessToken();
+      if (!token)
+        return { items: [] as AdminDisputeRecord[], total: 0, page: 1, limit: 10 };
+      const result = await darnaApi.admin.disputes(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return {
+        items: items as AdminDisputeRecord[],
+        total: Array.isArray(result) ? items.length : (result?.total ?? items.length),
+        page: Array.isArray(result) ? 1 : (result?.page ?? 1),
+        limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
+      };
     },
   });
 }

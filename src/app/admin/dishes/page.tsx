@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedTabs } from "@/components/ui/controls";
 import { ConfirmDialog, Sheet } from "@/components/ui/overlays";
+import { Pagination } from "@/components/ui/pagination";
 import { useApp } from "@/components/providers/app-provider";
 import {
   AdminCard,
@@ -30,7 +31,7 @@ import {
 } from "@/components/admin/admin-ui";
 import { loc } from "@/lib/data";
 import {
-  useAdminDishesQuery,
+  useAdminDishesPaginatedQuery,
   useAdminModerateDishMutation,
   useAdminRemoveDishMutation,
 } from "@/lib/queries";
@@ -60,13 +61,26 @@ export default function AdminDishesPage() {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hideId, setHideId] = useState<string | null>(null);
-  const { data: apiDishes = [], isPending, isError } = useAdminDishesQuery();
+  const [page, setPage] = useState(1);
+  const { data: paginated, isPending, isError } = useAdminDishesPaginatedQuery({
+    filter: filter === "all" ? undefined : filter,
+    q: query.trim() || undefined,
+    page: String(page),
+    limit: "15",
+  });
+  const apiDishes = paginated?.items ?? [];
+  const total = paginated?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / 15));
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, query]);
   const moderateDish = useAdminModerateDishMutation();
   const removeDish = useAdminRemoveDishMutation();
 
   const rows = useMemo<DishRow[]>(
     () =>
-      apiDishes.map((dish) => ({
+      apiDishes.map((dish: any) => ({
         id: dish.id,
         name: loc(dish.name, lang),
         desc: loc(dish.desc, lang),
@@ -95,23 +109,7 @@ export default function AdminDishesPage() {
     [rows],
   );
 
-  const filtered = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      const matchesFilter =
-        filter === "all"
-          ? true
-          : filter === "reported"
-            ? Boolean(row.reported)
-            : row.status === filter;
-      const matchesQuery =
-        !text ||
-        row.name.toLowerCase().includes(text) ||
-        row.cook.toLowerCase().includes(text) ||
-        row.cuisine.toLowerCase().includes(text);
-      return matchesFilter && matchesQuery;
-    });
-  }, [filter, query, rows]);
+  const filtered = rows;
 
   const selected = rows.find((row) => row.id === selectedId) ?? null;
   const hideTarget = rows.find((row) => row.id === hideId) ?? null;
@@ -213,7 +211,8 @@ export default function AdminDishesPage() {
             {t("loading")}
           </p>
         ) : (
-          <AdminTable>
+          <>
+            <AdminTable>
             <thead>
               <tr>
                 <Th>{t("adminNavDishes")}</Th>
@@ -303,6 +302,10 @@ export default function AdminDishesPage() {
               ))}
             </tbody>
           </AdminTable>
+          {filtered.length > 0 ? (
+            <Pagination page={page} totalPages={totalPages} onPage={setPage} className="mt-4" />
+          ) : null}
+          </>
         )}
 
         {filtered.length === 0 ? (

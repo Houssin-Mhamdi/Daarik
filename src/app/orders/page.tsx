@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -25,11 +25,11 @@ import {
 } from "@/components/app/order-status";
 import { Pagination } from "@/components/ui/pagination";
 import { useApp } from "@/components/providers/app-provider";
-import { usePagination } from "@/hooks/use-pagination";
+
 import { loc, type CustomerOrder } from "@/lib/data";
 import {
   useCreateCheckoutSessionMutation,
-  useMyOrdersQuery,
+  useMyOrdersPaginatedQuery,
 } from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
 
@@ -44,21 +44,22 @@ const tabFor = (order: CustomerOrder): Tab =>
 
 export default function OrdersPage() {
   const { t } = useApp();
-  const { data: myOrders = [] } = useMyOrdersQuery();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("upcoming");
+  const [page, setPage] = useState(1);
 
-  const groups = useMemo(
-    () => ({
-      upcoming: myOrders.filter((order) => tabFor(order) === "upcoming"),
-      completed: myOrders.filter((order) => tabFor(order) === "completed"),
-      cancelled: myOrders.filter((order) => tabFor(order) === "cancelled"),
-    }),
-    [myOrders],
-  );
+  const { data: paginated } = useMyOrdersPaginatedQuery({
+    tab,
+    page: String(page),
+    limit: "6",
+  });
+  const orders = paginated?.items ?? [];
+  const total = paginated?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / 6));
 
-  const orders = groups[tab];
-  const orderPagination = usePagination(orders, 6);
+  useEffect(() => {
+    setPage(1);
+  }, [tab]);
 
   const emptyCopy = {
     upcoming: { title: t("noUpcoming"), sub: t("noUpcoming") },
@@ -82,11 +83,11 @@ export default function OrdersPage() {
               <div className="rounded-2xl border border-line bg-white p-2 shadow-card">
                 {(
                   [
-                    ["upcoming", t("upcoming"), groups.upcoming.length],
-                    ["completed", t("completed"), groups.completed.length],
-                    ["cancelled", t("cancelled"), groups.cancelled.length],
+                    ["upcoming", t("upcoming"), 0],
+                    ["completed", t("completed"), 0],
+                    ["cancelled", t("cancelled"), 0],
                   ] as const
-                ).map(([id, label, count]) => (
+                ).map(([id, label]) => (
                   <button
                     key={id}
                     type="button"
@@ -107,7 +108,6 @@ export default function OrdersPage() {
                           : "bg-cream-100 text-muted",
                       )}
                     >
-                      {count}
                     </span>
                   </button>
                 ))}
@@ -188,7 +188,7 @@ export default function OrdersPage() {
               />
             ) : (
               <div className="mt-3 space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
-                {orderPagination.pageItems.map((order) => (
+                {orders.map((order) => (
                   <OrderCard key={order.id} order={order} tab={tab} />
                 ))}
               </div>
@@ -196,9 +196,9 @@ export default function OrdersPage() {
 
             {orders.length > 0 ? (
               <Pagination
-                page={orderPagination.page}
-                totalPages={orderPagination.totalPages}
-                onPage={orderPagination.setPage}
+                page={page}
+                totalPages={totalPages}
+                onPage={setPage}
                 className="mt-4"
               />
             ) : null}

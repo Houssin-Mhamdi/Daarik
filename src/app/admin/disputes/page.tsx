@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedTabs } from "@/components/ui/controls";
 import { Sheet } from "@/components/ui/overlays";
+import { Pagination } from "@/components/ui/pagination";
 import { useApp } from "@/components/providers/app-provider";
 import {
   AdminCard,
@@ -25,7 +26,7 @@ import {
   StatusPill,
 } from "@/components/admin/admin-ui";
 import {
-  useAdminDisputesQuery,
+  useAdminDisputesPaginatedQuery,
   useAdminResolveDisputeMutation,
 } from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
@@ -40,7 +41,19 @@ export default function AdminDisputesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [refund, setRefund] = useState("");
   const [note, setNote] = useState("");
-  const { data: disputes = [], isPending, isError } = useAdminDisputesQuery();
+  const [page, setPage] = useState(1);
+  const { data: paginated, isPending, isError } = useAdminDisputesPaginatedQuery({
+    status: filter === "all" ? undefined : filter,
+    page: String(page),
+    limit: "15",
+  });
+  const disputes = paginated?.items ?? [];
+  const total = paginated?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / 15));
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
   const resolveDisputeMutation = useAdminResolveDisputeMutation();
 
   const counts = useMemo(
@@ -54,9 +67,7 @@ export default function AdminDisputesPage() {
     [disputes],
   );
 
-  const visible = disputes.filter(
-    (dispute) => filter === "all" || dispute.status === filter,
-  );
+  const visible = disputes;
   const selected =
     disputes.find((dispute) => dispute.id === selectedId) ?? null;
 
