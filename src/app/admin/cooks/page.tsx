@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   BadgeCheck,
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, SegmentedTabs } from "@/components/ui/controls";
 import { ConfirmDialog, Sheet } from "@/components/ui/overlays";
+import { Pagination } from "@/components/ui/pagination";
 import { useApp } from "@/components/providers/app-provider";
 import {
   AdminCard,
@@ -39,6 +40,8 @@ import {
   useAdminCooksQuery,
   useAdminRequestVerificationChangesMutation,
   useAdminUpdateCookStatusMutation,
+  type AdminCookRecord,
+  type AdminCookApplicationRecord,
 } from "@/lib/queries";
 
 type Verification = "verified" | "pending" | "suspended";
@@ -70,14 +73,25 @@ export default function AdminCooksPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [applicant, setApplicant] = useState<Applicant | null>(null);
   const [suspendId, setSuspendId] = useState<string | null>(null);
-  const { data: adminCooks, isPending, isError } = useAdminCooksQuery();
+  const [page, setPage] = useState(1);
+  const { data: adminCooks, isPending, isError } = useAdminCooksQuery({
+    status: filter === "all" ? undefined : filter.toUpperCase(),
+    q: query.trim() || undefined,
+    page: String(page),
+    limit: "15",
+  });
   const approveVerification = useAdminApproveVerificationMutation();
   const requestVerificationChanges =
     useAdminRequestVerificationChangesMutation();
   const updateCookStatus = useAdminUpdateCookStatusMutation();
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(1);
+  }, [filter, query]);
+
   const rows = useMemo<CookRow[]>(() => {
-    const profileRows = (adminCooks?.cooks ?? []).map((cook) => ({
+    const profileRows = (adminCooks?.cooks ?? []).map((cook: AdminCookRecord) => ({
       id: cook.id,
       name: cook.name,
       city: cook.city,
@@ -89,12 +103,12 @@ export default function AdminCooksPage() {
       avatar: cook.avatar ?? undefined,
       initials: cook.name
         .split(" ")
-        .map((part) => part[0])
+        .map((part: string) => part[0])
         .slice(0, 2)
         .join(""),
     }));
     const applicationRows = (adminCooks?.verificationQueue ?? []).map(
-      (item) => {
+      (item: AdminCookApplicationRecord) => {
         const application = {
           id: item.id,
           name: item.name,
@@ -106,7 +120,7 @@ export default function AdminCooksPage() {
           documents: item.documentsCount,
           initials: item.name
             .split(" ")
-            .map((part) => part[0])
+            .map((part: string) => part[0])
             .slice(0, 2)
             .join(""),
         };
@@ -254,7 +268,8 @@ export default function AdminCooksPage() {
             {t("loading")}
           </p>
         ) : (
-          <AdminTable>
+          <>
+            <AdminTable>
             <thead>
               <tr>
                 <Th>{t("cookCol")}</Th>
@@ -337,6 +352,15 @@ export default function AdminCooksPage() {
               ))}
             </tbody>
           </AdminTable>
+          {(adminCooks?.total ?? 0) > 15 ? (
+            <Pagination
+              page={page}
+              totalPages={Math.max(1, Math.ceil((adminCooks?.total ?? 0) / 15))}
+              onPage={setPage}
+              className="mt-4"
+            />
+          ) : null}
+          </>
         )}
 
         {filtered.length === 0 ? (

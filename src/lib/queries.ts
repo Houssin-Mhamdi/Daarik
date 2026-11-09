@@ -89,6 +89,9 @@ export type AdminCookApplicationRecord = {
 export type AdminCooksResponse = {
   cooks: AdminCookRecord[];
   verificationQueue: AdminCookApplicationRecord[];
+  total?: number;
+  page?: number;
+  limit?: number;
 };
 
 export type AdminDishRecord = {
