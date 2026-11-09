@@ -36,6 +36,12 @@ export class DishesController {
     @Query("weekend") weekend?: string,
     @Query("family") family?: string,
     @Query("availableOnly") availableOnly?: string,
+    @Query("sameDay") sameDay?: string,
+    @Query("priceMin") priceMin?: string,
+    @Query("priceMax") priceMax?: string,
+    @Query("sort") sort?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
   ) {
     return this.dishesService.findAllPublic({
       cuisine,
@@ -47,6 +53,12 @@ export class DishesController {
       weekend,
       family,
       availableOnly,
+      sameDay,
+      priceMin,
+      priceMax,
+      sort,
+      page,
+      limit,
     });
   }
 

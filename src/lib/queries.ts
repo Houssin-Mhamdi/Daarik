@@ -445,8 +445,32 @@ export function useDishesQuery(filters?: Record<string, string | undefined>) {
       const clean = Object.fromEntries(
         Object.entries(filters ?? {}).filter(([, v]) => Boolean(v)),
       ) as Record<string, string>;
-      const list = await darnaApi.dishes.list(clean);
+      const result = await darnaApi.dishes.list(clean);
+      const list = Array.isArray(result) ? result : (result?.items ?? []);
       return list.map(normalizeDish).filter((dish) => dish.id);
+    },
+  });
+}
+
+export function useDishesPaginatedQuery(
+  filters?: Record<string, string | undefined>,
+) {
+  return useQuery({
+    queryKey: [...queryKeys.dishes(filters), "paginated"],
+    queryFn: async () => {
+      const clean = Object.fromEntries(
+        Object.entries(filters ?? {}).filter(([, v]) => Boolean(v)),
+      ) as Record<string, string>;
+      const result = await darnaApi.dishes.list(clean);
+      const items = Array.isArray(result)
+        ? result
+        : (result?.items ?? []);
+      return {
+        items: items.map(normalizeDish).filter((dish) => dish.id),
+        total: Array.isArray(result) ? items.length : (result?.total ?? items.length),
+        page: Array.isArray(result) ? 1 : (result?.page ?? 1),
+        limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
+      };
     },
   });
 }
@@ -466,12 +490,39 @@ export function useCooksQuery(filters?: {
   city?: string;
   cuisine?: string;
   q?: string;
+  page?: string;
+  limit?: string;
+  sort?: string;
 }) {
   return useQuery({
     queryKey: queryKeys.cooks(filters),
     queryFn: async () => {
       const list = await darnaApi.cooks.list(filters);
-      return list.map(normalizeCook).filter((cook) => cook.id);
+      const items = Array.isArray(list) ? list : (list?.items ?? []);
+      return items.map(normalizeCook).filter((cook) => cook.id);
+    },
+  });
+}
+
+export function useCooksPaginatedQuery(filters?: {
+  city?: string;
+  cuisine?: string;
+  q?: string;
+  page?: string;
+  limit?: string;
+  sort?: string;
+}) {
+  return useQuery({
+    queryKey: [...queryKeys.cooks(filters), "paginated"],
+    queryFn: async () => {
+      const result = await darnaApi.cooks.list(filters);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return {
+        items: items.map(normalizeCook).filter((cook) => cook.id),
+        total: Array.isArray(result) ? items.length : (result?.total ?? items.length),
+        page: Array.isArray(result) ? 1 : (result?.page ?? 1),
+        limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
+      };
     },
   });
 }

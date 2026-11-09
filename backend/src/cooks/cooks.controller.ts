@@ -33,8 +33,11 @@ export class CooksController {
     @Query("city") city?: string,
     @Query("cuisine") cuisine?: string,
     @Query("q") q?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+    @Query("sort") sort?: string,
   ) {
-    return this.cooksService.findAllPublic({ city, cuisine, q });
+    return this.cooksService.findAllPublic({ city, cuisine, q, page, limit, sort });
   }
 
   @Public()

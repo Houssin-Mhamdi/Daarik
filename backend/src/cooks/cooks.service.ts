@@ -36,22 +36,47 @@ export class CooksService {
     city?: string;
     cuisine?: string;
     q?: string;
+    page?: string;
+    limit?: string;
+    sort?: string;
   }) {
-    const cooks = await this.prisma.cookProfile.findMany({
-      where: {
-        status: CookStatus.VERIFIED,
-        ...(params?.city
-          ? { city: { equals: params.city, mode: "insensitive" } }
-          : {}),
-        ...(params?.cuisine ? { cuisineIds: { has: params.cuisine } } : {}),
-        ...(params?.q
-          ? { name: { contains: params.q, mode: "insensitive" } }
-          : {}),
-      },
-      orderBy: [{ rating: "desc" }, { ordersCount: "desc" }],
-    });
+    const page = Math.max(1, Number(params?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(params?.limit) || 0));
+    const usePaging = limit > 0;
 
-    return cooks.map((c) => this.toPublicCook(c));
+    const where = {
+      status: CookStatus.VERIFIED,
+      ...(params?.city
+        ? { city: { equals: params.city, mode: "insensitive" } }
+        : {}),
+      ...(params?.cuisine ? { cuisineIds: { has: params.cuisine } } : {}),
+      ...(params?.q
+        ? { name: { contains: params.q, mode: "insensitive" } }
+        : {}),
+    };
+
+    const orderBy =
+      params?.sort === "rating"
+        ? [{ rating: "desc" as const }]
+        : params?.sort === "orders"
+          ? [{ ordersCount: "desc" as const }]
+          : [{ rating: "desc" as const }, { ordersCount: "desc" as const }];
+
+    const [total, cooks] = await this.prisma.$transaction([
+      this.prisma.cookProfile.count({ where: where as any }),
+      this.prisma.cookProfile.findMany({
+        where: where as any,
+        orderBy,
+        ...(usePaging ? { skip: (page - 1) * limit, take: limit } : {}),
+      }),
+    ]);
+
+    return {
+      items: cooks.map((c) => this.toPublicCook(c)),
+      total,
+      page: usePaging ? page : 1,
+      limit: usePaging ? limit : total,
+    };
   }
 
   /**

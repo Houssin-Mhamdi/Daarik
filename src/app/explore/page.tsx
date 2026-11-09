@@ -18,8 +18,9 @@ import { Sheet, EmptyState } from "@/components/ui/overlays";
 import { DishCardSkeleton } from "@/components/ui/skeleton";
 import { DishCard } from "@/components/app/dish-card";
 import { useApp } from "@/components/providers/app-provider";
+import { useDishesPaginatedQuery } from "@/lib/queries";
 import { Pagination } from "@/components/ui/pagination";
-import { usePagination } from "@/hooks/use-pagination";
+
 import { loc } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +57,7 @@ export default function ExplorePage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   const [draftCuisine, setDraftCuisine] = useState("all");
   const [draftPrice, setDraftPrice] = useState<PriceFilter>(null);
@@ -84,51 +86,41 @@ export default function ExplorePage() {
     };
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let result = dishes.filter((dish) => {
-      const cuisineMatch = cuisine === "all" || dish.cuisineId === cuisine;
-      const priceMatch =
-        !price ||
-        (price === "low" && dish.price < 10) ||
-        (price === "mid" && dish.price >= 10 && dish.price <= 15) ||
-        (price === "high" && dish.price > 15);
-      const availabilityMatch =
-        !availability ||
-        (availability === "weekend" &&
-          (dish.weekend || dish.pickup.includes("sat-31"))) ||
-        (availability === "today" && dish.pickup.includes("fri-30"));
-      const dietMatch = diet.every((item) => dish.dietary.includes(item));
-      const queryMatch =
-        !q ||
-        loc(dish.name, lang).toLowerCase().includes(q) ||
-        loc(dish.desc, lang).toLowerCase().includes(q) ||
-        loc(
-          cuisines.find((item) => item.id === dish.cuisineId)?.label ?? "",
-          lang,
-        )
-          .toLowerCase()
-          .includes(q);
-      return (
-        cuisineMatch &&
-        priceMatch &&
-        availabilityMatch &&
-        dietMatch &&
-        queryMatch
-      );
-    });
+  // Reset to first page whenever filters change.
+  useEffect(() => {
+    setPage(1);
+  }, [query, cuisine, price, availability, diet, sort]);
 
-    result = [...result].sort((a, b) => {
-      if (sort === "priceLow") return a.price - b.price;
-      if (sort === "priceHigh") return b.price - a.price;
-      if (sort === "rating") return b.rating - a.rating;
-      if (sort === "nearest") return a.cookId.localeCompare(b.cookId);
-      return Number(b.featured ?? false) - Number(a.featured ?? false);
-    });
-    return result;
-  }, [dishes, cuisines, query, cuisine, price, availability, diet, sort, lang]);
+  const params = useMemo(() => {
+    const p: Record<string, string> = { page: String(page), limit: "12" };
+    if (query.trim()) p.q = query.trim();
+    if (cuisine !== "all") p.cuisine = cuisine;
+    if (diet.length) p.dietary = diet[0];
+    if (availability === "weekend") p.weekend = "true";
+    if (availability === "today") p.sameDay = "true";
+    if (price === "low") {
+      p.priceMax = "9.99";
+    } else if (price === "mid") {
+      p.priceMin = "10";
+      p.priceMax = "15";
+    } else if (price === "high") {
+      p.priceMin = "15.01";
+    }
+    if (sort === "priceLow") p.sort = "priceLow";
+    else if (sort === "priceHigh") p.sort = "priceHigh";
+    else if (sort === "rating") p.sort = "rating";
+    return p;
+  }, [page, query, cuisine, price, availability, diet, sort]);
 
-  const dishPagination = usePagination(filtered, 12);
+  const paginated = useDishesPaginatedQuery(params);
+  const filtered = paginated.data?.items ?? [];
+  const total = paginated.data?.total ?? 0;
+  const isLoading = paginated.isLoading;
+  const totalPages = Math.max(1, Math.ceil(total / 12));
+
+  useEffect(() => {
+    setLoading(isLoading);
+  }, [isLoading]);
 
   const activeFilters =
     (cuisine !== "all" ? 1 : 0) +
@@ -273,7 +265,7 @@ export default function ExplorePage() {
 
         <div className="mt-4 flex items-center justify-between">
           <p className="text-[13.5px] font-medium text-charcoal">
-            {t("resultsFound", { count: filtered.length })}
+            {t("resultsFound", { count: total })}
           </p>
           <div className="hidden items-center gap-2 md:flex">
             {activeFilters > 0 ? (
@@ -306,17 +298,13 @@ export default function ExplorePage() {
             ? Array.from({ length: 6 }).map((_, index) => (
                 <DishCardSkeleton key={index} />
               ))
-            : dishPagination.pageItems.map((dish) => (
+            : filtered.map((dish) => (
                 <DishCard dish={dish} key={dish.id} />
               ))}
         </div>
 
         {!loading && filtered.length > 0 ? (
-          <Pagination
-            page={dishPagination.page}
-            totalPages={dishPagination.totalPages}
-            onPage={dishPagination.setPage}
-          />
+          <Pagination page={page} totalPages={totalPages} onPage={setPage} />
         ) : null}
 
         {!loading && filtered.length === 0 ? (

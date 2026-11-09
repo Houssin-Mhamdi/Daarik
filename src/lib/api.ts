@@ -318,14 +318,26 @@ export const darnaApi = {
     me: () => apiRequest<AuthUserRecord>("/auth/me"),
   },
   cooks: {
-    list: (params?: { city?: string; cuisine?: string; q?: string }) => {
+    list: (params?: {
+      city?: string;
+      cuisine?: string;
+      q?: string;
+      page?: string;
+      limit?: string;
+      sort?: string;
+    }) => {
       const qs = new URLSearchParams(
         Object.entries(params ?? {}).filter(([, v]) => Boolean(v)) as [
           string,
           string,
         ][],
       ).toString();
-      return apiRequest<unknown[]>(`/cooks${qs ? `?${qs}` : ""}`);
+      return apiRequest<{
+        items: unknown[];
+        total: number;
+        page: number;
+        limit: number;
+      }>(`/cooks${qs ? `?${qs}` : ""}`);
     },
     get: (id: string) => apiRequest<unknown>(`/cooks/${id}`),
     apply: (body: Record<string, unknown>) =>
@@ -384,7 +396,12 @@ export const darnaApi = {
   dishes: {
     list: (params?: Record<string, string>) => {
       const qs = new URLSearchParams(params ?? {}).toString();
-      return apiRequest<unknown[]>(`/dishes${qs ? `?${qs}` : ""}`);
+      return apiRequest<{
+        items: unknown[];
+        total: number;
+        page: number;
+        limit: number;
+      }>(`/dishes${qs ? `?${qs}` : ""}`);
     },
     uploadImage: async (file: File) => darnaApi.uploads.uploadImage(file, "dishes"),
     get: (id: string) => apiRequest<unknown>(`/dishes/${id}`),

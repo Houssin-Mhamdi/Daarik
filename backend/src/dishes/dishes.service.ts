@@ -22,54 +22,87 @@ export class DishesService {
     weekend?: string;
     family?: string;
     availableOnly?: string;
+    sameDay?: string;
+    priceMin?: string;
+    priceMax?: string;
+    sort?: string;
+    page?: string;
+    limit?: string;
   }) {
     const q = query.q?.trim().toLowerCase();
-    const dishes = await this.prisma.dish.findMany({
-      where: {
-        status: DishStatus.LIVE,
-        ...(q
-          ? {
-              OR: [
-                { searchText: { contains: q } },
-                { cook: { name: { contains: q, mode: "insensitive" } } },
-              ],
-            }
-          : {}),
-        ...(query.cuisine ? { cuisineId: query.cuisine } : {}),
-        ...(query.dietary ? { dietary: { has: query.dietary } } : {}),
-        ...(query.pickup ? { pickup: { has: query.pickup } } : {}),
-        ...(query.featured === "true" ? { featured: true } : {}),
-        ...(query.weekend === "true" ? { weekend: true } : {}),
-        ...(query.family === "true" ? { family: true } : {}),
-        ...(query.availableOnly === "true" ? { portionsLeft: { gt: 0 } } : {}),
-        ...(query.cookId
-          ? {
-              cook: {
-                OR: [{ id: query.cookId }, { slug: query.cookId }],
-              },
-            }
-          : {}),
-      },
-      include: {
-        cook: {
-          select: {
-            id: true,
-            slug: true,
-            name: true,
-            avatar: true,
-            city: true,
-            area: true,
-            pickupArea: true,
-            rating: true,
-            reviewCount: true,
-            verified: true,
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 0));
+    const usePaging = limit > 0;
+
+    const where = {
+      status: DishStatus.LIVE,
+      ...(q
+        ? {
+            OR: [
+              { searchText: { contains: q } },
+              { cook: { name: { contains: q, mode: "insensitive" } } },
+            ],
+          }
+        : {}),
+      ...(query.cuisine ? { cuisineId: query.cuisine } : {}),
+      ...(query.dietary ? { dietary: { has: query.dietary } } : {}),
+      ...(query.pickup ? { pickup: { has: query.pickup } } : {}),
+      ...(query.featured === "true" ? { featured: true } : {}),
+      ...(query.weekend === "true" ? { weekend: true } : {}),
+      ...(query.family === "true" ? { family: true } : {}),
+      ...(query.availableOnly === "true" ? { portionsLeft: { gt: 0 } } : {}),
+      ...(query.sameDay === "true" ? { sameDayPickup: true } : {}),
+      ...(query.priceMin ? { price: { gte: Number(query.priceMin) } } : {}),
+      ...(query.priceMax ? { price: { lte: Number(query.priceMax) } } : {}),
+      ...(query.cookId
+        ? {
+            cook: {
+              OR: [{ id: query.cookId }, { slug: query.cookId }],
+            },
+          }
+        : {}),
+    };
+
+    const orderBy =
+      query.sort === "priceLow"
+        ? [{ price: "asc" as const }]
+        : query.sort === "priceHigh"
+          ? [{ price: "desc" as const }]
+          : query.sort === "rating"
+            ? [{ rating: "desc" as const }]
+            : [{ featured: "desc" as const }, { rating: "desc" as const }];
+
+    const [total, dishes] = await this.prisma.$transaction([
+      this.prisma.dish.count({ where: where as any }),
+      this.prisma.dish.findMany({
+        where: where as any,
+        include: {
+          cook: {
+            select: {
+              id: true,
+              slug: true,
+              name: true,
+              avatar: true,
+              city: true,
+              area: true,
+              pickupArea: true,
+              rating: true,
+              reviewCount: true,
+              verified: true,
+            },
           },
         },
-      },
-      orderBy: [{ featured: "desc" }, { rating: "desc" }],
-    });
+        orderBy,
+        ...(usePaging ? { skip: (page - 1) * limit, take: limit } : {}),
+      }),
+    ]);
 
-    return dishes.map((d) => this.mapPublicDish(d));
+    return {
+      items: dishes.map((d) => this.mapPublicDish(d)),
+      total,
+      page: usePaging ? page : 1,
+      limit: usePaging ? limit : total,
+    };
   }
 
   async findOnePublic(idOrSlug: string) {

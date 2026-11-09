@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Search, Soup } from "lucide-react";
@@ -12,40 +12,27 @@ import { EmptyState } from "@/components/ui/overlays";
 
 import { Pagination } from "@/components/ui/pagination";
 import { useApp } from "@/components/providers/app-provider";
-import { usePagination } from "@/hooks/use-pagination";
+import {
+  useDishesPaginatedQuery,
+  useCooksPaginatedQuery,
+} from "@/lib/queries";
 import { loc } from "@/lib/data";
 
 
 function SearchResults() {
-  const { t, lang, dishes, cooks } = useApp();
+  const { t, lang } = useApp();
   const params = useSearchParams();
   const q = (params.get("q") || "").trim();
-  const lower = q.toLowerCase();
 
-  const matchingDishes = useMemo(() => {
-    if (q.length < 3) return [];
-    return dishes.filter((dish) => {
-      return (
-        loc(dish.name, lang).toLowerCase().includes(lower) ||
-        loc(dish.desc, lang).toLowerCase().includes(lower) ||
-        (cooks.find((c) => c.id === dish.cookId)?.name ?? "")
-          .toLowerCase()
-          .includes(lower)
-      );
-    });
-  }, [dishes, cooks, lang, lower, q]);
+  const [dishPage, setDishPage] = useState(1);
+  const [cookPage, setCookPage] = useState(1);
 
-  const matchingCooks = useMemo(() => {
-    if (q.length < 3) return [];
-    return cooks.filter(
-      (cook) =>
-        cook.name.toLowerCase().includes(lower) ||
-        cook.city.toLowerCase().includes(lower),
-    );
-  }, [cooks, lower, q]);
-
-  const dishPag = usePagination(matchingDishes, 12);
-  const cookPag = usePagination(matchingCooks, 8);
+  const dishQuery = useDishesPaginatedQuery(
+    q.length >= 3 ? { q, page: String(dishPage), limit: "12" } : undefined,
+  );
+  const cookQuery = useCooksPaginatedQuery(
+    q.length >= 3 ? { q, page: String(cookPage), limit: "8" } : undefined,
+  );
 
   if (q.length < 3) {
     return (
@@ -58,6 +45,13 @@ function SearchResults() {
       </div>
     );
   }
+
+  const dishes = dishQuery.data?.items ?? [];
+  const dishTotal = dishQuery.data?.total ?? 0;
+  const dishTotalPages = Math.max(1, Math.ceil(dishTotal / 12));
+  const cooks = cookQuery.data?.items ?? [];
+  const cookTotal = cookQuery.data?.total ?? 0;
+  const cookTotalPages = Math.max(1, Math.ceil(cookTotal / 8));
 
   return (
     <div className="mx-auto w-full max-w-[1240px] px-4 py-6 md:px-8 md:py-10">
@@ -81,10 +75,19 @@ function SearchResults() {
       <section className="mt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-bold text-charcoal">
-            {t("searchDishesTitle")} ({matchingDishes.length})
+            {t("searchDishesTitle")} ({dishTotal})
           </h2>
         </div>
-        {matchingDishes.length === 0 ? (
+        {dishQuery.isLoading ? (
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="skeleton aspect-[4/3] w-full rounded-3xl"
+              />
+            ))}
+          </div>
+        ) : dishes.length === 0 ? (
           <EmptyState
             className="mt-4"
             icon={<Soup className="size-7" />}
@@ -94,14 +97,14 @@ function SearchResults() {
         ) : (
           <>
             <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
-              {dishPag.pageItems.map((dish) => (
+              {dishes.map((dish) => (
                 <DishCard dish={dish} key={dish.id} />
               ))}
             </div>
             <Pagination
-              page={dishPag.page}
-              totalPages={dishPag.totalPages}
-              onPage={dishPag.setPage}
+              page={dishPage}
+              totalPages={dishTotalPages}
+              onPage={setDishPage}
             />
           </>
         )}
@@ -109,19 +112,19 @@ function SearchResults() {
 
       <section className="mt-8">
         <h2 className="text-[15px] font-bold text-charcoal">
-          {t("searchCooksTitle")} ({matchingCooks.length})
+          {t("searchCooksTitle")} ({cookTotal})
         </h2>
-        {matchingCooks.length === 0 ? null : (
+        {cookQuery.isLoading ? null : cooks.length === 0 ? null : (
           <>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-              {cookPag.pageItems.map((cook) => (
+              {cooks.map((cook) => (
                 <CookCard cook={cook} key={cook.id} />
               ))}
             </div>
             <Pagination
-              page={cookPag.page}
-              totalPages={cookPag.totalPages}
-              onPage={cookPag.setPage}
+              page={cookPage}
+              totalPages={cookTotalPages}
+              onPage={setCookPage}
             />
           </>
         )}
