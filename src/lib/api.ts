@@ -455,14 +455,41 @@ export const darnaApi = {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    myOrders: () => apiRequest<unknown[]>("/orders"),
+    myOrders: (params?: { tab?: string; page?: string; limit?: string }) => {
+      const qs = new URLSearchParams(
+        Object.entries(params ?? {}).filter(([, v]) => Boolean(v)) as [
+          string,
+          string,
+        ][],
+      ).toString();
+      return apiRequest<{
+        items: unknown[];
+        total: number;
+        page: number;
+        limit: number;
+      }>(`/orders${qs ? `?${qs}` : ""}`);
+    },
     get: (id: string) => apiRequest<unknown>(`/orders/${id}`),
     cancel: (id: string) =>
       apiRequest<unknown>(`/orders/${id}/cancel`, { method: "POST" }),
-    cookOrders: (status?: string) =>
-      apiRequest<unknown[]>(
-        `/orders/cook/me${status ? `?status=${status}` : ""}`,
-      ),
+    cookOrders: (params?: {
+      status?: string;
+      page?: string;
+      limit?: string;
+    }) => {
+      const qs = new URLSearchParams(
+        Object.entries(params ?? {}).filter(([, v]) => Boolean(v)) as [
+          string,
+          string,
+        ][],
+      ).toString();
+      return apiRequest<{
+        items: unknown[];
+        total: number;
+        page: number;
+        limit: number;
+      }>(`/orders/cook/me${qs ? `?${qs}` : ""}`);
+    },
     updateStatus: (id: string, status: string) =>
       apiRequest<unknown>(`/orders/cook/${id}/status`, {
         method: "PATCH",
@@ -552,28 +579,49 @@ export const darnaApi = {
       apiRequest<AdminOverviewResponse>(
         `/admin/overview${range ? `?range=${range}` : ""}`,
       ),
-    orders: (params?: { status?: string; q?: string }) => {
+    orders: (params?: {
+      status?: string;
+      q?: string;
+      page?: string;
+      limit?: string;
+    }) => {
       const qs = new URLSearchParams(
         Object.entries(params ?? {}).filter(([, v]) => Boolean(v)) as [
           string,
           string,
         ][],
       ).toString();
-      return apiRequest<unknown[]>(`/admin/orders${qs ? `?${qs}` : ""}`);
+      return apiRequest<{
+        items: unknown[];
+        total: number;
+        page: number;
+        limit: number;
+      }>(`/admin/orders${qs ? `?${qs}` : ""}`);
     },
     updateOrderStatus: (id: string, status: string) =>
       apiRequest<unknown>(`/admin/orders/${encodeURIComponent(id)}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
-    cooks: (params?: { status?: string; q?: string }) => {
+    cooks: (params?: {
+      status?: string;
+      q?: string;
+      page?: string;
+      limit?: string;
+    }) => {
       const qs = new URLSearchParams(
         Object.entries(params ?? {}).filter(([, v]) => Boolean(v)) as [
           string,
           string,
         ][],
       ).toString();
-      return apiRequest<unknown>(`/admin/cooks${qs ? `?${qs}` : ""}`);
+      return apiRequest<{
+        cooks: unknown[];
+        verificationQueue: unknown[];
+        total: number;
+        page: number;
+        limit: number;
+      }>(`/admin/cooks${qs ? `?${qs}` : ""}`);
     },
     cookWorkspace: (id: string) =>
       apiRequest<unknown>(`/admin/cooks/${encodeURIComponent(id)}`),
@@ -602,14 +650,24 @@ export const darnaApi = {
         `/admin/verifications/${encodeURIComponent(id)}/request-changes`,
         { method: "POST", body: JSON.stringify({ notes }) },
       ),
-    dishes: (params?: { filter?: string; q?: string }) => {
+    dishes: (params?: {
+      filter?: string;
+      q?: string;
+      page?: string;
+      limit?: string;
+    }) => {
       const qs = new URLSearchParams(
         Object.entries(params ?? {}).filter(([, v]) => Boolean(v)) as [
           string,
           string,
         ][],
       ).toString();
-      return apiRequest<unknown[]>(`/admin/dishes${qs ? `?${qs}` : ""}`);
+      return apiRequest<{
+        items: unknown[];
+        total: number;
+        page: number;
+        limit: number;
+      }>(`/admin/dishes${qs ? `?${qs}` : ""}`);
     },
     moderateDish: (id: string, status: string) =>
       apiRequest<unknown>(`/admin/dishes/${encodeURIComponent(id)}/status`, {
@@ -706,10 +764,24 @@ export const darnaApi = {
         `/admin/cooks/${encodeURIComponent(id)}/sync-stripe`,
         { method: "POST" },
       ),
-    disputes: (status?: string) =>
-      apiRequest<unknown[]>(
-        `/admin/disputes${status ? `?status=${encodeURIComponent(status)}` : ""}`,
-      ),
+    disputes: (params?: {
+      status?: string;
+      page?: string;
+      limit?: string;
+    }) => {
+      const qs = new URLSearchParams(
+        Object.entries(params ?? {}).filter(([, v]) => Boolean(v)) as [
+          string,
+          string,
+        ][],
+      ).toString();
+      return apiRequest<{
+        items: unknown[];
+        total: number;
+        page: number;
+        limit: number;
+      }>(`/admin/disputes${qs ? `?${qs}` : ""}`);
+    },
     resolveDispute: (
       id: string,
       body: { refundAmount?: number; resolutionNote?: string; status?: string },

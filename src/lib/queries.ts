@@ -666,13 +666,19 @@ export function useMyCookApplicationQuery(enabled = true, userEmail?: string) {
 // ---------------------------------------------------------------------------
 // ORDERS & REVIEWS QUERIES & MUTATIONS
 // ---------------------------------------------------------------------------
-export function useMyOrdersQuery() {
+export function useMyOrdersQuery(params?: {
+  tab?: string;
+  page?: string;
+  limit?: string;
+}) {
   return useQuery({
-    queryKey: queryKeys.orders,
+    queryKey: [...queryKeys.orders, params ?? {}],
     queryFn: async () => {
       const token = getAccessToken();
       if (!token) return [] as CustomerOrder[];
-      return (await darnaApi.orders.myOrders()) as CustomerOrder[];
+      const result = await darnaApi.orders.myOrders(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return items as CustomerOrder[];
     },
   });
 }
@@ -787,13 +793,19 @@ export function useUpdateCookProfileMutation() {
   });
 }
 
-export function useCookOrdersQuery(status?: string) {
+export function useCookOrdersQuery(params?: {
+  status?: string;
+  page?: string;
+  limit?: string;
+}) {
   return useQuery({
-    queryKey: queryKeys.cookOrders(status),
+    queryKey: queryKeys.cookOrders(params?.status),
     queryFn: async () => {
       const token = getAccessToken();
       if (!token) return [] as CookOrder[];
-      return (await darnaApi.orders.cookOrders(status)) as CookOrder[];
+      const result = await darnaApi.orders.cookOrders(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return items as CookOrder[];
     },
   });
 }
@@ -858,12 +870,19 @@ export function useAdminOverviewQuery(range: "30d" | "90d" = "30d") {
   });
 }
 
-export function useAdminOrdersQuery(params?: { status?: string; q?: string }) {
+export function useAdminOrdersQuery(params?: {
+  status?: string;
+  q?: string;
+  page?: string;
+  limit?: string;
+}) {
   return useQuery({
     queryKey: queryKeys.adminOrders(params),
     queryFn: async () => {
       if (!getAccessToken()) return [] as AdminOrderRecord[];
-      return (await darnaApi.admin.orders(params)) as AdminOrderRecord[];
+      const result = await darnaApi.admin.orders(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return items as AdminOrderRecord[];
     },
   });
 }
@@ -881,7 +900,12 @@ export function useAdminUpdateOrderStatusMutation() {
   });
 }
 
-export function useAdminCooksQuery(params?: { status?: string; q?: string }) {
+export function useAdminCooksQuery(params?: {
+  status?: string;
+  q?: string;
+  page?: string;
+  limit?: string;
+}) {
   return useQuery({
     queryKey: queryKeys.adminCooks(params),
     queryFn: async () => {
@@ -891,7 +915,8 @@ export function useAdminCooksQuery(params?: { status?: string; q?: string }) {
           verificationQueue: [],
         } satisfies AdminCooksResponse;
       }
-      return (await darnaApi.admin.cooks(params)) as AdminCooksResponse;
+      const result = (await darnaApi.admin.cooks(params)) as AdminCooksResponse;
+      return result;
     },
   });
 }
@@ -1000,12 +1025,19 @@ export function useAdminUpdateCookAvailabilityMutation(cookId: string) {
   });
 }
 
-export function useAdminDishesQuery(params?: { filter?: string; q?: string }) {
+export function useAdminDishesQuery(params?: {
+  filter?: string;
+  q?: string;
+  page?: string;
+  limit?: string;
+}) {
   return useQuery({
     queryKey: queryKeys.adminDishes(params),
     queryFn: async () => {
       if (!getAccessToken()) return [] as AdminDishRecord[];
-      return (await darnaApi.admin.dishes(params)) as AdminDishRecord[];
+      const result = await darnaApi.admin.dishes(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return items as AdminDishRecord[];
     },
   });
 }
@@ -1066,13 +1098,19 @@ export function useAdminSettingsQuery() {
   });
 }
 
-export function useAdminDisputesQuery(status?: string) {
+export function useAdminDisputesQuery(params?: {
+  status?: string;
+  page?: string;
+  limit?: string;
+}) {
   return useQuery({
-    queryKey: queryKeys.adminDisputes(status),
+    queryKey: queryKeys.adminDisputes(params?.status),
     queryFn: async () => {
       const token = getAccessToken();
       if (!token) return [] as AdminDisputeRecord[];
-      return (await darnaApi.admin.disputes(status)) as AdminDisputeRecord[];
+      const result = await darnaApi.admin.disputes(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return items as AdminDisputeRecord[];
     },
   });
 }

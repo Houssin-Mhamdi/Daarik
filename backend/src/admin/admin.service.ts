@@ -232,34 +232,49 @@ export class AdminService {
   // Orders
   // ---------------------------------------------------------------------------
 
-  async getOrders(query: { status?: string; q?: string }) {
-    const orders = await this.prisma.order.findMany({
-      where: {
-        ...(query.status && query.status !== "all"
-          ? { status: query.status.toUpperCase() as OrderStatus }
-          : {}),
-        ...(query.q
-          ? {
-              OR: [
-                { code: { contains: query.q, mode: "insensitive" } },
-                { customerName: { contains: query.q, mode: "insensitive" } },
-                {
-                  cook: { name: { contains: query.q, mode: "insensitive" } },
-                },
-              ],
-            }
-          : {}),
-      },
-      include: {
-        cook: true,
-        items: { include: { dish: true } },
-        transfers: true,
-        refunds: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+  async getOrders(query: {
+    status?: string;
+    q?: string;
+    page?: string;
+    limit?: string;
+  }) {
+    const p = Math.max(1, Number(query.page) || 1);
+    const l = Math.min(100, Math.max(1, Number(query.limit) || 0));
+    const usePaging = l > 0;
 
-    return orders.map((o) => ({
+    const where = {
+      ...(query.status && query.status !== "all"
+        ? { status: query.status.toUpperCase() as OrderStatus }
+        : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { code: { contains: query.q, mode: "insensitive" } },
+              { customerName: { contains: query.q, mode: "insensitive" } },
+              {
+                cook: { name: { contains: query.q, mode: "insensitive" } },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [total, orders] = await this.prisma.$transaction([
+      this.prisma.order.count({ where: where as any }),
+      this.prisma.order.findMany({
+        where: where as any,
+        include: {
+          cook: true,
+          items: { include: { dish: true } },
+          transfers: true,
+          refunds: true,
+        },
+        orderBy: { createdAt: "desc" },
+        ...(usePaging ? { skip: (p - 1) * l, take: l } : {}),
+      }),
+    ]);
+
+    const items = orders.map((o) => ({
       id: o.id,
       code: o.code,
       customer: o.customerName,
@@ -294,6 +309,13 @@ export class AdminService {
       transferEligibleAt: o.transferEligibleAt,
       createdAt: o.createdAt,
     }));
+
+    return {
+      items,
+      total,
+      page: usePaging ? p : 1,
+      limit: usePaging ? l : total,
+    };
   }
 
   async updateOrderStatus(
@@ -357,26 +379,39 @@ export class AdminService {
   // Cooks
   // ---------------------------------------------------------------------------
 
-  async getCooks(query: { status?: string; q?: string }) {
-    const [cooks, applications] = await Promise.all([
+  async getCooks(query: {
+    status?: string;
+    q?: string;
+    page?: string;
+    limit?: string;
+  }) {
+    const p = Math.max(1, Number(query.page) || 1);
+    const l = Math.min(100, Math.max(1, Number(query.limit) || 0));
+    const usePaging = l > 0;
+
+    const where = {
+      ...(query.status && query.status !== "all"
+        ? { status: query.status.toUpperCase() as CookStatus }
+        : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { name: { contains: query.q, mode: "insensitive" } },
+              { city: { contains: query.q, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+
+    const [total, cooks, applications] = await Promise.all([
+      this.prisma.cookProfile.count({ where: where as any }),
       this.prisma.cookProfile.findMany({
-        where: {
-          ...(query.status && query.status !== "all"
-            ? { status: query.status.toUpperCase() as CookStatus }
-            : {}),
-          ...(query.q
-            ? {
-                OR: [
-                  { name: { contains: query.q, mode: "insensitive" } },
-                  { city: { contains: query.q, mode: "insensitive" } },
-                ],
-              }
-            : {}),
-        },
+        where: where as any,
         include: {
           _count: { select: { dishes: true, orders: true } },
         },
         orderBy: { ordersCount: "desc" },
+        ...(usePaging ? { skip: (p - 1) * l, take: l } : {}),
       }),
       this.prisma.cookApplication.findMany({
         where: { status: ApplicationStatus.PENDING },
@@ -387,6 +422,9 @@ export class AdminService {
     return {
       cooks: cooks.map((c) => this.toAdminCook(c)),
       verificationQueue: applications,
+      total,
+      page: usePaging ? p : 1,
+      limit: usePaging ? l : total,
     };
   }
 
@@ -618,20 +656,43 @@ export class AdminService {
   // Dishes
   // ---------------------------------------------------------------------------
 
-  async getDishes(query: { filter?: string; q?: string }) {
-    const dishes = await this.prisma.dish.findMany({
-      where: {
-        ...(query.filter === "reported"
-          ? { reported: true }
-          : query.filter && query.filter !== "all"
-            ? { status: query.filter.toUpperCase() as DishStatus }
-            : {}),
-      },
-      include: { cook: true },
-      orderBy: { updatedAt: "desc" },
-    });
+  async getDishes(query: {
+    filter?: string;
+    q?: string;
+    page?: string;
+    limit?: string;
+  }) {
+    const p = Math.max(1, Number(query.page) || 1);
+    const l = Math.min(100, Math.max(1, Number(query.limit) || 0));
+    const usePaging = l > 0;
 
-    return dishes.map((d) => ({
+    const where = {
+      ...(query.filter === "reported"
+        ? { reported: true }
+        : query.filter && query.filter !== "all"
+          ? { status: query.filter.toUpperCase() as DishStatus }
+          : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { name: { path: ["nl"], string_contains: query.q } },
+              { searchText: { contains: query.q } },
+            ],
+          }
+        : {}),
+    };
+
+    const [total, dishes] = await this.prisma.$transaction([
+      this.prisma.dish.count({ where: where as any }),
+      this.prisma.dish.findMany({
+        where: where as any,
+        include: { cook: true },
+        orderBy: { updatedAt: "desc" },
+        ...(usePaging ? { skip: (p - 1) * l, take: l } : {}),
+      }),
+    ]);
+
+    const items = dishes.map((d) => ({
       id: d.slug || d.id,
       dbId: d.id,
       name: d.name,
@@ -648,6 +709,13 @@ export class AdminService {
       reported: d.reported,
       reportReason: d.reportReason,
     }));
+
+    return {
+      items,
+      total,
+      page: usePaging ? p : 1,
+      limit: usePaging ? l : total,
+    };
   }
 
   async moderateDish(idOrSlug: string, dto: ModerateDishDto) {
@@ -754,17 +822,27 @@ export class AdminService {
   // Disputes
   // ---------------------------------------------------------------------------
 
-  async getDisputes(status?: string) {
-    const disputes = await this.prisma.dispute.findMany({
-      where: {
-        ...(status && status !== "all"
-          ? { status: status.toUpperCase() as DisputeStatus }
-          : {}),
-      },
-      orderBy: { openedAt: "desc" },
-    });
+  async getDisputes(status?: string, page?: string, limit?: string) {
+    const p = Math.max(1, Number(page) || 1);
+    const l = Math.min(100, Math.max(1, Number(limit) || 0));
+    const usePaging = l > 0;
 
-    return disputes.map((d) => ({
+    const where = {
+      ...(status && status !== "all"
+        ? { status: status.toUpperCase() as DisputeStatus }
+        : {}),
+    };
+
+    const [total, disputes] = await this.prisma.$transaction([
+      this.prisma.dispute.count({ where: where as any }),
+      this.prisma.dispute.findMany({
+        where: where as any,
+        orderBy: { openedAt: "desc" },
+        ...(usePaging ? { skip: (p - 1) * l, take: l } : {}),
+      }),
+    ]);
+
+    const items = disputes.map((d) => ({
       id: d.code,
       dbId: d.id,
       code: d.orderCode,
@@ -786,6 +864,13 @@ export class AdminService {
       }),
       resolvedAt: d.resolvedAt,
     }));
+
+    return {
+      items,
+      total,
+      page: usePaging ? p : 1,
+      limit: usePaging ? l : total,
+    };
   }
 
   async resolveDispute(idOrCode: string, dto: ResolveDisputeDto) {

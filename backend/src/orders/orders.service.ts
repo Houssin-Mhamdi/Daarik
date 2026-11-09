@@ -182,23 +182,55 @@ export class OrdersService {
     return this.formatCustomerOrder(order, false);
   }
 
-  async getMyOrders(userId: string) {
-    const orders = await this.prisma.order.findMany({
-      where: { customerId: userId },
-      include: {
-        cook: true,
-        items: { include: { dish: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+  async getMyOrders(
+    userId: string,
+    params?: { page?: string; limit?: string; tab?: string },
+  ) {
+    const page = Math.max(1, Number(params?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(params?.limit) || 0));
+    const usePaging = limit > 0;
 
-    return orders.map((o) =>
+    const statusFilter =
+      params?.tab === "completed"
+        ? { status: OrderStatus.COMPLETED }
+        : params?.tab === "cancelled"
+          ? { status: OrderStatus.CANCELLED }
+          : params?.tab === "upcoming"
+            ? {
+                status: {
+                  in: [
+                    OrderStatus.CONFIRMED,
+                    OrderStatus.PREPARING,
+                    OrderStatus.READY,
+                  ],
+                },
+              }
+            : {};
+
+    const where = { customerId: userId, ...statusFilter };
+
+    const [total, orders] = await this.prisma.$transaction([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({
+        where,
+        include: {
+          cook: true,
+          items: { include: { dish: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        ...(usePaging ? { skip: (page - 1) * limit, take: limit } : {}),
+      }),
+    ]);
+
+    const items = orders.map((o) =>
       this.formatCustomerOrder(
         o,
         PAID_STATUSES.includes(o.paymentStatus) &&
           o.status !== OrderStatus.CANCELLED,
       ),
     );
+
+    return { items, total, page: usePaging ? page : 1, limit: usePaging ? limit : total };
   }
 
   async getOrderById(userId: string, idOrCode: string) {
@@ -273,22 +305,37 @@ export class OrdersService {
     return this.formatCustomerOrder(updated, false);
   }
 
-  async getCookOrders(userId: string, statusFilter?: string) {
+  async getCookOrders(
+    userId: string,
+    statusFilter?: string,
+    page?: string,
+    limit?: string,
+  ) {
     const cook = await this.resolveCook(userId);
-    const orders = await this.prisma.order.findMany({
-      where: {
-        cookId: cook.id,
-        ...(statusFilter && statusFilter !== "all"
-          ? { status: statusFilter.toUpperCase() as OrderStatus }
-          : {}),
-      },
-      include: {
-        items: { include: { dish: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const p = Math.max(1, Number(page) || 1);
+    const l = Math.min(100, Math.max(1, Number(limit) || 0));
+    const usePaging = l > 0;
 
-    return orders.map((o) => ({
+    const where = {
+      cookId: cook.id,
+      ...(statusFilter && statusFilter !== "all"
+        ? { status: statusFilter.toUpperCase() as OrderStatus }
+        : {}),
+    };
+
+    const [total, orders] = await this.prisma.$transaction([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({
+        where,
+        include: {
+          items: { include: { dish: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        ...(usePaging ? { skip: (p - 1) * l, take: l } : {}),
+      }),
+    ]);
+
+    const items = orders.map((o) => ({
       id: o.id,
       code: o.code,
       customer: o.customerName,
@@ -317,6 +364,13 @@ export class OrdersService {
       placed: { nl: "Zojuist", en: "Just now", ar: "الآن" },
       createdAt: o.createdAt,
     }));
+
+    return {
+      items,
+      total,
+      page: usePaging ? p : 1,
+      limit: usePaging ? l : total,
+    };
   }
 
   async updateCookOrderStatus(

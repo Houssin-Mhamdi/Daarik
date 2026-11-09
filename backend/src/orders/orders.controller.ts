@@ -32,16 +32,23 @@ export class OrdersController {
   }
 
   @Get()
-  getMyOrders(@CurrentUser() user: JwtPayloadUser) {
-    return this.ordersService.getMyOrders(user.sub);
+  getMyOrders(
+    @CurrentUser() user: JwtPayloadUser,
+    @Query("tab") tab?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.ordersService.getMyOrders(user.sub, { tab, page, limit });
   }
 
   @Get("cook/me")
   getCookOrders(
     @CurrentUser() user: JwtPayloadUser,
     @Query("status") status?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
   ) {
-    return this.ordersService.getCookOrders(user.sub, status);
+    return this.ordersService.getCookOrders(user.sub, status, page, limit);
   }
 
   @Patch("cook/:id/status")

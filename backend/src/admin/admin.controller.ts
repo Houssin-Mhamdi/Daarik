@@ -42,8 +42,13 @@ export class AdminController {
   }
 
   @Get("orders")
-  getOrders(@Query("status") status?: string, @Query("q") q?: string) {
-    return this.adminService.getOrders({ status, q });
+  getOrders(
+    @Query("status") status?: string,
+    @Query("q") q?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.adminService.getOrders({ status, q, page, limit });
   }
 
   @Patch("orders/:id/status")
@@ -69,8 +74,13 @@ export class AdminController {
   }
 
   @Get("cooks")
-  getCooks(@Query("status") status?: string, @Query("q") q?: string) {
-    return this.adminService.getCooks({ status, q });
+  getCooks(
+    @Query("status") status?: string,
+    @Query("q") q?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.adminService.getCooks({ status, q, page, limit });
   }
 
   @Get("cooks/:id")
@@ -132,8 +142,13 @@ export class AdminController {
   }
 
   @Get("dishes")
-  getDishes(@Query("filter") filter?: string, @Query("q") q?: string) {
-    return this.adminService.getDishes({ filter, q });
+  getDishes(
+    @Query("filter") filter?: string,
+    @Query("q") q?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.adminService.getDishes({ filter, q, page, limit });
   }
 
   @Patch("dishes/:id/status")
@@ -192,8 +207,12 @@ export class AdminController {
   }
 
   @Get("disputes")
-  getDisputes(@Query("status") status: string) {
-    return this.adminService.getDisputes(status);
+  getDisputes(
+    @Query("status") status: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.adminService.getDisputes(status, page, limit);
   }
 
   @Post("disputes/:id/resolve")
