@@ -47,7 +47,7 @@ const diets = [
 ] as const;
 
 export default function ExplorePage() {
-  const { t, lang, dishes, cuisines } = useApp();
+  const { t, lang, cuisines } = useApp();
   const [query, setQuery] = useState("");
   const [cuisine, setCuisine] = useState<string>("all");
   const [price, setPrice] = useState<PriceFilter>(null);
@@ -87,7 +87,8 @@ export default function ExplorePage() {
   }, []);
 
   // Reset to first page whenever filters change.
-  useEffect(() => {
+    useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [query, cuisine, price, availability, diet, sort]);
 
@@ -118,7 +119,8 @@ export default function ExplorePage() {
   const isLoading = paginated.isLoading;
   const totalPages = Math.max(1, Math.ceil(total / 12));
 
-  useEffect(() => {
+    useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(isLoading);
   }, [isLoading]);
 

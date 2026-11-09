@@ -77,11 +77,12 @@ export default function AdminOrdersPage() {
     page: String(page),
     limit: "15",
   });
-  const apiOrders = paginated?.items ?? [];
+  const apiOrders = useMemo(() => paginated?.items ?? [], [paginated]);
   const total = paginated?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / 15));
 
-  useEffect(() => {
+    useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [filter, query]);
   const updateOrderStatusMutation = useAdminUpdateOrderStatusMutation();

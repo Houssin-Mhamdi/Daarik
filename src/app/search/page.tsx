@@ -16,11 +16,11 @@ import {
   useDishesPaginatedQuery,
   useCooksPaginatedQuery,
 } from "@/lib/queries";
-import { loc } from "@/lib/data";
+
 
 
 function SearchResults() {
-  const { t, lang } = useApp();
+  const { t } = useApp();
   const params = useSearchParams();
   const q = (params.get("q") || "").trim();
 

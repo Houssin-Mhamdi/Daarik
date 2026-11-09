@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedTabs } from "@/components/ui/controls";
 import { Sheet } from "@/components/ui/overlays";
-import { Pagination } from "@/components/ui/pagination";
 import { useApp } from "@/components/providers/app-provider";
 import {
   AdminCard,
@@ -47,11 +46,10 @@ export default function AdminDisputesPage() {
     page: String(page),
     limit: "15",
   });
-  const disputes = paginated?.items ?? [];
-  const total = paginated?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / 15));
+  const disputes = useMemo(() => paginated?.items ?? [], [paginated]);
 
-  useEffect(() => {
+    useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [filter]);
   const resolveDisputeMutation = useAdminResolveDisputeMutation();

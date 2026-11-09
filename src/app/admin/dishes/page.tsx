@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -34,6 +34,7 @@ import {
   useAdminDishesPaginatedQuery,
   useAdminModerateDishMutation,
   useAdminRemoveDishMutation,
+  type AdminDishRecord,
 } from "@/lib/queries";
 import { formatPrice } from "@/lib/utils";
 
@@ -68,11 +69,12 @@ export default function AdminDishesPage() {
     page: String(page),
     limit: "15",
   });
-  const apiDishes = paginated?.items ?? [];
+  const apiDishes = useMemo(() => paginated?.items ?? [], [paginated]);
   const total = paginated?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / 15));
 
-  useEffect(() => {
+    useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [filter, query]);
   const moderateDish = useAdminModerateDishMutation();
@@ -80,7 +82,7 @@ export default function AdminDishesPage() {
 
   const rows = useMemo<DishRow[]>(
     () =>
-      apiDishes.map((dish: any) => ({
+      apiDishes.map((dish: AdminDishRecord) => ({
         id: dish.id,
         name: loc(dish.name, lang),
         desc: loc(dish.desc, lang),

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -35,12 +35,7 @@ import { cn, formatPrice } from "@/lib/utils";
 
 type Tab = "upcoming" | "completed" | "cancelled";
 
-const tabFor = (order: CustomerOrder): Tab =>
-  order.status === "cancelled"
-    ? "cancelled"
-    : order.status === "completed"
-      ? "completed"
-      : "upcoming";
+
 
 export default function OrdersPage() {
   const { t } = useApp();
@@ -57,7 +52,8 @@ export default function OrdersPage() {
   const total = paginated?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / 6));
 
-  useEffect(() => {
+    useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [tab]);
 
