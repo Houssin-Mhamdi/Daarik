@@ -323,13 +323,13 @@ export default function DishPage() {
                     .map((ingredient) => loc(ingredient, lang))
                     .filter(Boolean)
                     .map((label, index) => (
-                    <span
-                      key={`${label}-${index}`}
-                      className="rounded-full border border-line bg-white px-3 py-1.5 text-[13.5px] text-charcoal"
-                    >
-                      {label}
-                    </span>
-                  ))}
+                      <span
+                        key={`${label}-${index}`}
+                        className="rounded-full border border-line bg-white px-3 py-1.5 text-[13.5px] text-charcoal"
+                      >
+                        {label}
+                      </span>
+                    ))}
                 </div>
               </section>
 

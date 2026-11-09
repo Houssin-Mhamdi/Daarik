@@ -18,6 +18,8 @@ import { Sheet, EmptyState } from "@/components/ui/overlays";
 import { DishCardSkeleton } from "@/components/ui/skeleton";
 import { DishCard } from "@/components/app/dish-card";
 import { useApp } from "@/components/providers/app-provider";
+import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 import { loc } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -125,6 +127,8 @@ export default function ExplorePage() {
     });
     return result;
   }, [dishes, cuisines, query, cuisine, price, availability, diet, sort, lang]);
+
+  const dishPagination = usePagination(filtered, 12);
 
   const activeFilters =
     (cuisine !== "all" ? 1 : 0) +
@@ -302,8 +306,18 @@ export default function ExplorePage() {
             ? Array.from({ length: 6 }).map((_, index) => (
                 <DishCardSkeleton key={index} />
               ))
-            : filtered.map((dish) => <DishCard dish={dish} key={dish.id} />)}
+            : dishPagination.pageItems.map((dish) => (
+                <DishCard dish={dish} key={dish.id} />
+              ))}
         </div>
+
+        {!loading && filtered.length > 0 ? (
+          <Pagination
+            page={dishPagination.page}
+            totalPages={dishPagination.totalPages}
+            onPage={dishPagination.setPage}
+          />
+        ) : null}
 
         {!loading && filtered.length === 0 ? (
           <EmptyState

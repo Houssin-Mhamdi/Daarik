@@ -7,7 +7,9 @@ import { ArrowUpRight, Search, SlidersHorizontal, X } from "lucide-react";
 import { Sheet } from "@/components/ui/overlays";
 import { Rating } from "@/components/ui/controls";
 import { useApp } from "@/components/providers/app-provider";
+import { Highlight } from "@/components/app/highlight";
 import { loc } from "@/lib/data";
+import { useDebounce } from "@/hooks/use-debounce";
 import { cn, formatPrice } from "@/lib/utils";
 
 export function SearchBar({
@@ -25,6 +27,7 @@ export function SearchBar({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounce(query, 300);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -34,8 +37,8 @@ export function SearchBar({
   }, [open]);
 
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
+    const q = debouncedQuery.trim().toLowerCase();
+    if (q.length < 3) return [];
     return dishes
       .filter((dish) => {
         const cook = getCook(dish.cookId);
@@ -56,31 +59,26 @@ export function SearchBar({
           cook?.name.toLowerCase().includes(q)
         );
       })
-      .slice(0, 4);
-  }, [query, lang, dishes, cuisines, getCook]);
+      .slice(0, 6);
+  }, [debouncedQuery, lang, dishes, cuisines, getCook]);
 
   const cookResults = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
+    const q = debouncedQuery.trim().toLowerCase();
+    if (q.length < 3) return [];
     return cooks
       .filter(
         (cook) =>
           cook.name.toLowerCase().includes(q) ||
           cook.city.toLowerCase().includes(q),
       )
-      .slice(0, 2);
-  }, [query, cooks]);
+      .slice(0, 4);
+  }, [debouncedQuery, cooks]);
 
   const submit = (value: string) => {
     const q = value.trim();
-    if (!q) return;
-    try {
-      window.sessionStorage.setItem("darna.search", q);
-    } catch {
-      /* ignore */
-    }
+    if (q.length < 3) return;
     setOpen(false);
-    router.push("/explore");
+    router.push(`/search?q=${encodeURIComponent(q)}`);
   };
 
   return (
@@ -227,6 +225,11 @@ export function SearchBar({
                 ))}
             </div>
           </div>
+        ) : debouncedQuery.trim().length > 0 &&
+          debouncedQuery.trim().length < 3 ? (
+          <div className="py-10 text-center text-[14px] text-muted">
+            {t("searchMinChars")}
+          </div>
         ) : results.length === 0 && cookResults.length === 0 ? (
           <div className="py-14 text-center">
             <span className="mx-auto grid size-14 place-items-center rounded-full bg-cream-100 text-terracotta">
@@ -264,7 +267,7 @@ export function SearchBar({
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[15px] font-semibold text-charcoal">
-                          {loc(dish.name, lang)}
+                          <Highlight text={loc(dish.name, lang)} query={debouncedQuery} />
                         </span>
                         <span className="mt-1 flex items-center gap-2">
                           <Rating value={dish.rating} />
@@ -305,7 +308,7 @@ export function SearchBar({
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[15px] font-semibold text-charcoal">
-                          {cook.name}
+                          <Highlight text={cook.name} query={debouncedQuery} />
                         </span>
                         <span className="text-[13.5px] text-muted">
                           {cook.area[lang]} · {cook.city}
@@ -320,10 +323,10 @@ export function SearchBar({
 
             <button
               type="button"
-              onClick={() => submit(query)}
+              onClick={() => submit(debouncedQuery || query)}
               className="flex w-full items-center justify-between rounded-2xl bg-terracotta-50 px-4 py-3 text-start text-[15px] font-semibold text-terracotta-700"
             >
-              {t("searchResultsFor", { query: query.trim() })}
+              {t("seeAllSearchResults", { query: (debouncedQuery || query).trim() })}
               <ArrowUpRight className="size-4 rtl:-scale-x-100" />
             </button>
           </div>

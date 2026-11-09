@@ -26,7 +26,11 @@ import { Progress, QuantityStepper } from "@/components/ui/controls";
 import { Card } from "@/components/ui/misc";
 import { useApp } from "@/components/providers/app-provider";
 import { allergenNames, dietaryNames, loc, type Dish } from "@/lib/data";
-import { useCreateDishMutation, useUpdateDishMutation, useUploadDishImageMutation } from "@/lib/queries";
+import {
+  useCreateDishMutation,
+  useUpdateDishMutation,
+  useUploadDishImageMutation,
+} from "@/lib/queries";
 import { cn, errorMessage, formatPrice } from "@/lib/utils";
 import {
   ALL_PICKUP_SLOTS,
@@ -78,9 +82,7 @@ export function DishWizard({ dish }: { dish?: Dish }) {
   );
   const [cuisine, setCuisine] = useState(dish?.cuisineId ?? "tunisian");
   const [ingredients, setIngredients] = useState<string[]>(
-    dish
-      ? dish.ingredients.map((item) => loc(item, lang)).filter(Boolean)
-      : [],
+    dish ? dish.ingredients.map((item) => loc(item, lang)).filter(Boolean) : [],
   );
   const [ingredientDraft, setIngredientDraft] = useState("");
 
@@ -186,7 +188,8 @@ export function DishWizard({ dish }: { dish?: Dish }) {
     if (step === 4) {
       if (!selectedDays.length && !sameDay && !nextDay)
         return t("pickAtLeastOneDay");
-      if (selectedDays.some((d) => !windows[d].length)) return t("slotRequired");
+      if (selectedDays.some((d) => !windows[d].length))
+        return t("slotRequired");
     }
     return "";
   }
@@ -554,13 +557,17 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                           key={item}
                           type="button"
                           onClick={() =>
-                            setIngredients((cur) => cur.filter((i) => i !== item))
+                            setIngredients((cur) =>
+                              cur.filter((i) => i !== item),
+                            )
                           }
                           aria-label={`${t("remove")} ${item}`}
                           className="flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1.5 text-[13px] text-charcoal"
                         >
                           {item}
-                          <span aria-hidden className="text-muted">×</span>
+                          <span aria-hidden className="text-muted">
+                            ×
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -829,8 +836,7 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                     <>
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         {selectedDays.map((d) => {
-                          const label =
-                            weekDays[WEEK_ORDER.indexOf(d)] ?? d;
+                          const label = weekDays[WEEK_ORDER.indexOf(d)] ?? d;
                           return (
                             <button
                               key={d}

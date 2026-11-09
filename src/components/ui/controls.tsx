@@ -108,10 +108,7 @@ export function Rating({
         className,
       )}
     >
-      <Star
-        className={cn(icon, "fill-saffron text-saffron")}
-        aria-hidden
-      />
+      <Star className={cn(icon, "fill-saffron text-saffron")} aria-hidden />
       {showValue ? <span>{value.toFixed(1)}</span> : null}
       {typeof count === "number" ? (
         <span className="font-normal text-muted">({count})</span>
@@ -136,9 +133,7 @@ export function QuantityStepper({
   className?: string;
 }) {
   const btn =
-    size === "sm"
-      ? "size-8 [&_svg]:size-3.5"
-      : "size-10 [&_svg]:size-4";
+    size === "sm" ? "size-8 [&_svg]:size-3.5" : "size-10 [&_svg]:size-4";
   return (
     <div
       className={cn(

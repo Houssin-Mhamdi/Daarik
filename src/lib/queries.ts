@@ -494,7 +494,12 @@ export function useCookQuery(id: string) {
 }
 
 export function useUploadImageMutation(
-  defaultFolder: "dishes" | "cooks" | "avatars" | "documents" | "uploads" = "uploads",
+  defaultFolder:
+    | "dishes"
+    | "cooks"
+    | "avatars"
+    | "documents"
+    | "uploads" = "uploads",
 ) {
   return useMutation({
     mutationFn: (

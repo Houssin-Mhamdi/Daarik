@@ -47,7 +47,9 @@ export function BottomNav({ variant }: { variant: "customer" | "cook" }) {
 
   return (
     <nav
-      aria-label={variant === "customer" ? "Main navigation" : "Cook navigation"}
+      aria-label={
+        variant === "customer" ? "Main navigation" : "Cook navigation"
+      }
       className="fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-cream/92 shadow-nav backdrop-blur-xl md:hidden"
     >
       <div

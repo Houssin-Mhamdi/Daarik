@@ -23,7 +23,9 @@ import {
   OrderStatusBadge,
   PaymentStatusBadge,
 } from "@/components/app/order-status";
+import { Pagination } from "@/components/ui/pagination";
 import { useApp } from "@/components/providers/app-provider";
+import { usePagination } from "@/hooks/use-pagination";
 import { loc, type CustomerOrder } from "@/lib/data";
 import {
   useCreateCheckoutSessionMutation,
@@ -56,6 +58,7 @@ export default function OrdersPage() {
   );
 
   const orders = groups[tab];
+  const orderPagination = usePagination(orders, 6);
 
   const emptyCopy = {
     upcoming: { title: t("noUpcoming"), sub: t("noUpcoming") },
@@ -185,11 +188,20 @@ export default function OrdersPage() {
               />
             ) : (
               <div className="mt-3 space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
-                {orders.map((order) => (
+                {orderPagination.pageItems.map((order) => (
                   <OrderCard key={order.id} order={order} tab={tab} />
                 ))}
               </div>
             )}
+
+            {orders.length > 0 ? (
+              <Pagination
+                page={orderPagination.page}
+                totalPages={orderPagination.totalPages}
+                onPage={orderPagination.setPage}
+                className="mt-4"
+              />
+            ) : null}
 
             {orders.length ? (
               <div className="mt-5 rounded-2xl bg-cream-100/70 p-4 md:mt-6">
