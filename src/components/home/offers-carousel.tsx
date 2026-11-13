@@ -27,7 +27,7 @@ export function OffersCarousel({ offers }: { offers: Dish[] }) {
         className="mt-2.5 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-2 no-scrollbar"
       >
         {offers.length > 0 ? (
-          offers.map((dish, index) => {
+          offers.map((dish) => {
             const cook = cooks.find((item) => item.id === dish.cookId);
             return (
               <Link

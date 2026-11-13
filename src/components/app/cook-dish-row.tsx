@@ -13,7 +13,7 @@ function DishTile({ dish, closed }: { dish: Dish; closed: boolean }) {
   const soldOut = closed || dish.portionsLeft <= 0;
 
   return (
-    <div className="w-[112px] shrink-0 md:w-[168px]">
+    <div className="w-[150px] shrink-0 md:w-[210px]">
       <div className="relative aspect-square overflow-hidden rounded-2xl bg-cream-100">
         <Link href={`/dish/${dish.id}`} className="absolute inset-0">
           <Image
@@ -77,7 +77,7 @@ function DishTile({ dish, closed }: { dish: Dish; closed: boolean }) {
 }
 
 export function CookDishRow({ cook, dishes }: { cook: Cook; dishes: Dish[] }) {
-  const { lang } = useApp();
+  const { lang, t } = useApp();
 
   return (
     <section className="mt-4">
@@ -124,6 +124,13 @@ export function CookDishRow({ cook, dishes }: { cook: Cook; dishes: Dish[] }) {
           />
         ))}
       </div>
+      <Link
+        href={`/cook/${cook.id}`}
+        className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-terracotta"
+      >
+        {t("seeAll")} {cook.name.split(" ")[0]}’s kitchen
+        <span aria-hidden>→</span>
+      </Link>
     </section>
   );
 }
