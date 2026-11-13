@@ -21,8 +21,7 @@ export function QueryProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (
-        event.key !== "darna.accessToken" &&
-        event.key !== "darna.refreshToken" &&
+        event.key !== "darna.session" &&
         event.key !== null
       ) {
         return;

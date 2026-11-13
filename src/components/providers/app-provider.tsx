@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -25,7 +26,7 @@ import {
   type OrderItem,
   type PickupOption,
 } from "@/lib/data";
-import { darnaApi, getAccessToken, type CatalogCuisine } from "@/lib/api";
+import { darnaApi, getAccessToken, type CartRecord, type CatalogCuisine } from "@/lib/api";
 import { buildPickupOptions } from "@/lib/pickup";
 import {
   queryKeys,
@@ -133,6 +134,11 @@ type AppContextValue = {
   setPickupTime: (time: string) => void;
   cartNote: string;
   setCartNote: (note: string) => void;
+  cartSyncing: boolean;
+  cartSyncError: boolean;
+  flushCart: () => Promise<boolean>;
+  guestCartConflict: boolean;
+  resolveGuestCartConflict: (keepGuest: boolean) => void;
   serviceFee: number;
 };
 
@@ -141,6 +147,8 @@ const AppContext = createContext<AppContextValue | null>(null);
 const STORAGE = {
   lang: "darna.lang",
   cart: "darna.cart",
+  cartOwner: "darna.cartOwner",
+  cartNote: "darna.cartNote",
   pickup: "darna.pickup",
   pickupTime: "darna.pickupTime",
 };
@@ -165,7 +173,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { data: liveDishes = [] } = useDishesQuery();
   const { data: liveCooks = [] } = useCooksQuery();
   const { data: catalog } = useCatalogQuery();
-  const { data: apiUser } = useCurrentUserQuery();
+  const { data: apiUser, isPending: authPending } = useCurrentUserQuery();
   const { data: apiFavorites } = useFavoritesQuery();
   const loginMutation = useLoginMutation();
   const registerMutation = useRegisterMutation();
@@ -177,14 +185,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>("nl");
   const [langHydrated, setLangHydrated] = useState(false);
   const [cart, setCart] = useState<CartLine[]>(defaultCart);
+  const [cartHydrated, setCartHydrated] = useState(false);
+  const [cartSyncing, setCartSyncing] = useState(false);
+  const [cartSyncError, setCartSyncError] = useState(false);
+  const [guestCartConflict, setGuestCartConflict] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<PendingSwitch>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [lastOrder, setLastOrder] = useState<PlacedOrder | null>(null);
   const [pickup, setPickupState] = useState<string>("");
   const [pickupTime, setPickupTimeState] = useState<string>("18:00");
-  const [cartNote, setCartNote] = useState("");
+  const [cartNote, setCartNoteState] = useState("");
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const orderSeq = useRef(2422);
+  const cartOwner = useRef<string | null>(null);
+  const currentUserId = useRef<string | null>(null);
+  const cartReady = useRef(false);
+  const cartQueue = useRef<Promise<void>>(Promise.resolve());
+  const cartPending = useRef(0);
+  const cartRevision = useRef(0);
+  const detailsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const conflictResolver = useRef<((keepGuest: boolean) => void) | null>(null);
+  const cartRef = useRef(cart);
+  const pickupRef = useRef(pickup);
+  const pickupTimeRef = useRef(pickupTime);
+  const cartNoteRef = useRef(cartNote);
+  useLayoutEffect(() => {
+    cartRef.current = cart;
+    pickupRef.current = pickup;
+    pickupTimeRef.current = pickupTime;
+    cartNoteRef.current = cartNote;
+    currentUserId.current = apiUser?.id ?? null;
+  }, [cart, pickup, pickupTime, cartNote, apiUser?.id]);
 
   const findDish = useCallback(
     (id: string) => liveDishes.find((d) => d.id === id),
@@ -237,10 +268,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLangHydrated(true);
       const storedCart = readStored<CartLine[] | null>(STORAGE.cart, null);
       if (storedCart) setCart(storedCart);
+      cartOwner.current = window.localStorage.getItem(STORAGE.cartOwner);
+      if (!cartOwner.current && getAccessToken()) cartOwner.current = "legacy-session";
       const storedPickup = readStored<string | null>(STORAGE.pickup, null);
       if (storedPickup) setPickupState(storedPickup);
       const storedTime = readStored<string | null>(STORAGE.pickupTime, null);
       if (storedTime) setPickupTimeState(storedTime);
+      setCartNoteState(readStored<string>(STORAGE.cartNote, ""));
+      setCartHydrated(true);
     });
     return () => {
       active = false;
@@ -261,14 +296,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [lang, langHydrated]);
 
   useEffect(() => {
+    if (!cartHydrated || (authPending && getAccessToken())) return;
     try {
       window.localStorage.setItem(STORAGE.cart, JSON.stringify(cart));
+      window.localStorage.setItem(STORAGE.cartNote, JSON.stringify(cartNote));
+      if (cartOwner.current) {
+        window.localStorage.setItem(STORAGE.cartOwner, cartOwner.current);
+      } else {
+        window.localStorage.removeItem(STORAGE.cartOwner);
+      }
     } catch {
-      /* ignore */
+      console.error("Could not save the cart on this device");
     }
-  }, [cart]);
+  }, [cart, cartNote, cartHydrated, authPending]);
 
   useEffect(() => {
+    if (!cartHydrated) return;
     try {
       window.localStorage.setItem(STORAGE.pickup, JSON.stringify(activePickup));
       window.localStorage.setItem(
@@ -278,7 +321,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, [activePickup, activePickupTime]);
+  }, [activePickup, activePickupTime, cartHydrated]);
 
   useEffect(() => {
     const scheduledTimers = timers.current;
@@ -341,11 +384,201 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    currentUserId.current = null;
+    cartReady.current = false;
+    if (detailsTimer.current) {
+      clearTimeout(detailsTimer.current);
+      detailsTimer.current = null;
+    }
+    conflictResolver.current?.(false);
     await logoutMutation.mutateAsync();
+    cartOwner.current = null;
+    setCartSyncing(false);
+    setCartSyncError(false);
+    setGuestCartConflict(false);
+    setCart([]);
+    setCartNoteState("");
   }, [logoutMutation]);
+
+  const applyServerCart = useCallback((server: CartRecord) => {
+    setCart(server.items.map((item) => ({ dishId: item.dishId, qty: item.qty })));
+    if (server.pickupSlot) setPickupState(server.pickupSlot);
+    if (server.pickupTime) setPickupTimeState(server.pickupTime);
+    setCartNoteState(server.note ?? "");
+  }, []);
+
+  const resolveGuestCartConflict = useCallback((keepGuest: boolean) => {
+    conflictResolver.current?.(keepGuest);
+    conflictResolver.current = null;
+    setGuestCartConflict(false);
+  }, []);
+
+  const runCartMutation = useCallback(
+    (action: () => Promise<CartRecord>): Promise<boolean> => {
+      const userId = currentUserId.current;
+      if (!userId || !cartReady.current) {
+        toast(translate(lang, "cartSyncUnavailable"), { variant: "error" });
+        return Promise.resolve(false);
+      }
+      cartPending.current += 1;
+      cartRevision.current += 1;
+      setCartSyncing(true);
+      const operation = cartQueue.current.then(async () => {
+        if (currentUserId.current !== userId) return null;
+        return action();
+      });
+      const settled = operation.then(
+        (server) => {
+          cartPending.current -= 1;
+          if (currentUserId.current !== userId) return false;
+          if (server && cartPending.current === 0 && !detailsTimer.current) {
+            applyServerCart(server);
+            setCartSyncing(false);
+          }
+          return Boolean(server);
+        },
+        (error: unknown) => {
+          cartPending.current -= 1;
+          if (currentUserId.current === userId) {
+            console.error("Cart update failed", error);
+            cartReady.current = false;
+            setCartSyncError(true);
+            setCartSyncing(cartPending.current > 0);
+            toast(translate(lang, "cartSyncFailed"), { variant: "error" });
+          }
+          return false;
+        },
+      );
+      cartQueue.current = settled.then(() => undefined);
+      return settled;
+    },
+    [applyServerCart, lang, toast],
+  );
+
+  const saveCartDetails = useCallback(() => {
+    if (detailsTimer.current) {
+      clearTimeout(detailsTimer.current);
+      detailsTimer.current = null;
+    }
+    if (!currentUserId.current || !cartRef.current.length) {
+      if (cartPending.current === 0) setCartSyncing(false);
+      return Promise.resolve(true);
+    }
+    return runCartMutation(() =>
+      darnaApi.cart.updateDetails({
+        pickupSlot: pickupRef.current,
+        pickupTime: pickupTimeRef.current,
+        note: cartNoteRef.current,
+      }),
+    );
+  }, [runCartMutation]);
+
+  const scheduleCartDetails = useCallback(() => {
+    if (!currentUserId.current || !cartRef.current.length) return;
+    if (!cartReady.current) {
+      toast(translate(lang, "cartSyncUnavailable"), { variant: "error" });
+      return;
+    }
+    cartRevision.current += 1;
+    if (detailsTimer.current) clearTimeout(detailsTimer.current);
+    setCartSyncing(true);
+    detailsTimer.current = setTimeout(() => {
+      void saveCartDetails();
+    }, 500);
+  }, [lang, saveCartDetails, toast]);
+
+  const flushCart = useCallback(async () => {
+    if (getAccessToken() && !currentUserId.current) return false;
+    if (detailsTimer.current && !(await saveCartDetails())) return false;
+    await cartQueue.current;
+    return !currentUserId.current || cartReady.current;
+  }, [saveCartDetails]);
+
+  useEffect(() => {
+    const userId = apiUser?.id;
+    if (!userId || !cartHydrated) {
+      cartReady.current = false;
+      return;
+    }
+    let active = true;
+    let loading = false;
+    const sync = async () => {
+      if (loading || cartPending.current || detailsTimer.current) return;
+      loading = true;
+      const revision = cartRevision.current;
+      if (!cartReady.current) setCartSyncing(true);
+      try {
+        let server = await darnaApi.cart.get();
+        if (!active || currentUserId.current !== userId) return;
+        if (!cartReady.current && !cartOwner.current && cartRef.current.length) {
+          const guest = [...cartRef.current];
+          const details = {
+            pickupSlot: pickupRef.current,
+            pickupTime: pickupTimeRef.current,
+            note: cartNoteRef.current,
+          };
+          try {
+            server = await darnaApi.cart.merge({ items: guest, ...details });
+          } catch (error) {
+            const isConflict =
+              error instanceof Error &&
+              "data" in error &&
+              typeof error.data === "object" &&
+              error.data !== null &&
+              "code" in error.data &&
+              error.data.code === "DIFFERENT_COOK";
+            if (!isConflict) throw error;
+            const keepGuest = await new Promise<boolean>((resolve) => {
+              conflictResolver.current = resolve;
+              setGuestCartConflict(true);
+            });
+            if (!active || currentUserId.current !== userId) return;
+            if (keepGuest) {
+              server = await darnaApi.cart.replaceAll({ items: guest, ...details });
+            } else {
+              server = await darnaApi.cart.get();
+            }
+          }
+        }
+        if (!active || currentUserId.current !== userId || cartPending.current || detailsTimer.current || cartRevision.current !== revision) return;
+        cartOwner.current = userId;
+        cartReady.current = true;
+        setCartSyncError(false);
+        applyServerCart(server);
+      } catch (error) {
+        if (active && currentUserId.current === userId) {
+          console.error("Cart synchronization failed", error);
+          cartReady.current = false;
+          setCartSyncError(true);
+          toast(translate(lang, "cartSyncFailed"), { variant: "error" });
+        }
+      } finally {
+        loading = false;
+        if (active && !cartPending.current && !detailsTimer.current) setCartSyncing(false);
+      }
+    };
+    void sync();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") void sync();
+    }, 10000);
+    window.addEventListener("focus", sync);
+    window.addEventListener("online", sync);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("online", sync);
+      conflictResolver.current?.(false);
+      conflictResolver.current = null;
+    };
+  }, [apiUser?.id, cartHydrated, applyServerCart, lang, toast]);
 
   const addToCart = useCallback(
     (dishId: string, qty = 1, dishFallback?: Dish) => {
+      if (getAccessToken() && (!currentUserId.current || !cartReady.current)) {
+        toast(translate(lang, "cartSyncUnavailable"), { variant: "error" });
+        return false;
+      }
       const dish = findDish(dishId) ?? dishFallback;
       if (!dish) {
         toast(translate(lang, "dishNotFound"), { variant: "error" });
@@ -387,39 +620,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return [...prev, { dishId, qty }];
       });
-      toast(translate(lang, "toastCartAdded", { name: dish.name[lang] }));
-
       if (getAccessToken()) {
-        darnaApi.cart.addItem({ dishId, qty }).catch(() => {});
+        void runCartMutation(() => darnaApi.cart.addItem({
+          dishId,
+          qty,
+          ...(!cart.length ? {
+            pickupSlot: pickupRef.current,
+            pickupTime: pickupTimeRef.current,
+            note: cartNoteRef.current,
+          } : {}),
+        })).then((saved) => {
+          if (saved) toast(translate(lang, "toastCartAdded", { name: dish.name[lang] }));
+        });
+      } else {
+        toast(translate(lang, "toastCartAdded", { name: dish.name[lang] }));
       }
       return true;
     },
-    [cart, liveCooks, liveDishes, findDish, lang, queryClient, toast],
+    [cart, liveCooks, liveDishes, findDish, lang, queryClient, toast, runCartMutation],
   );
 
   const confirmSwitch = useCallback(() => {
     if (!pendingSwitch) return;
+    if (getAccessToken() && (!currentUserId.current || !cartReady.current)) {
+      toast(translate(lang, "cartSyncUnavailable"), { variant: "error" });
+      return;
+    }
     const dish = findDish(pendingSwitch.dishId);
     setCart([{ dishId: pendingSwitch.dishId, qty: pendingSwitch.qty }]);
     setPendingSwitch(null);
-    if (dish) {
+    if (getAccessToken()) {
+      void runCartMutation(() => darnaApi.cart.replace({
+        dishId: pendingSwitch.dishId,
+        qty: pendingSwitch.qty,
+        pickupSlot: pickupRef.current,
+        pickupTime: pickupTimeRef.current,
+        note: cartNoteRef.current,
+      })).then((saved) => {
+        if (saved && dish) toast(translate(lang, "toastCartAdded", { name: dish.name[lang] }));
+      });
+    } else if (dish) {
       toast(translate(lang, "toastCartAdded", { name: dish.name[lang] }));
     }
-    if (getAccessToken()) {
-      darnaApi.cart
-        .replace({ dishId: pendingSwitch.dishId, qty: pendingSwitch.qty })
-        .catch(() => {});
-    }
-  }, [pendingSwitch, findDish, lang, toast]);
+  }, [pendingSwitch, findDish, lang, toast, runCartMutation]);
 
   const cancelSwitch = useCallback(() => setPendingSwitch(null), []);
 
   const setQty = useCallback(
     (dishId: string, qty: number) => {
+      if (getAccessToken() && (!currentUserId.current || !cartReady.current)) {
+        toast(translate(lang, "cartSyncUnavailable"), { variant: "error" });
+        return;
+      }
       if (qty < 1) {
         setCart((prev) => prev.filter((line) => line.dishId !== dishId));
         if (getAccessToken()) {
-          darnaApi.cart.updateQty(dishId, 0).catch(() => {});
+          void runCartMutation(() => darnaApi.cart.updateQty(dishId, 0));
         }
         return;
       }
@@ -431,25 +687,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
       );
       if (getAccessToken()) {
-        darnaApi.cart.updateQty(dishId, nextQty).catch(() => {});
+        void runCartMutation(() => darnaApi.cart.updateQty(dishId, nextQty));
       }
     },
-    [findDish],
+    [findDish, lang, runCartMutation, toast],
   );
 
   const removeFromCart = useCallback((dishId: string) => {
+    if (getAccessToken() && (!currentUserId.current || !cartReady.current)) {
+      toast(translate(lang, "cartSyncUnavailable"), { variant: "error" });
+      return;
+    }
     setCart((prev) => prev.filter((line) => line.dishId !== dishId));
     if (getAccessToken()) {
-      darnaApi.cart.updateQty(dishId, 0).catch(() => {});
+      void runCartMutation(() => darnaApi.cart.updateQty(dishId, 0));
     }
-  }, []);
+  }, [lang, runCartMutation, toast]);
 
   const clearCart = useCallback(() => {
+    if (getAccessToken() && (!currentUserId.current || !cartReady.current)) {
+      toast(translate(lang, "cartSyncUnavailable"), { variant: "error" });
+      return;
+    }
     setCart([]);
     if (getAccessToken()) {
-      darnaApi.cart.clear().catch(() => {});
+      void runCartMutation(() => darnaApi.cart.clear());
     }
-  }, []);
+  }, [lang, runCartMutation, toast]);
 
   const toggleFavorite = useCallback(
     (dishId: string) => {
@@ -488,18 +752,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setPickup = useCallback(
     (id: string) => {
+      pickupRef.current = id;
       setPickupState(id);
       const option = catalogPickupOptions.find((p) => p.id === id);
       if (option) {
-        setPickupTimeState(option.slots[0] ?? "");
+        pickupTimeRef.current = option.slots[0] ?? "";
+        setPickupTimeState(pickupTimeRef.current);
       }
+      scheduleCartDetails();
     },
-    [catalogPickupOptions],
+    [catalogPickupOptions, scheduleCartDetails],
   );
 
   const setPickupTime = useCallback((time: string) => {
+    pickupTimeRef.current = time;
     setPickupTimeState(time);
-  }, []);
+    scheduleCartDetails();
+  }, [scheduleCartDetails]);
+
+  const setCartNote = useCallback((note: string) => {
+    cartNoteRef.current = note;
+    setCartNoteState(note);
+    scheduleCartDetails();
+  }, [scheduleCartDetails]);
 
   const user = useMemo<AuthUser>(() => {
     if (apiUser) {
@@ -573,13 +848,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const reorderCart = useCallback(
     (items: OrderItem[]) => {
-      setCart(
-        items
-          .filter((item) => Boolean(findDish(item.dishId)))
-          .map((item) => ({ dishId: item.dishId, qty: item.qty })),
-      );
+      if (getAccessToken() && (!currentUserId.current || !cartReady.current)) {
+        toast(translate(lang, "cartSyncUnavailable"), { variant: "error" });
+        return;
+      }
+      const lines = items
+        .filter((item) => Boolean(findDish(item.dishId)))
+        .map((item) => ({ dishId: item.dishId, qty: item.qty }));
+      if (!lines.length) {
+        toast(translate(lang, "dishNotFound"), { variant: "error" });
+        return;
+      }
+      setCart(lines);
+      if (getAccessToken()) {
+        void runCartMutation(() => darnaApi.cart.replaceAll({
+          items: lines,
+          pickupSlot: pickupRef.current,
+          pickupTime: pickupTimeRef.current,
+          note: cartNoteRef.current,
+        })).then((saved) => {
+          if (saved) toast(translate(lang, "addedToCart"));
+        });
+      } else {
+        toast(translate(lang, "addedToCart"));
+      }
     },
-    [findDish],
+    [findDish, lang, runCartMutation, toast],
   );
 
   const value: AppContextValue = {
@@ -624,6 +918,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPickupTime,
     cartNote,
     setCartNote,
+    cartSyncing: cartSyncing || (Boolean(getAccessToken()) && (!cartHydrated || authPending)),
+    cartSyncError,
+    flushCart,
+    guestCartConflict,
+    resolveGuestCartConflict,
     serviceFee: catalog?.serviceFee ?? SERVICE_FEE,
   };
 

@@ -40,7 +40,7 @@ export function OffersCarousel({ offers }: { offers: Dish[] }) {
                   alt={loc(dish.name, lang)}
                   fill
                   sizes="82vw"
-                  loading={index === 0 ? "eager" : "lazy"}
+                  loading="eager"
                   unoptimized
                   className="object-cover transition duration-700 group-hover:scale-105"
                 />

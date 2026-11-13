@@ -4,8 +4,10 @@ import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
+import type { NextFunction, Request, Response } from "express";
 import { join } from "node:path";
 import { AppModule } from "./app.module";
+import { ACCESS_COOKIE, readCookie } from "./auth/auth-cookies";
 
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
@@ -34,7 +36,30 @@ async function bootstrap() {
     origin: origin.split(",").map((o) => o.trim()),
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Accept-Language"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Accept-Language",
+      "X-Requested-With",
+    ],
+  });
+
+  // CSRF defence for cookie auth: browsers cannot attach a custom header
+  // cross-origin without a CORS preflight, which only trusted origins pass.
+  // Bearer-token clients and the Stripe webhook are unaffected.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const safe = ["GET", "HEAD", "OPTIONS"].includes(req.method);
+    const usesCookie =
+      !req.headers.authorization && readCookie(req, ACCESS_COOKIE);
+    const isWebhook = req.path.endsWith("/payments/webhook");
+    if (!safe && usesCookie && !isWebhook && !req.headers["x-requested-with"]) {
+      res.status(403).json({
+        statusCode: 403,
+        message: "Missing X-Requested-With header",
+      });
+      return;
+    }
+    next();
   });
 
   // Global prefix /api

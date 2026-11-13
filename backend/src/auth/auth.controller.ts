@@ -1,7 +1,24 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
+import type { Request, Response } from "express";
 import { AuthService } from "./auth.service";
+import {
+  REFRESH_COOKIE,
+  clearAuthCookies,
+  readCookie,
+  setAuthCookies,
+} from "./auth-cookies";
 import {
   ChangePasswordDto,
   LoginDto,
@@ -18,35 +35,65 @@ import {
 @ApiBearerAuth()
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post("register")
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { user, ...tokens } = await this.authService.register(dto);
+    setAuthCookies(res, this.config, tokens);
+    return { user };
   }
 
   @Public()
   @Throttle({ default: { limit: 8, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @Post("login")
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { user, ...tokens } = await this.authService.login(dto);
+    setAuthCookies(res, this.config, tokens);
+    return { user };
   }
 
   @Public()
   @Throttle({ default: { limit: 15, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @Post("refresh")
-  refresh(@Body() dto: RefreshTokenDto) {
-    return this.authService.refresh(dto);
+  async refresh(
+    @Req() req: Request,
+    @Body() dto: RefreshTokenDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const tokens = await this.authService.refresh(
+      readCookie(req, REFRESH_COOKIE) ?? dto.refreshToken,
+    );
+    setAuthCookies(res, this.config, tokens);
+    return { success: true };
   }
 
+  @Public()
   @HttpCode(HttpStatus.OK)
   @Post("logout")
-  logout(@CurrentUser() user: JwtPayloadUser) {
-    return this.authService.logout(user.sub);
+  async logout(
+    @CurrentUser() user: JwtPayloadUser | null,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const refreshToken = readCookie(req, REFRESH_COOKIE);
+    clearAuthCookies(res, this.config);
+    return user
+      ? this.authService.logout(user.sub, user.sessionId)
+      : this.authService.logoutWithRefreshToken(refreshToken);
   }
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })

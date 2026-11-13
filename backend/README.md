@@ -26,6 +26,18 @@ npm run prisma:seed
 npm run start:dev
 ```
 
+For databases created before device sessions were added, apply the additive
+schema change and regenerate the Prisma client before starting the API:
+
+```powershell
+npx prisma db execute --file prisma\add-device-sessions.sql --schema prisma\schema.prisma
+npx prisma generate
+```
+
+Existing sessions must sign in again. With the API running and at least one
+available dish in the database, `npm run test:cart` creates and removes an
+isolated test account to check cross-device sessions and cart synchronization.
+
 ## Seeded Demo Accounts (Password: `Darna2026!`)
 - **Customer**: `sarah.devries@example.nl`
 - **Cook (Rana)**: `rana@darna.nl`

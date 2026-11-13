@@ -59,7 +59,9 @@ export default function CheckoutPage() {
     pickupOptions,
     cartNote,
     serviceFee,
-    clearCart,
+    flushCart,
+    cartSyncing,
+    cartSyncError,
     toast,
     user,
   } = useApp();
@@ -116,14 +118,18 @@ export default function CheckoutPage() {
     : [];
 
   useEffect(() => {
-    if (!cart.length && !paying) {
+    if (!cart.length && !paying && !cartSyncing && !cartSyncError) {
       // allow the confirmation navigation to complete
       const timer = setTimeout(() => {
         if (!cart.length) router.replace("/cart");
       }, 600);
       return () => clearTimeout(timer);
     }
-  }, [cart.length, paying, router]);
+  }, [cart.length, paying, cartSyncing, cartSyncError, router]);
+
+  if (!lines.length && (cartSyncing || cartSyncError)) {
+    return <p className="px-4 py-16 text-center text-muted" role="status">{t(cartSyncError ? "cartSyncFailed" : "cartSyncing")}</p>;
+  }
 
   if (!lines.length) {
     return (
@@ -188,6 +194,9 @@ export default function CheckoutPage() {
     setPaying(true);
     setPayError(null);
     try {
+      if (!(await flushCart())) {
+        throw new Error(t("cartSyncUnavailable"));
+      }
       let code = pendingOrderCode;
       if (!code) {
         const created = await createOrderMutation.mutateAsync({
@@ -219,7 +228,6 @@ export default function CheckoutPage() {
               : "ideal",
       });
 
-      clearCart();
       // Full navigation: Stripe Checkout is a hosted page on stripe.com.
       window.location.assign(session.url);
     } catch (error) {

@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { AddCartItemDto, UpdateCartItemDto } from "./dto/cart.dto";
+import { AddCartItemDto, ReplaceCartDto, UpdateCartDetailsDto, UpdateCartItemDto } from "./dto/cart.dto";
 import { computeOrderMoney, toCents, toEuros } from "../payments/money";
 
 @Injectable()
@@ -56,6 +56,9 @@ export class CartService {
 
     return {
       cook,
+      pickupSlot: items[0]?.pickupSlot ?? null,
+      pickupTime: items[0]?.pickupTime ?? null,
+      note: items[0]?.note ?? null,
       items: items.map((item) => ({
         id: item.id,
         dishId: item.dish.slug || item.dish.id,
@@ -164,14 +167,73 @@ export class CartService {
           userId,
           dishId: dish.id,
           qty,
-          pickupSlot: dto.pickupSlot,
-          pickupTime: dto.pickupTime,
-          note: dto.note,
+          pickupSlot: dto.pickupSlot ?? currentItems[0]?.pickupSlot,
+          pickupTime: dto.pickupTime ?? currentItems[0]?.pickupTime,
+          note: dto.note ?? currentItems[0]?.note,
         },
       });
     }
 
     return this.getCart(userId);
+  }
+
+  async updateDetails(userId: string, dto: UpdateCartDetailsDto) {
+    await this.prisma.cartItem.updateMany({
+      where: { userId },
+      data: dto,
+    });
+    return this.getCart(userId);
+  }
+
+  async replaceAll(userId: string, dto: ReplaceCartDto) {
+    const dishes = await Promise.all(dto.items.map(async (item) => {
+      const dish = await this.prisma.dish.findFirst({
+        where: { OR: [{ id: item.dishId }, { slug: item.dishId }] },
+        include: { cook: true },
+      });
+      if (!dish || dish.status !== "LIVE") throw new NotFoundException("Dish is not available");
+      if (dish.portionsLeft <= 0) throw new BadRequestException("This dish is sold out");
+      if (!dish.cook.kitchenOpen) throw new ConflictException("This kitchen is not accepting orders right now");
+      return { dish, qty: Math.min(item.qty, dish.portionsLeft) };
+    }));
+    if (new Set(dishes.map(({ dish }) => dish.cookId)).size !== 1) {
+      throw new ConflictException({
+        code: "DIFFERENT_COOK",
+        message: "A cart can contain dishes from only one kitchen",
+      });
+    }
+    if (new Set(dishes.map(({ dish }) => dish.id)).size !== dishes.length) {
+      throw new BadRequestException("A dish can appear only once in the cart");
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cartItem.deleteMany({ where: { userId } });
+      await tx.cartItem.createMany({
+        data: dishes.map(({ dish, qty }) => ({
+          userId,
+          dishId: dish.id,
+          qty,
+          pickupSlot: dto.pickupSlot,
+          pickupTime: dto.pickupTime,
+          note: dto.note,
+        })),
+      });
+    });
+    return this.getCart(userId);
+  }
+
+  async mergeCart(userId: string, dto: ReplaceCartDto) {
+    const current = await this.getCart(userId);
+    const ids = new Set(current.items.map((item) => item.dishId));
+    const items = [
+      ...current.items.map(({ dishId, qty }) => ({ dishId, qty })),
+      ...dto.items.filter((item) => !ids.has(item.dishId)),
+    ];
+    return this.replaceAll(userId, {
+      items,
+      pickupSlot: current.items.length ? current.pickupSlot ?? undefined : dto.pickupSlot,
+      pickupTime: current.items.length ? current.pickupTime ?? undefined : dto.pickupTime,
+      note: current.items.length ? current.note ?? undefined : dto.note,
+    });
   }
 
   async updateItemQty(

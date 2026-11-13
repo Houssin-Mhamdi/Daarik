@@ -6,6 +6,7 @@ import {
 import { Reflector } from "@nestjs/core";
 import { AuthGuard } from "@nestjs/passport";
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
+import { ACCESS_COOKIE, readCookie } from "../../auth/auth-cookies";
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard("jwt") {
@@ -22,8 +23,12 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
       const req = context.switchToHttp().getRequest();
       const authHeader: string | undefined = req?.headers?.authorization;
       // If a Bearer token is sent on a @Public() route (e.g. POST /cooks/apply),
-      // still parse it so @CurrentUser() is populated.
-      if (authHeader && authHeader.startsWith("Bearer ")) {
+      // If credentials are sent on a @Public() route (e.g. POST /cooks/apply),
+      // still parse them so @CurrentUser() is populated.
+      if (
+        (authHeader && authHeader.startsWith("Bearer ")) ||
+        readCookie(req, ACCESS_COOKIE)
+      ) {
         return super.canActivate(context);
       }
       return true;

@@ -38,12 +38,13 @@ export default function CartPage() {
     setQty,
     removeFromCart,
     clearCart,
-    toast,
     pickup,
     setPickup,
     pickupOptions,
     cartNote,
     setCartNote,
+    cartSyncing,
+    cartSyncError,
     serviceFee,
   } = useApp();
   const [clearOpen, setClearOpen] = useState(false);
@@ -82,6 +83,14 @@ export default function CartPage() {
       setPickup(availablePickups[0]);
     }
   }, [availablePickups, pickup, setPickup]);
+
+  if (!lines.length && cartSyncing) {
+    return <p className="px-4 py-16 text-center text-muted" role="status">{t("cartSyncing")}</p>;
+  }
+
+  if (!lines.length && cartSyncError) {
+    return <p className="px-4 py-16 text-center text-muted" role="alert">{t("cartSyncFailed")}</p>;
+  }
 
   if (!lines.length) {
     return (
@@ -150,6 +159,14 @@ export default function CartPage() {
             {t("clearCart")}
           </button>
         </div>
+
+        {cartSyncError ? (
+          <p role="alert" className="mt-4 rounded-xl bg-[#fdf1ec] p-3 text-sm text-[#a13a28]">
+            {t("cartSyncFailed")}
+          </p>
+        ) : cartSyncing ? (
+          <p role="status" className="mt-4 text-sm text-muted">{t("cartSyncing")}</p>
+        ) : null}
 
         <div className="mt-4 items-start gap-7 md:grid md:grid-cols-[1fr_380px]">
           <div>
@@ -228,7 +245,6 @@ export default function CartPage() {
                           aria-label={t("remove")}
                           onClick={() => {
                             removeFromCart(dish.id);
-                            toast(t("itemRemoved"));
                           }}
                           className="grid size-7 shrink-0 place-items-center rounded-full text-muted-soft transition hover:bg-cream-100 hover:text-charcoal"
                         >
@@ -240,7 +256,6 @@ export default function CartPage() {
                           value={line.qty}
                           onChange={(next) => {
                             setQty(dish.id, next);
-                            if (next < line.qty) toast(t("qtyUpdated"));
                           }}
                           min={1}
                           max={dish.portionsLeft}
@@ -306,6 +321,7 @@ export default function CartPage() {
                 id="cart-note"
                 value={cartNote}
                 onChange={(event) => setCartNote(event.target.value)}
+                maxLength={300}
                 rows={3}
                 placeholder={t("notePlaceholder")}
                 className="mt-2 w-full resize-none rounded-2xl border border-line bg-cream/40 p-3 text-[14.5px] leading-relaxed outline-none transition placeholder:text-muted-soft focus:border-terracotta focus:bg-white focus:ring-4 focus:ring-terracotta/10"
@@ -406,7 +422,6 @@ export default function CartPage() {
         onConfirm={() => {
           clearCart();
           setClearOpen(false);
-          toast(t("itemRemoved"));
         }}
         title={t("clearCartTitle")}
         description={t("clearCartDesc")}

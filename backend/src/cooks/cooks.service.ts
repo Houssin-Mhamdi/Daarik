@@ -41,7 +41,8 @@ export class CooksService {
     sort?: string;
   }) {
     const page = Math.max(1, Number(params?.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(params?.limit) || 0));
+    const requestedLimit = Number(params?.limit) || 0;
+    const limit = requestedLimit > 0 ? Math.min(100, requestedLimit) : 0;
     const usePaging = limit > 0;
 
     const where = {

@@ -188,31 +188,62 @@ export interface CookEarnings {
   balance: { availableCents: number; pendingCents: number } | null;
 }
 
-const TOKEN_STORAGE = {
-  access: "darna.accessToken",
-  refresh: "darna.refreshToken",
-};
+// The real tokens live in httpOnly cookies set by the API and are invisible to
+// JavaScript. We only keep a non-secret marker so the UI knows whether a
+// session probably exists (callers use getAccessToken() as a boolean).
+const SESSION_KEY = "darna.session";
+
+if (typeof window !== "undefined") {
+  window.localStorage.removeItem("darna.accessToken");
+  window.localStorage.removeItem("darna.refreshToken");
+}
 
 export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_STORAGE.access);
+  return window.localStorage.getItem(SESSION_KEY) ? "session" : null;
 }
 
-export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_STORAGE.refresh);
-}
-
-export function setAuthTokens(accessToken: string, refreshToken: string) {
+export function markSession() {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(TOKEN_STORAGE.access, accessToken);
-  window.localStorage.setItem(TOKEN_STORAGE.refresh, refreshToken);
+  window.localStorage.setItem(SESSION_KEY, "1");
 }
 
 export function clearAuthTokens() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(TOKEN_STORAGE.access);
-  window.localStorage.removeItem(TOKEN_STORAGE.refresh);
+  window.localStorage.removeItem(SESSION_KEY);
+}
+
+export type CartRecord = {
+  items: { dishId: string; qty: number }[];
+  pickupSlot: string | null;
+  pickupTime: string | null;
+  note: string | null;
+};
+
+let refreshInFlight: Promise<Response> | null = null;
+
+function refreshSession(): Promise<Response> {
+  if (!refreshInFlight) {
+    const refresh = () => fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "darna",
+        },
+        body: "{}",
+        credentials: "include",
+      });
+    const refreshWithLock = async (): Promise<Response> => {
+      if (typeof navigator !== "undefined" && navigator.locks) {
+        return await navigator.locks.request("darna.auth.refresh", refresh);
+      }
+      return refresh();
+    };
+    refreshInFlight = refreshWithLock().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
 }
 
 export async function apiRequest<T>(
@@ -224,17 +255,16 @@ export async function apiRequest<T>(
   if (!headers.has("Content-Type") && options.body) {
     headers.set("Content-Type", "application/json");
   }
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
+  headers.set("X-Requested-With", "darna");
 
   let res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers,
+    credentials: "include",
   });
 
-  // If the access token expired or the DB was re-seeded, try refreshing once;
-  // if refresh fails, clear stale tokens so subsequent calls don't stay broken.
+  // If the access cookie expired or the DB was re-seeded, try refreshing once;
+  // if refresh fails, clear the session marker so subsequent calls don't stay broken.
   if (
     res.status === 401 &&
     token &&
@@ -243,30 +273,18 @@ export async function apiRequest<T>(
     !path.startsWith("/auth/refresh") &&
     !path.startsWith("/auth/logout")
   ) {
-    const refreshToken = getRefreshToken();
-    if (refreshToken) {
-      const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
-      }).catch(() => null);
+    const refreshRes = await refreshSession();
 
-      if (refreshRes && refreshRes.ok) {
-        const refreshed = (await refreshRes.json()) as {
-          accessToken: string;
-          refreshToken: string;
-        };
-        setAuthTokens(refreshed.accessToken, refreshed.refreshToken);
-        headers.set("Authorization", `Bearer ${refreshed.accessToken}`);
-        res = await fetch(`${API_BASE_URL}${path}`, {
-          ...options,
-          headers,
-        });
-      } else {
-        clearAuthTokens();
-      }
-    } else {
+    if (refreshRes.ok) {
+      res = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers,
+        credentials: "include",
+      });
+    } else if (refreshRes.status === 401 || refreshRes.status === 403) {
       clearAuthTokens();
+    } else {
+      throw new Error(`Session refresh failed (${refreshRes.status})`);
     }
   }
 
@@ -297,22 +315,20 @@ export const darnaApi = {
       preferredLang?: "nl" | "en" | "ar";
       role?: "CUSTOMER" | "COOK";
     }) =>
-      apiRequest<{
-        user: AuthUserRecord;
-        accessToken: string;
-        refreshToken: string;
-      }>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
+      apiRequest<{ user: AuthUserRecord }>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
     login: (body: { email: string; password: string }) =>
-      apiRequest<{
-        user: AuthUserRecord;
-        accessToken: string;
-        refreshToken: string;
-      }>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
-    refresh: (refreshToken: string) =>
-      apiRequest<{ accessToken: string; refreshToken: string }>(
-        "/auth/refresh",
-        { method: "POST", body: JSON.stringify({ refreshToken }) },
-      ),
+      apiRequest<{ user: AuthUserRecord }>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    refresh: () =>
+      apiRequest<{ success: boolean }>("/auth/refresh", {
+        method: "POST",
+        body: "{}",
+      }),
     logout: () =>
       apiRequest<{ success: boolean }>("/auth/logout", { method: "POST" }),
     me: () => apiRequest<AuthUserRecord>("/auth/me"),
@@ -373,12 +389,12 @@ export const darnaApi = {
       const form = new FormData();
       form.append("file", file);
       form.append("folder", folder);
-      const token = getAccessToken();
       const res = await fetch(
         `${API_BASE_URL}/uploads/image?folder=${encodeURIComponent(folder)}`,
         {
           method: "POST",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          headers: { "X-Requested-With": "darna" },
+          credentials: "include",
           body: form,
         },
       );
@@ -424,23 +440,39 @@ export const darnaApi = {
       }),
   },
   cart: {
-    get: () => apiRequest<unknown>("/cart"),
-    addItem: (body: { dishId: string; qty?: number; replace?: boolean }) =>
-      apiRequest<unknown>("/cart/items", {
+    get: () =>
+      apiRequest<CartRecord>("/cart"),
+    addItem: (body: { dishId: string; qty?: number; replace?: boolean; pickupSlot?: string; pickupTime?: string; note?: string }) =>
+      apiRequest<CartRecord>("/cart/items", {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    replace: (body: { dishId: string; qty?: number }) =>
-      apiRequest<unknown>("/cart/replace", {
+    replace: (body: { dishId: string; qty?: number; pickupSlot?: string; pickupTime?: string; note?: string }) =>
+      apiRequest<CartRecord>("/cart/replace", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    replaceAll: (body: { items: { dishId: string; qty: number }[]; pickupSlot?: string; pickupTime?: string; note?: string }) =>
+      apiRequest<CartRecord>("/cart", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    merge: (body: { items: { dishId: string; qty: number }[]; pickupSlot?: string; pickupTime?: string; note?: string }) =>
+      apiRequest<CartRecord>("/cart/merge", {
         method: "POST",
         body: JSON.stringify(body),
       }),
     updateQty: (dishId: string, qty: number) =>
-      apiRequest<unknown>(`/cart/items/${dishId}`, {
+      apiRequest<CartRecord>(`/cart/items/${encodeURIComponent(dishId)}`, {
         method: "PATCH",
         body: JSON.stringify({ qty }),
       }),
-    clear: () => apiRequest<unknown>("/cart", { method: "DELETE" }),
+    updateDetails: (body: { pickupSlot?: string; pickupTime?: string; note?: string }) =>
+      apiRequest<CartRecord>("/cart/details", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    clear: () => apiRequest<CartRecord>("/cart", { method: "DELETE" }),
   },
   orders: {
     create: (body: Record<string, unknown>) =>

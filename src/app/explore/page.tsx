@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpDown,
@@ -16,15 +16,15 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/controls";
 import { Sheet, EmptyState } from "@/components/ui/overlays";
 import { DishCardSkeleton } from "@/components/ui/skeleton";
-import { DishCard } from "@/components/app/dish-card";
+import { CookDishRow } from "@/components/app/cook-dish-row";
 import { useApp } from "@/components/providers/app-provider";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import { LocationPicker } from "@/components/app/location-picker";
 import { useSearchArea } from "@/hooks/use-search-area";
 import { useDishesPaginatedQuery } from "@/lib/queries";
-import { Pagination } from "@/components/ui/pagination";
 
 import { loc } from "@/lib/data";
-import { cn } from "@/lib/utils";
+import { cn, formatPrice } from "@/lib/utils";
 
 type Sort = "recommended" | "priceLow" | "priceHigh" | "rating" | "nearest";
 type PriceFilter = "low" | "mid" | "high" | null;
@@ -48,8 +48,18 @@ const diets = [
   "spicy",
 ] as const;
 
+const PAGE_SIZE = 8;
+
 export default function ExplorePage() {
-  const { t, lang, cuisines } = useApp();
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <ExploreContent />
+    </Suspense>
+  );
+}
+
+function ExploreContent() {
+  const { t, lang, cuisines, cooks, cart, cartCount, dishes: appDishes } = useApp();
   const [query, setQuery] = useState("");
   const [cuisine, setCuisine] = useState<string>("all");
   const [price, setPrice] = useState<PriceFilter>(null);
@@ -59,7 +69,7 @@ export default function ExplorePage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
+  const [cookLimit, setCookLimit] = useState(PAGE_SIZE);
   const { city, setCity, setArea } = useSearchArea();
   const [locationOpen, setLocationOpen] = useState(false);
 
@@ -90,14 +100,14 @@ export default function ExplorePage() {
     };
   }, []);
 
-  // Reset to first page whenever filters change.
-    useEffect(() => {
+  // Reset the "show more" windows whenever filters change.
+  useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPage(1);
+    setCookLimit(PAGE_SIZE);
   }, [query, cuisine, price, availability, diet, sort, city]);
 
   const params = useMemo(() => {
-    const p: Record<string, string> = { page: String(page), limit: "12" };
+    const p: Record<string, string> = { page: "1", limit: "100" };
     if (query.trim()) p.q = query.trim();
     if (city) p.city = city;
     if (cuisine !== "all") p.cuisine = cuisine;
@@ -116,13 +126,29 @@ export default function ExplorePage() {
     else if (sort === "priceHigh") p.sort = "priceHigh";
     else if (sort === "rating") p.sort = "rating";
     return p;
-  }, [page, query, city, cuisine, price, availability, diet, sort]);
+  }, [query, city, cuisine, price, availability, diet, sort]);
 
   const paginated = useDishesPaginatedQuery(params);
   const filtered = paginated.data?.items ?? [];
-  const total = paginated.data?.total ?? 0;
   const isLoading = paginated.isLoading;
-  const totalPages = Math.max(1, Math.ceil(total / 12));
+
+  const groups = useMemo(() => {
+    const byCook = new Map<string, typeof filtered>();
+    for (const dish of paginated.data?.items ?? []) {
+      byCook.set(dish.cookId, [...(byCook.get(dish.cookId) ?? []), dish]);
+    }
+    return cooks
+      .filter((cook) => byCook.has(cook.id))
+      .map((cook) => ({ cook, dishes: byCook.get(cook.id)! }));
+  }, [paginated.data, cooks]);
+  const total = groups.length;
+  const visibleGroups = groups.slice(0, cookLimit);
+  const cartTotal = cart.reduce((sum, line) => {
+    const dish =
+      filtered.find((d) => d.id === line.dishId) ??
+      appDishes.find((d) => d.id === line.dishId);
+    return sum + (dish ? dish.price * line.qty : 0);
+  }, 0);
 
     useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -134,6 +160,11 @@ export default function ExplorePage() {
     (price ? 1 : 0) +
     (availability ? 1 : 0) +
     diet.length;
+
+  const clearCity = () => {
+    setCity("");
+    setArea(null);
+  };
 
   const openFilters = () => {
     setDraftCuisine(cuisine);
@@ -196,6 +227,21 @@ export default function ExplorePage() {
             <ChevronDown className="size-3 text-muted" />
           </button>
         </div>
+
+        {city && !loading ? (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-2.5">
+            <p className="text-[13px] text-charcoal">
+              {t("cityFilterHint", { count: total, city })}
+            </p>
+            <button
+              type="button"
+              onClick={clearCity}
+              className="shrink-0 text-[13px] font-semibold text-terracotta"
+            >
+              {t("showAllNetherlands")}
+            </button>
+          </div>
+        ) : null}
 
         <div className="sticky top-0 z-30 -mx-4 mt-4 bg-cream/92 px-4 py-2 backdrop-blur-xl md:static md:mx-0 md:bg-transparent md:px-0 md:py-0">
           <div className="flex items-center gap-2">
@@ -271,48 +317,57 @@ export default function ExplorePage() {
           ))}
         </div>
 
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-5 flex items-center justify-between">
           <p className="text-[13.5px] font-medium text-charcoal">
             {t("resultsFound", { count: total })}
           </p>
-          <div className="hidden items-center gap-2 md:flex">
-            {activeFilters > 0 ? (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="text-[13px] font-semibold text-terracotta"
-              >
-                {t("clearAll")}
-              </button>
-            ) : null}
-            <span className="flex items-center gap-1 text-[13px] text-muted">
-              {t("sortBy")}:
-              <button
-                type="button"
-                onClick={() => setSortOpen(true)}
-                className="font-semibold text-charcoal"
-              >
-                {t(
-                  sorts.find((item) => item.value === sort)?.key ??
-                    "sortRecommended",
-                )}
-              </button>
-            </span>
-          </div>
+        </div>
+        <div className="mt-2 hidden items-center justify-end gap-2 md:flex">
+          {activeFilters > 0 ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-[13px] font-semibold text-terracotta"
+            >
+              {t("clearAll")}
+            </button>
+          ) : null}
+          <span className="flex items-center gap-1 text-[13px] text-muted">
+            {t("sortBy")}:
+            <button
+              type="button"
+              onClick={() => setSortOpen(true)}
+              className="font-semibold text-charcoal"
+            >
+              {t(
+                sorts.find((item) => item.value === sort)?.key ??
+                  "sortRecommended",
+              )}
+            </button>
+          </span>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
+        <div>
           {loading
-            ? Array.from({ length: 6 }).map((_, index) => (
-                <DishCardSkeleton key={index} />
+            ? Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="mt-6 w-[160px]">
+                  <DishCardSkeleton />
+                </div>
               ))
-            : filtered.map((dish) => (
-                <DishCard dish={dish} key={dish.id} />
+            : visibleGroups.map(({ cook, dishes }) => (
+                <CookDishRow key={cook.id} cook={cook} dishes={dishes} />
               ))}
         </div>
 
-        {!loading && filtered.length > 0 ? (
-          <Pagination page={page} totalPages={totalPages} onPage={setPage} />
+        {!loading && visibleGroups.length < total ? (
+          <div className="mt-6 flex justify-center">
+            <Button
+              variant="secondary"
+              onClick={() => setCookLimit((n) => n + PAGE_SIZE)}
+            >
+              {t("showMore")}
+            </Button>
+          </div>
         ) : null}
 
         {!loading && filtered.length === 0 ? (
@@ -341,6 +396,21 @@ export default function ExplorePage() {
           </Link>
         </div>
       </div>
+
+      {cartCount > 0 ? (
+        <Link
+          href="/cart"
+          className="fixed inset-x-4 bottom-[84px] z-40 mx-auto flex h-14 max-w-[448px] items-center justify-between rounded-full bg-terracotta px-5 text-white shadow-lift md:bottom-6"
+        >
+          <span className="grid size-8 place-items-center rounded-full bg-white text-[14px] font-bold text-terracotta">
+            {cartCount}
+          </span>
+          <span className="text-[16px] font-bold">{t("viewCart")}</span>
+          <span className="text-[15px] font-semibold">
+            {formatPrice(cartTotal, lang)}
+          </span>
+        </Link>
+      ) : null}
 
       {/* Filters sheet */}
       <Sheet

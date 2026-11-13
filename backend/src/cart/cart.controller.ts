@@ -6,10 +6,11 @@ import {
   Param,
   Patch,
   Post,
+  Put,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { CartService } from "./cart.service";
-import { AddCartItemDto, UpdateCartItemDto } from "./dto/cart.dto";
+import { AddCartItemDto, ReplaceCartDto, UpdateCartDetailsDto, UpdateCartItemDto } from "./dto/cart.dto";
 import {
   CurrentUser,
   JwtPayloadUser,
@@ -39,6 +40,16 @@ export class CartController {
     return this.cartService.addItem(user.sub, { ...dto, replace: true });
   }
 
+  @Post("merge")
+  mergeCart(@CurrentUser() user: JwtPayloadUser, @Body() dto: ReplaceCartDto) {
+    return this.cartService.mergeCart(user.sub, dto);
+  }
+
+  @Put()
+  replaceAll(@CurrentUser() user: JwtPayloadUser, @Body() dto: ReplaceCartDto) {
+    return this.cartService.replaceAll(user.sub, dto);
+  }
+
   @Patch("items/:dishId")
   updateItemQty(
     @CurrentUser() user: JwtPayloadUser,
@@ -46,6 +57,14 @@ export class CartController {
     @Body() dto: UpdateCartItemDto,
   ) {
     return this.cartService.updateItemQty(user.sub, dishId, dto);
+  }
+
+  @Patch("details")
+  updateDetails(
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() dto: UpdateCartDetailsDto,
+  ) {
+    return this.cartService.updateDetails(user.sub, dto);
   }
 
   @Delete()

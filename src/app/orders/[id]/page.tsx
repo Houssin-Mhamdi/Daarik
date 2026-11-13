@@ -187,7 +187,6 @@ export default function OrderDetailPage() {
 
   function reorder() {
     reorderCart(order!.items);
-    toast(t("addedToCart"), { description: t("viewCart") });
     router.push("/cart");
   }
 

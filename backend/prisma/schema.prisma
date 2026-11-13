@@ -123,6 +123,7 @@ model User {
   updatedAt        DateTime @updatedAt
 
   cookProfile      CookProfile?
+  authSessions     AuthSession[]
   cookApplications CookApplication[]
   cartItems        CartItem[]
   favoriteDishes   FavoriteDish[]
@@ -296,6 +297,17 @@ model PickupOption {
   shortDay Json
   date     String
   slots    String[]
+}
+
+model AuthSession {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model CartItem {

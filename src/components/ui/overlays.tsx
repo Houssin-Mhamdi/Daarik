@@ -129,6 +129,7 @@ export function ConfirmDialog({
   variant = "default",
   icon,
   loading,
+  dismissOnBackdrop = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -140,6 +141,7 @@ export function ConfirmDialog({
   variant?: "default" | "destructive";
   icon?: React.ReactNode;
   loading?: boolean;
+  dismissOnBackdrop?: boolean;
 }) {
   const mounted = useMounted();
   useLockScroll(open);
@@ -150,7 +152,7 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-5">
       <div
         className="absolute inset-0 animate-fade-in bg-charcoal/50 backdrop-blur-[2px]"
-        onClick={onClose}
+        onClick={dismissOnBackdrop ? onClose : undefined}
         aria-hidden
       />
       <div

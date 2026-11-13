@@ -116,7 +116,7 @@ export function DishCard({
             alt={loc(dish.name, lang)}
             fill
             sizes="76px"
-            loading="lazy"
+            loading="eager"
             unoptimized
             className={cn(
               "object-cover transition duration-500 group-hover:scale-105",

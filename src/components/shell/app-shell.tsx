@@ -56,6 +56,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     cooks,
     confirmSwitch,
     cancelSwitch,
+    guestCartConflict,
+    resolveGuestCartConflict,
     toasts,
     dismissToast,
   } = useApp();
@@ -199,6 +201,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         })}
         confirmLabel={t("replaceCart")}
         cancelLabel={t("keepCart")}
+      />
+
+      <ConfirmDialog
+        open={guestCartConflict}
+        onClose={() => resolveGuestCartConflict(false)}
+        onConfirm={() => resolveGuestCartConflict(true)}
+        title={t("guestCartConflictTitle")}
+        description={t("guestCartConflictDesc")}
+        confirmLabel={t("guestCartKeep")}
+        cancelLabel={t("accountCartKeep")}
+        dismissOnBackdrop={false}
       />
 
       <ToastViewport toasts={toasts} onDismiss={dismissToast} />

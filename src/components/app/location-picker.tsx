@@ -55,8 +55,6 @@ const LocationMap = dynamic(() => import("./location-map"), {
   ),
 });
 
-const LOCATION_STORAGE_KEY = "darna.location";
-const LOCATION_REQUESTED_KEY = "darna.location-requested";
 const DEFAULT_RADIUS_KM = 10;
 
 function cityFromAddress(address?: Record<string, string>) {
@@ -154,82 +152,6 @@ export function LocationPicker({
     return cooks.filter((cook) => cityMatches(cook.city, location.city));
   }, [cooks, location, radiusKm]);
 
-  useEffect(() => {
-    let active = true;
-
-    try {
-      const saved = window.localStorage.getItem(LOCATION_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as DeliveryLocation;
-        if (
-          parsed.city &&
-          parsed.label &&
-          Number.isFinite(parsed.lat) &&
-          Number.isFinite(parsed.lng)
-        ) {
-          const restoreTimer = window.setTimeout(() => {
-            if (!active) return;
-            const radius = parsed.radiusKm ?? DEFAULT_RADIUS_KM;
-            setLocation(parsed);
-            setMapPoint(parsed);
-            setRadiusKm(radius);
-            onCityChange(parsed.city);
-            onAreaChange?.({ lat: parsed.lat, lng: parsed.lng, radiusKm: radius });
-          }, 0);
-          return () => {
-            active = false;
-            window.clearTimeout(restoreTimer);
-          };
-        }
-      }
-    } catch {
-      window.localStorage.removeItem(LOCATION_STORAGE_KEY);
-    }
-
-    if (
-      window.localStorage.getItem(LOCATION_REQUESTED_KEY) === "true" ||
-      !navigator.geolocation
-    ) {
-      return () => {
-        active = false;
-      };
-    }
-
-    window.localStorage.setItem(LOCATION_REQUESTED_KEY, "true");
-    navigator.geolocation.getCurrentPosition(
-      async ({ coords }) => {
-        const point = { lat: coords.latitude, lng: coords.longitude };
-        let place: Awaited<ReturnType<typeof reverseGeocode>> = null;
-        try {
-          place = await reverseGeocode(point);
-        } catch {
-          place = null;
-        }
-        if (!active) return;
-        const nextLocation: DeliveryLocation = {
-          ...point,
-          city: place?.city || t("currentLocation"),
-          label: place?.label || t("currentLocation"),
-          radiusKm: DEFAULT_RADIUS_KM,
-        };
-        setLocation(nextLocation);
-        setMapPoint(point);
-        onCityChange(nextLocation.city);
-        onAreaChange?.({ ...point, radiusKm: DEFAULT_RADIUS_KM });
-        window.localStorage.setItem(
-          LOCATION_STORAGE_KEY,
-          JSON.stringify(nextLocation),
-        );
-      },
-      () => undefined,
-      { enableHighAccuracy: false, maximumAge: 300000, timeout: 10000 },
-    );
-
-    return () => {
-      active = false;
-    };
-  }, [onCityChange, onAreaChange, t]);
-
   useEffect(
     () => () => {
       if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
@@ -250,7 +172,6 @@ export function LocationPicker({
     setMapPoint(saved);
     onCityChange(saved.city || saved.label.split(",")[0]);
     onAreaChange?.({ lat: saved.lat, lng: saved.lng, radiusKm });
-    window.localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(saved));
     closePicker();
   };
 
@@ -381,12 +302,7 @@ export function LocationPicker({
           <button
             type="button"
             onClick={() => {
-              try {
-                window.localStorage.removeItem(LOCATION_STORAGE_KEY);
-              } catch {
-                /* ignore */
-              }
-              onCityChange("");
+onCityChange("");
               onAreaChange?.(null);
               closePicker();
             }}

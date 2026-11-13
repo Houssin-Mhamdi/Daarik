@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -37,6 +37,20 @@ import { useNotificationsQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto w-full max-w-[1240px] px-4 py-6 md:px-8 md:py-10">
+          <PageSkeleton />
+        </div>
+      }
+    >
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
   const { t, lang, cooks, cuisines, isAuthenticated, user } = useApp();
   const { data: notifications = [] } = useNotificationsQuery();
   const { city, area, ready, setCity, setArea } = useSearchArea();

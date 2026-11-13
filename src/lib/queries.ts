@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   type AdminPayoutRecord,
   type CookApplicationStatus,
@@ -8,7 +13,7 @@ import {
   clearAuthTokens,
   darnaApi,
   getAccessToken,
-  setAuthTokens,
+  markSession,
 } from "@/lib/api";
 import {
   buildPickupOptions,
@@ -305,9 +310,16 @@ export function useCurrentUserQuery() {
       if (!token) return null;
       try {
         return await darnaApi.auth.me();
-      } catch {
-        clearAuthTokens();
-        return null;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          "status" in error &&
+          (error.status === 401 || error.status === 403)
+        ) {
+          clearAuthTokens();
+          return null;
+        }
+        throw error;
       }
     },
     retry: false,
@@ -325,7 +337,7 @@ export function useLoginMutation() {
       await qc.cancelQueries();
       qc.removeQueries();
       window.localStorage.removeItem("darna.cookApplicationEmail");
-      setAuthTokens(data.accessToken, data.refreshToken);
+      markSession();
       qc.setQueryData(queryKeys.authMe, data.user);
     },
   });
@@ -349,7 +361,7 @@ export function useRegisterMutation() {
       await qc.cancelQueries();
       qc.removeQueries();
       window.localStorage.removeItem("darna.cookApplicationEmail");
-      setAuthTokens(data.accessToken, data.refreshToken);
+      markSession();
       qc.setQueryData(queryKeys.authMe, data.user);
     },
   });
@@ -460,6 +472,7 @@ export function useDishesPaginatedQuery(
 ) {
   return useQuery({
     queryKey: [...queryKeys.dishes(filters), "paginated"],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const clean = Object.fromEntries(
         Object.entries(filters ?? {}).filter(([, v]) => Boolean(v)),
@@ -517,6 +530,7 @@ export function useCooksPaginatedQuery(filters?: {
 }) {
   return useQuery({
     queryKey: [...queryKeys.cooks(filters), "paginated"],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const result = await darnaApi.cooks.list(filters);
       const items = Array.isArray(result) ? result : (result?.items ?? []);
