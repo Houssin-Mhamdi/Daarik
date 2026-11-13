@@ -125,12 +125,12 @@ export function CookDishRow({ cook, dishes }: { cook: Cook; dishes: Dish[] }) {
         ))}
         <Link
           href={`/cook/${cook.id}`}
-          className="flex w-[150px] shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-terracotta/40 bg-terracotta-50/40 p-3 text-center transition hover:bg-terracotta-50 md:w-[210px]"
+          className="flex w-[150px] shrink-0 flex-col items-center justify-center gap-1 self-center text-center md:w-[210px]"
         >
           <span className="text-[13px] font-semibold text-terracotta">
             {t("seeAll")} {cook.name.split(" ")[0]}’s kitchen
           </span>
-          <span className="text-[20px] text-terracotta">→</span>
+          <span className="text-[18px] text-terracotta">→</span>
         </Link>
       </div>
     </section>
