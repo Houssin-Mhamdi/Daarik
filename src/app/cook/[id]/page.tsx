@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -49,7 +49,7 @@ export default function CookProfilePage() {
     "dishesTab" | "reviewsTab" | "availabilityTab"
   >("dishesTab");
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [activeCategory, setActiveCategory] = useState<string>("all");
 
   if (cookLoading) {
     return (
@@ -81,10 +81,40 @@ export default function CookProfilePage() {
     cookData?.cook?.categories?.length
       ? cookData.cook.categories
       : ["Best selling", "Discount", "Drinks", "Mains", "Desserts", "Sides"];
-  const visibleDishes =
-    selectedCategory === "all"
-      ? dishes
-      : dishes.filter((dish) => dish.category === selectedCategory);
+
+  const scrollToCategory = (cat: string) => {
+    if (cat === "all") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      setActiveCategory("all");
+      return;
+    }
+    const el = document.getElementById(`cat-${cat}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveCategory(cat);
+    }
+  };
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const id = entry.target.id.replace("cat-", "");
+            if (id) setActiveCategory(id);
+          }
+        }
+      },
+      { rootMargin: "-80px 0px -70% 0px", threshold: 0 },
+    );
+    categories.forEach((cat) => {
+      const el = document.getElementById(`cat-${cat}`);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [categories, dishes]);
+
+  const visibleDishes = dishes;
   const cookReviews = cookData?.reviews ?? [];
   const saved = isFavoriteCook(cook.id);
   const cuisineLabels = cook.cuisineIds
@@ -297,15 +327,26 @@ export default function CookProfilePage() {
               {tab === "dishesTab" ? (
                 <>
                   <div className="sticky top-16 z-20 -mx-4 mt-2 flex gap-2 overflow-x-auto bg-cream/95 px-4 py-2 backdrop-blur md:static md:mx-0 md:bg-transparent md:px-0">
-                    <button type="button" onClick={() => setSelectedCategory("all")} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", selectedCategory === "all" ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{t("allCuisines")}</button>
+                    <button type="button" onClick={() => scrollToCategory("all")} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", activeCategory === "all" ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{t("allCuisines")}</button>
                     {categories.map((cat) => (
-                      <button key={cat} type="button" onClick={() => setSelectedCategory(cat)} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", selectedCategory === cat ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{translateCategory(cat, t)}</button>
+                      <button key={cat} type="button" onClick={() => scrollToCategory(cat)} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", activeCategory === cat ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{translateCategory(cat, t)}</button>
                     ))}
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
-                    {visibleDishes.map((dish) => (
-                      <DishCard key={dish.id} dish={dish} showCook={false} />
-                    ))}
+                    {categories.map((cat) => {
+                      const catDishes = dishes.filter((d) => d.category === cat);
+                      if (catDishes.length === 0) return null;
+                      return (
+                        <section key={cat} id={"cat-" + cat} className="scroll-mt-24">
+                          <h2 className="mb-3 font-display text-[24px] font-bold text-charcoal md:text-[28px]">{translateCategory(cat, t)}</h2>
+                          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+                            {catDishes.map((dish) => (
+                              <DishCard key={dish.id} dish={dish} showCook={false} />
+                            ))}
+                          </div>
+                        </section>
+                      );
+                    })}
                   </div>
                 </>
               ) : null}
