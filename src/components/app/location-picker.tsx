@@ -56,6 +56,7 @@ const LocationMap = dynamic(() => import("./location-map"), {
 });
 
 const DEFAULT_RADIUS_KM = 10;
+const LOCATION_STORAGE_KEY = "darna.location";
 
 function cityFromAddress(address?: Record<string, string>) {
   return (
@@ -302,7 +303,12 @@ export function LocationPicker({
           <button
             type="button"
             onClick={() => {
-onCityChange("");
+              try {
+                window.localStorage.removeItem(LOCATION_STORAGE_KEY);
+              } catch {
+                /* ignore */
+              }
+              onCityChange("");
               onAreaChange?.(null);
               closePicker();
             }}
