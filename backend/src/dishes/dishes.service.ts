@@ -41,7 +41,8 @@ export class DishesService {
         ? { city: { equals: query.city, mode: "insensitive" as const } }
         : {}),
     };
-    const limit = Math.min(100, Math.max(1, Number(query.limit) || 0));
+    const rawLimit = query.limit ? Number(query.limit) : 0;
+    const limit = rawLimit > 0 ? Math.min(100, rawLimit) : 0;
     const usePaging = limit > 0;
 
     const where = {

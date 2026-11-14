@@ -239,7 +239,8 @@ export class AdminService {
     limit?: string;
   }) {
     const p = Math.max(1, Number(query.page) || 1);
-    const l = Math.min(100, Math.max(1, Number(query.limit) || 0));
+    const rawL = query.limit ? Number(query.limit) : 0;
+    const l = rawL > 0 ? Math.min(100, rawL) : 0;
     const usePaging = l > 0;
 
     const where = {
@@ -386,7 +387,8 @@ export class AdminService {
     limit?: string;
   }) {
     const p = Math.max(1, Number(query.page) || 1);
-    const l = Math.min(100, Math.max(1, Number(query.limit) || 0));
+    const rawL = query.limit ? Number(query.limit) : 0;
+    const l = rawL > 0 ? Math.min(100, rawL) : 0;
     const usePaging = l > 0;
 
     const where = {
@@ -663,7 +665,8 @@ export class AdminService {
     limit?: string;
   }) {
     const p = Math.max(1, Number(query.page) || 1);
-    const l = Math.min(100, Math.max(1, Number(query.limit) || 0));
+    const rawL = query.limit ? Number(query.limit) : 0;
+    const l = rawL > 0 ? Math.min(100, rawL) : 0;
     const usePaging = l > 0;
 
     const where = {
@@ -824,7 +827,8 @@ export class AdminService {
 
   async getDisputes(status?: string, page?: string, limit?: string) {
     const p = Math.max(1, Number(page) || 1);
-    const l = Math.min(100, Math.max(1, Number(limit) || 0));
+    const rawL = limit ? Number(limit) : 0;
+    const l = rawL > 0 ? Math.min(100, rawL) : 0;
     const usePaging = l > 0;
 
     const where = {

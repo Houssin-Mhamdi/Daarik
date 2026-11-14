@@ -187,7 +187,8 @@ export class OrdersService {
     params?: { page?: string; limit?: string; tab?: string },
   ) {
     const page = Math.max(1, Number(params?.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(params?.limit) || 0));
+    const rawLimit = params?.limit ? Number(params.limit) : 0;
+    const limit = rawLimit > 0 ? Math.min(100, rawLimit) : 0;
     const usePaging = limit > 0;
 
     const statusFilter =
@@ -313,7 +314,8 @@ export class OrdersService {
   ) {
     const cook = await this.resolveCook(userId);
     const p = Math.max(1, Number(page) || 1);
-    const l = Math.min(100, Math.max(1, Number(limit) || 0));
+    const rawL = limit ? Number(limit) : 0;
+    const l = rawL > 0 ? Math.min(100, rawL) : 0;
     const usePaging = l > 0;
 
     const where = {
