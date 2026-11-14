@@ -107,7 +107,7 @@ function ExploreContent() {
   }, [query, cuisine, price, availability, diet, sort, city]);
 
   const params = useMemo(() => {
-    const p: Record<string, string> = { page: "1", limit: "100" };
+    const p: Record<string, string> = { page: "1" };
     if (query.trim()) p.q = query.trim();
     if (city) p.city = city;
     if (cuisine !== "all") p.cuisine = cuisine;
@@ -319,7 +319,7 @@ function ExploreContent() {
 
         <div className="mt-5 flex items-center justify-between">
           <p className="text-[13.5px] font-medium text-charcoal">
-            {t("resultsFound", { count: total })}
+            {t("resultsFound", { count: filtered.length })}
           </p>
         </div>
         <div className="mt-2 hidden items-center justify-end gap-2 md:flex">
