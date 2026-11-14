@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/ui/controls";
 import { Sheet, EmptyState } from "@/components/ui/overlays";
 import { DishCardSkeleton } from "@/components/ui/skeleton";
 import { CookDishRow } from "@/components/app/cook-dish-row";
+import { useSearchParams } from "next/navigation";
 import { useApp } from "@/components/providers/app-provider";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { LocationPicker } from "@/components/app/location-picker";
@@ -70,7 +71,10 @@ function ExploreContent() {
   const [sortOpen, setSortOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [cookLimit, setCookLimit] = useState(PAGE_SIZE);
-  const { city, setCity, setArea } = useSearchArea();
+  const searchParams = useSearchParams();
+  const urlCity = searchParams.get("city");
+  const { city: savedCity, setCity, setArea } = useSearchArea();
+  const city = urlCity !== null ? urlCity : savedCity;
   const [locationOpen, setLocationOpen] = useState(false);
 
   const [draftCuisine, setDraftCuisine] = useState("all");
