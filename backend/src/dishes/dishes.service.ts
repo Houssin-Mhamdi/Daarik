@@ -7,6 +7,7 @@ import { DishStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { buildDishSearchText } from "../common/dish-search";
 import { CreateDishDto, ReportDishDto, UpdateDishDto } from "./dto/dish.dto";
+import { applyDishFilters } from "./filters/dish-filters";
 
 @Injectable()
 export class DishesService {
@@ -30,43 +31,14 @@ export class DishesService {
     page?: string;
     limit?: string;
   }) {
-    const q = query.q?.trim().toLowerCase();
     const page = Math.max(1, Number(query.page) || 1);
 
-    const cookFilter = {
-      ...(query.cookId
-        ? { OR: [{ id: query.cookId }, { slug: query.cookId }] }
-        : {}),
-      ...(query.city
-        ? { city: { equals: query.city, mode: "insensitive" as const } }
-        : {}),
-    };
     const rawLimit = query.limit ? Number(query.limit) : 0;
     const limit = rawLimit > 0 ? Math.min(100, rawLimit) : 0;
     const usePaging = limit > 0;
 
-    const where = {
-      status: DishStatus.LIVE,
-      ...(q
-        ? {
-            OR: [
-              { searchText: { contains: q } },
-              { cook: { name: { contains: q, mode: "insensitive" } } },
-            ],
-          }
-        : {}),
-      ...(query.cuisine ? { cuisineId: query.cuisine } : {}),
-      ...(query.dietary ? { dietary: { has: query.dietary } } : {}),
-      ...(query.pickup ? { pickup: { has: query.pickup } } : {}),
-      ...(query.featured === "true" ? { featured: true } : {}),
-      ...(query.weekend === "true" ? { weekend: true } : {}),
-      ...(query.family === "true" ? { family: true } : {}),
-      ...(query.availableOnly === "true" ? { portionsLeft: { gt: 0 } } : {}),
-      ...(query.sameDay === "true" ? { sameDayPickup: true } : {}),
-      ...(query.priceMin ? { price: { gte: Number(query.priceMin) } } : {}),
-      ...(query.priceMax ? { price: { lte: Number(query.priceMax) } } : {}),
-      ...(Object.keys(cookFilter).length ? { cook: cookFilter } : {}),
-    };
+    const where: Record<string, any> = { status: DishStatus.LIVE };
+    applyDishFilters(query as any, where);
 
     const orderBy =
       query.sort === "priceLow"

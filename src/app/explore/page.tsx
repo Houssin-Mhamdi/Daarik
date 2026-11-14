@@ -27,7 +27,7 @@ import { useDishesPaginatedQuery } from "@/lib/queries";
 import { loc } from "@/lib/data";
 import { cn, formatPrice } from "@/lib/utils";
 
-type Sort = "recommended" | "priceLow" | "priceHigh" | "rating" | "nearest";
+import { buildExploreParams, type Sort } from "@/lib/filters/explore-filters";
 type PriceFilter = "low" | "mid" | "high" | null;
 type Availability = "today" | "weekend" | null;
 
@@ -110,27 +110,20 @@ function ExploreContent() {
     setCookLimit(PAGE_SIZE);
   }, [query, cuisine, price, availability, diet, sort, city]);
 
-  const params = useMemo(() => {
-    const p: Record<string, string> = { page: "1" };
-    if (query.trim()) p.q = query.trim();
-    if (city) p.city = city;
-    if (cuisine !== "all") p.cuisine = cuisine;
-    if (diet.length) p.dietary = diet[0];
-    if (availability === "weekend") p.weekend = "true";
-    if (availability === "today") p.sameDay = "true";
-    if (price === "low") {
-      p.priceMax = "9.99";
-    } else if (price === "mid") {
-      p.priceMin = "10";
-      p.priceMax = "15";
-    } else if (price === "high") {
-      p.priceMin = "15.01";
-    }
-    if (sort === "priceLow") p.sort = "priceLow";
-    else if (sort === "priceHigh") p.sort = "priceHigh";
-    else if (sort === "rating") p.sort = "rating";
-    return p;
-  }, [query, city, cuisine, price, availability, diet, sort]);
+  const params = useMemo(
+    () =>
+      buildExploreParams({
+        query,
+        city,
+        cuisine,
+        price,
+        availability,
+        diet,
+        sort,
+        page: 1,
+      }),
+    [query, city, cuisine, price, availability, diet, sort],
+  );
 
   const paginated = useDishesPaginatedQuery(params);
   const filtered = paginated.data?.items ?? [];

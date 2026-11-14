@@ -16,6 +16,7 @@ import {
   UpdateCookProfileDto,
 } from "./dto/cook.dto";
 import { toEuros } from "../payments/money";
+import { applyCookFilters } from "./filters/cook-filters";
 
 /** Payment states in which the customer's money has actually been captured. */
 const CAPTURED_STATUSES: PaymentStatus[] = [
@@ -45,16 +46,8 @@ export class CooksService {
     const limit = requestedLimit > 0 ? Math.min(100, requestedLimit) : 0;
     const usePaging = limit > 0;
 
-    const where = {
-      status: CookStatus.VERIFIED,
-      ...(params?.city
-        ? { city: { equals: params.city, mode: "insensitive" } }
-        : {}),
-      ...(params?.cuisine ? { cuisineIds: { has: params.cuisine } } : {}),
-      ...(params?.q
-        ? { name: { contains: params.q, mode: "insensitive" } }
-        : {}),
-    };
+    const where: Record<string, any> = { status: CookStatus.VERIFIED };
+    applyCookFilters(params ?? {}, where);
 
     const orderBy =
       params?.sort === "rating"
