@@ -153,17 +153,17 @@ export default function CookProfilePage() {
               </button>
             </div>
           </div>
-          <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Badge variant="glass" size="sm">
+          <div className="absolute inset-x-4 bottom-4 flex flex-wrap items-end justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="glass" size="sm" className="max-w-full">
                 <Sparkles className="size-3 text-terracotta" />
-                {t("verifiedCook")}
+                <span className="truncate">{t("verifiedCook")}</span>
               </Badge>
-              <Badge variant="dark" size="sm">
-                {cook.city}
+              <Badge variant="dark" size="sm" className="max-w-full">
+                <span className="truncate">{cook.city}</span>
               </Badge>
             </div>
-            <span className="rounded-full bg-white/90 px-2.5 py-1 text-[12px] font-semibold text-charcoal backdrop-blur">
+            <span className="shrink-0 rounded-full bg-white/90 px-2.5 py-1 text-[12px] font-semibold text-charcoal backdrop-blur">
               {t("pickupOnly")}
             </span>
           </div>
