@@ -33,6 +33,7 @@ import {
   useUploadDishImageMutation,
 } from "@/lib/queries";
 import { cn, errorMessage, formatPrice } from "@/lib/utils";
+import { translateCategory } from "@/lib/categories";
 import {
   ALL_PICKUP_SLOTS,
   DEFAULT_PICKUP_SLOTS,
@@ -530,7 +531,7 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                   >
                     {cookCategories.map((cat) => (
                       <option key={cat} value={cat}>
-                        {cat}
+                        {translateCategory(cat, t)}
                       </option>
                     ))}
                   </Select>
