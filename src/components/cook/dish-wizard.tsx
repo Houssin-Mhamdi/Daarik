@@ -27,6 +27,7 @@ import { Card } from "@/components/ui/misc";
 import { useApp } from "@/components/providers/app-provider";
 import { allergenNames, dietaryNames, loc, type Dish } from "@/lib/data";
 import {
+  useCookProfileQuery,
   useCreateDishMutation,
   useUpdateDishMutation,
   useUploadDishImageMutation,
@@ -41,6 +42,7 @@ import {
 
 export function DishWizard({ dish }: { dish?: Dish }) {
   const { t, lang, toast, cuisines } = useApp();
+  const { data: cookProfile } = useCookProfileQuery();
   const router = useRouter();
   const createDishMutation = useCreateDishMutation();
   const updateDishMutation = useUpdateDishMutation();
@@ -81,10 +83,19 @@ export function DishWizard({ dish }: { dish?: Dish }) {
     dish ? loc(dish.desc, lang) : "",
   );
   const [cuisine, setCuisine] = useState(dish?.cuisineId ?? "tunisian");
+  const [category, setCategory] = useState(dish?.category ?? "Mains");
+  const [extraCategories, setExtraCategories] = useState<string[]>([]);
+  const [newCategory, setNewCategory] = useState("");
   const [ingredients, setIngredients] = useState<string[]>(
     dish ? dish.ingredients.map((item) => loc(item, lang)).filter(Boolean) : [],
   );
   const [ingredientDraft, setIngredientDraft] = useState("");
+  const cookCategories = [
+    ...(cookProfile?.categories?.length
+      ? cookProfile.categories
+      : ["Best selling", "Discount", "Drinks", "Mains", "Desserts", "Sides"]),
+    ...extraCategories,
+  ];
 
   function addIngredients(raw: string) {
     const parts = raw
@@ -217,6 +228,7 @@ export function DishWizard({ dish }: { dish?: Dish }) {
       image: photo,
       price: parsedPrice,
       cuisineId: cuisine,
+      category,
       serves,
       portions: capacity,
       portionsLeft: capacity,
@@ -508,6 +520,43 @@ export function DishWizard({ dish }: { dish?: Dish }) {
                     ))}
                   </Select>
                 </Field>
+                <Field label="Category" htmlFor="wizard-category">
+                  <Select
+                    id="wizard-category"
+                    value={category}
+                    onChange={(event) =>
+                      setCategory(event.target.value)
+                    }
+                  >
+                    {cookCategories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <div className="flex gap-2">
+                  <Input
+                    value={newCategory}
+                    onChange={(event) => setNewCategory(event.target.value)}
+                    placeholder="New category"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      const v = newCategory.trim();
+                      if (v && !cookCategories.includes(v)) {
+                        setExtraCategories((prev) => [...prev, v]);
+                        setCategory(v);
+                        setNewCategory("");
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
                 <Field
                   label={t("ingredientsLabel")}
                   htmlFor="wizard-ingredients"
