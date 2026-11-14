@@ -63,6 +63,7 @@ export type Cook = {
   city: string;
   area: Localized;
   cuisineIds: CuisineId[];
+  categories: string[];
   rating: number;
   reviewCount: number;
   verified: boolean;
@@ -88,7 +89,7 @@ export type Dish = {
   image: string;
   price: number;
   cuisineId: CuisineId;
-  rating: number;
+  category?: string;  rating: number;
   reviewCount: number;
   serves: number;
   portions: number;

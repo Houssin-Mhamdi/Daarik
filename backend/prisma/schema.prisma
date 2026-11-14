@@ -149,6 +149,8 @@ model CookProfile {
   city          String
   area          Json
   cuisineIds    String[]
+  /// Cook-defined dish categories (e.g. "Best selling", "Drinks"). Defaults provided.
+  categories    String[]   @default(["Best selling", "Discount", "Drinks", "Mains", "Desserts", "Sides"])
   rating        Float      @default(5.0)
   reviewCount   Int        @default(0)
   verified      Boolean    @default(false)
@@ -250,6 +252,8 @@ model Dish {
   image        String
   price        Float
   cuisineId    String
+  /// Cook-specific dish category (e.g. "Best selling", "Drinks"). Defaults to "Mains".
+  category     String     @default("Mains")
   rating       Float      @default(5.0)
   reviewCount  Int        @default(0)
   serves       Int        @default(1)

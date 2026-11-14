@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -75,6 +75,15 @@ export default function CookProfilePage() {
   }
 
   const dishes: Dish[] = cookData?.dishes ?? [];
+  const categories: string[] =
+    cookData?.cook?.categories?.length
+      ? cookData.cook.categories
+      : ["Best selling", "Discount", "Drinks", "Mains", "Desserts", "Sides"];
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const visibleDishes =
+    selectedCategory === "all"
+      ? dishes
+      : dishes.filter((dish) => dish.category === selectedCategory);
   const cookReviews = cookData?.reviews ?? [];
   const saved = isFavoriteCook(cook.id);
   const cuisineLabels = cook.cuisineIds
@@ -285,11 +294,19 @@ export default function CookProfilePage() {
               </div>
 
               {tab === "dishesTab" ? (
-                <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
-                  {dishes.map((dish) => (
-                    <DishCard key={dish.id} dish={dish} showCook={false} />
-                  ))}
-                </div>
+                <>
+                  <div className="sticky top-16 z-20 -mx-4 mt-2 flex gap-2 overflow-x-auto bg-cream/95 px-4 py-2 backdrop-blur md:static md:mx-0 md:bg-transparent md:px-0">
+                    <button type="button" onClick={() => setSelectedCategory("all")} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", selectedCategory === "all" ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{t("allCuisines")}</button>
+                    {categories.map((cat) => (
+                      <button key={cat} type="button" onClick={() => setSelectedCategory(cat)} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", selectedCategory === cat ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{cat}</button>
+                    ))}
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+                    {visibleDishes.map((dish) => (
+                      <DishCard key={dish.id} dish={dish} showCook={false} />
+                    ))}
+                  </div>
+                </>
               ) : null}
 
               {tab === "reviewsTab" ? (

@@ -159,6 +159,7 @@ export class DishesService {
         image: dto.image,
         price: dto.price,
         cuisineId: dto.cuisineId,
+        category: dto.category ?? "Mains",
         serves: dto.serves ?? 1,
         portions: dto.portions ?? 8,
         portionsLeft: dto.portionsLeft ?? dto.portions ?? 8,

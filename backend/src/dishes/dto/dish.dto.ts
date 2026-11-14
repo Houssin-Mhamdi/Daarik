@@ -54,6 +54,11 @@ export class CreateDishDto {
   cuisineId!: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  category?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(20)
@@ -157,6 +162,11 @@ export class UpdateDishDto {
   @IsOptional()
   @IsString()
   cuisineId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  category?: string;
 
   @IsOptional()
   @IsInt()

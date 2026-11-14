@@ -104,6 +104,11 @@ export class UpdateCookProfileDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  categories?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   languages?: string[];
 
   @IsOptional()
