@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog, Sheet } from "@/components/ui/overlays";
+import { Pagination } from "@/components/ui/pagination";
 import { useApp } from "@/components/providers/app-provider";
 import {
   AdminCard,
@@ -36,10 +37,12 @@ import {
   useSyncAdminPayoutMutation,
 } from "@/lib/queries";
 import { errorMessage, formatPrice } from "@/lib/utils";
+import { usePagination } from "@/hooks/use-pagination";
 
 export default function AdminPayoutsPage() {
   const { t, lang, toast } = useApp();
   const { data: payouts = [] } = useAdminPayoutsQuery();
+  const payoutPagination = usePagination(payouts, 10);
   const { data: marketplace, refetch: refetchMarketplace } =
     useAdminMarketplaceQuery();
   const releaseMutation = useReleaseTransfersMutation();
@@ -224,6 +227,14 @@ export default function AdminPayoutsPage() {
                 )}
               </tbody>
             </AdminTable>
+            {payouts.length > 10 ? (
+              <Pagination
+                page={payoutPagination.page}
+                totalPages={payoutPagination.totalPages}
+                onPage={payoutPagination.setPage}
+                className="mt-4"
+              />
+            ) : null}
           </AdminCard>
 
           {/* Bank payouts */}
@@ -251,7 +262,7 @@ export default function AdminPayoutsPage() {
               </thead>
               <tbody>
                 {payouts.length ? (
-                  payouts.map((payout) => (
+                  payoutPagination.pageItems.map((payout) => (
                     <tr key={payout.id} className="transition hover:bg-cream/40">
                       <Td className="font-semibold">{payout.id}</Td>
                       <Td>{payout.cook}</Td>

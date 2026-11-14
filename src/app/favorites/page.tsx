@@ -7,8 +7,10 @@ import { SegmentedTabs } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/overlays";
 import { Button } from "@/components/ui/button";
 import { DishCard } from "@/components/app/dish-card";
+import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 import { useApp } from "@/components/providers/app-provider";
-import { loc } from "@/lib/data";
+import { loc, type Cook, type Dish } from "@/lib/data";
 import { useCurrentUserQuery } from "@/lib/queries";
 
 export default function FavoritesPage() {
@@ -27,6 +29,10 @@ export default function FavoritesPage() {
 
   const savedDishes = dishes.filter((dish) => favorites.includes(dish.id));
   const savedCooks = cooks.filter((cook) => favoriteCooks.includes(cook.id));
+
+  const dishPag = usePagination(savedDishes, 8);
+  const cookPag = usePagination(savedCooks, 8);
+  const favPagination = tab === "dishes" ? dishPag : cookPag;
 
   if (authPending) {
     return (
@@ -105,11 +111,16 @@ export default function FavoritesPage() {
 
         {tab === "dishes" ? (
           savedDishes.length > 0 ? (
-            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
-              {savedDishes.map((dish) => (
-                <DishCard key={dish.id} dish={dish} />
-              ))}
-            </div>
+            <>
+              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
+                {(favPagination.pageItems as Dish[]).map((dish) => (
+                  <DishCard key={dish.id} dish={dish} />
+                ))}
+              </div>
+              {savedDishes.length > 8 ? (
+                <Pagination page={favPagination.page} totalPages={favPagination.totalPages} onPage={favPagination.setPage} className="mt-4" />
+              ) : null}
+            </>
           ) : (
             <EmptyState
               className="mt-6"
@@ -124,8 +135,9 @@ export default function FavoritesPage() {
             />
           )
         ) : savedCooks.length > 0 ? (
-          <div className="mt-4 grid gap-2.5 md:grid-cols-2">
-            {savedCooks.map((cook) => (
+          <>
+            <div className="mt-4 grid gap-2.5 md:grid-cols-2">
+              {(favPagination.pageItems as Cook[]).map((cook) => (
               <div
                 key={cook.id}
                 className="flex items-center gap-3 rounded-[22px] border border-line bg-white p-3 shadow-card"
@@ -169,6 +181,10 @@ export default function FavoritesPage() {
               </div>
             ))}
           </div>
+          {savedCooks.length > 8 ? (
+            <Pagination page={favPagination.page} totalPages={favPagination.totalPages} onPage={favPagination.setPage} className="mt-4" />
+          ) : null}
+          </>
         ) : (
           <EmptyState
             className="mt-6"
