@@ -153,7 +153,7 @@ export default function CookProfilePage() {
               </button>
             </div>
           </div>
-          <div className="absolute inset-x-4 bottom-4 flex flex-wrap items-end justify-between gap-2">
+          <div className="absolute inset-x-4 bottom-12 flex flex-wrap items-end justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="glass" size="sm" className="max-w-full">
                 <Sparkles className="size-3 text-terracotta" />
