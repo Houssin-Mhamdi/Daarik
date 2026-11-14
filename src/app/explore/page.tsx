@@ -235,7 +235,7 @@ function ExploreContent() {
         {city && !loading ? (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-2.5">
             <p className="text-[13px] text-charcoal">
-              {t("cityFilterHint", { count: total, city })}
+              {t("cityFilterHint", { count: filtered.length, city })}
             </p>
             <button
               type="button"

@@ -1234,7 +1234,7 @@ const nl: Partial<Record<EnKeys, string>> = {
   browseCuisines: "Bekijk per keuken",
   allNetherlands: "Heel Nederland",
   showAllNetherlands: "Toon heel Nederland",
-  cityFilterHint: "{count} koks in {city}",
+  cityFilterHint: "{count} gerechten in {city}",
   searchResultsFor: "Resultaten voor “{query}”",
   searchMinChars: "Typ minimaal 3 tekens om te zoeken",
   searchDishesTitle: "Gerechten",

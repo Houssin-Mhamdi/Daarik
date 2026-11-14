@@ -1192,7 +1192,7 @@ const ar: Partial<Record<EnKeys, string>> = {
   browseCuisines: "تصفح حسب المطبخ",
   allNetherlands: "كل هولندا",
   showAllNetherlands: "عرض كل هولندا",
-  cityFilterHint: "عرض {count} طهاة في {city}",
+  cityFilterHint: "عرض {count} طبق في {city}",
   searchResultsFor: "نتائج «{query}»",
   searchMinChars: "اكتب 3 أحرف على الأقل للبحث",
   searchDishesTitle: "أطباق",

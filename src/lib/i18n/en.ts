@@ -1237,7 +1237,7 @@ const en = {
   browseCuisines: "Browse by cuisine",
   allNetherlands: "All of the Netherlands",
   showAllNetherlands: "Show all of the Netherlands",
-  cityFilterHint: "Showing {count} cooks in {city}",
+  cityFilterHint: "Showing {count} dishes in {city}",
   searchResultsFor: "Results for “{query}”",
   searchMinChars: "Type at least 3 characters to search",
   searchDishesTitle: "Dishes",
