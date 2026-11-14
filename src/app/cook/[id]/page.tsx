@@ -49,6 +49,7 @@ export default function CookProfilePage() {
     "dishesTab" | "reviewsTab" | "availabilityTab"
   >("dishesTab");
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   if (cookLoading) {
     return (
@@ -80,7 +81,6 @@ export default function CookProfilePage() {
     cookData?.cook?.categories?.length
       ? cookData.cook.categories
       : ["Best selling", "Discount", "Drinks", "Mains", "Desserts", "Sides"];
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const visibleDishes =
     selectedCategory === "all"
       ? dishes
