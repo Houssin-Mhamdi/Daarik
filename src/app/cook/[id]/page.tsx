@@ -120,7 +120,13 @@ export default function CookProfilePage() {
           <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4 pt-[max(12px,env(safe-area-inset-top,0px))] md:pt-4">
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => {
+                if (typeof window !== "undefined" && window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push("/explore");
+                }
+              }}
               aria-label={t("back")}
               className="grid size-10 place-items-center rounded-full bg-white/90 text-charcoal shadow-sm backdrop-blur"
             >
