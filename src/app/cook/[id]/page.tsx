@@ -9,7 +9,6 @@ import {
   Heart,
   Languages,
   MapPin,
-  MessageCircle,
   Share2,
   ShieldCheck,
   Sparkles,
@@ -19,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedTabs } from "@/components/ui/controls";
-import { Sheet, EmptyState } from "@/components/ui/overlays";
+import { EmptyState } from "@/components/ui/overlays";
 import { StickyActionBar } from "@/components/ui/misc";
 import { DishCard } from "@/components/app/dish-card";
 import { ReviewCard } from "@/components/app/review-card";
@@ -48,9 +47,7 @@ export default function CookProfilePage() {
   const [tab, setTab] = useState<
     "dishesTab" | "reviewsTab" | "availabilityTab"
   >("dishesTab");
-  const [messageOpen, setMessageOpen] = useState(false);
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
-  const [message, setMessage] = useState("");
 
   if (cookLoading) {
     return (
@@ -448,13 +445,7 @@ export default function CookProfilePage() {
                     />
                     {saved ? t("saved") : t("saveCook")}
                   </Button>
-                  <Button
-                    className="flex-1"
-                    onClick={() => setMessageOpen(true)}
-                  >
-                    <MessageCircle className="size-4" />
-                    {t("messageCook")}
-                  </Button>
+
                 </div>
               </div>
             </aside>
@@ -473,45 +464,11 @@ export default function CookProfilePage() {
             />
             {saved ? t("saved") : t("saveCook")}
           </Button>
-          <Button className="flex-[1.4]" onClick={() => setMessageOpen(true)}>
-            <MessageCircle className="size-4" />
-            {t("messageCook")}
-          </Button>
+
         </StickyActionBar>
       </div>
 
-      <Sheet
-        open={messageOpen}
-        onClose={() => setMessageOpen(false)}
-        title={t("messageSheetTitle", { name: cook.name.split(" ")[0] })}
-        description={t("responseTime", { time: cook.response[lang] })}
-        footer={
-          <Button
-            className="w-full"
-            onClick={() => {
-              setMessageOpen(false);
-              setMessage("");
-              toast(t("messageSent"));
-            }}
-          >
-            {t("send")}
-          </Button>
-        }
-      >
-        <div className="pt-1">
-          <textarea
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder={t("messagePlaceholder")}
-            rows={5}
-            className="w-full resize-none rounded-2xl border border-line bg-white p-3.5 text-[15px] leading-relaxed outline-none focus:border-terracotta focus:ring-4 focus:ring-terracotta/10"
-          />
-          <p className="mt-2 flex items-start gap-1.5 text-[12.5px] leading-relaxed text-muted">
-            <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-olive" />
-            {t("pickupNote")}
-          </p>
-        </div>
-      </Sheet>
+
       <AuthRequiredSheet
         open={authPromptOpen}
         onClose={() => setAuthPromptOpen(false)}
