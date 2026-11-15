@@ -26,7 +26,13 @@ import {
   type OrderItem,
   type PickupOption,
 } from "@/lib/data";
-import { darnaApi, getAccessToken, type CartRecord, type CatalogCuisine } from "@/lib/api";
+import {
+  clearAuthTokens,
+  darnaApi,
+  getAccessToken,
+  type CartRecord,
+  type CatalogCuisine,
+} from "@/lib/api";
 import { buildPickupOptions } from "@/lib/pickup";
 import {
   queryKeys,
@@ -170,6 +176,19 @@ let toastSeq = 0;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      clearAuthTokens();
+      queryClient.setQueryData(queryKeys.authMe, null);
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
+    };
+    window.addEventListener("darna:auth-expired", handler);
+    return () => window.removeEventListener("darna:auth-expired", handler);
+  }, [queryClient]);
   const { data: liveDishes = [] } = useDishesQuery();
   const { data: liveCooks = [] } = useCooksQuery();
   const { data: catalog } = useCatalogQuery();
@@ -546,6 +565,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCartSyncError(false);
         applyServerCart(server);
       } catch (error) {
+        const isAuthError =
+          error instanceof Error &&
+          (error.message.includes("inactive") ||
+            error.message.includes("not found") ||
+            (error as { status?: number }).status === 401);
+        if (isAuthError) {
+          clearAuthTokens();
+          queryClient.setQueryData(queryKeys.authMe, null);
+          if (typeof window !== "undefined") {
+            window.location.href = "/login";
+          }
+          return;
+        }
         if (active && currentUserId.current === userId) {
           console.error("Cart synchronization failed", error);
           cartReady.current = false;

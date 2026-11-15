@@ -283,6 +283,9 @@ export async function apiRequest<T>(
       });
     } else if (refreshRes.status === 401 || refreshRes.status === 403) {
       clearAuthTokens();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("darna:auth-expired"));
+      }
     } else {
       throw new Error(`Session refresh failed (${refreshRes.status})`);
     }
@@ -290,9 +293,18 @@ export async function apiRequest<T>(
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
-    const err = new Error(
-      errorBody.message || `API Error ${res.status}`,
-    ) as Error & {
+    const message = errorBody.message || `API Error ${res.status}`;
+    if (
+      res.status === 401 &&
+      typeof message === "string" &&
+      /inactive|not found|unauthorized/i.test(message)
+    ) {
+      clearAuthTokens();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("darna:auth-expired"));
+      }
+    }
+    const err = new Error(message) as Error & {
       status?: number;
       data?: unknown;
     };
