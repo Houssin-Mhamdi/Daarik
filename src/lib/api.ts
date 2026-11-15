@@ -729,6 +729,16 @@ export const darnaApi = {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
+    bulkDishStatus: (body: { ids: string[]; status: string }) =>
+      apiRequest<unknown>("/admin/dishes/bulk-status", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    bulkCookStatus: (body: { ids: string[]; status: string }) =>
+      apiRequest<unknown>("/admin/cooks/bulk-status", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
     removeDish: (id: string) =>
       apiRequest<unknown>(`/admin/dishes/${encodeURIComponent(id)}`, {
         method: "DELETE",

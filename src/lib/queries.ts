@@ -101,6 +101,7 @@ export type AdminCooksResponse = {
 
 export type AdminDishRecord = {
   id: string;
+  dbId: string;
   name: { nl: string; en: string; ar: string } | string;
   desc: { nl: string; en: string; ar: string } | string;
   image: string;
@@ -1032,6 +1033,15 @@ export function useAdminCooksQuery(params?: {
   });
 }
 
+export function useAdminBulkCookStatusMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: string }) =>
+      darnaApi.admin.bulkCookStatus({ ids, status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.adminCooks() }),
+  });
+}
+
 export function useAdminUpdateCookStatusMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -1173,6 +1183,15 @@ export function useAdminDishesPaginatedQuery(params?: {
         limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
       };
     },
+  });
+}
+
+export function useAdminBulkDishStatusMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: string }) =>
+      darnaApi.admin.bulkDishStatus({ ids, status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.adminDishes() }),
   });
 }
 

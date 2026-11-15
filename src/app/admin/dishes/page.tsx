@@ -31,6 +31,7 @@ import {
 } from "@/components/admin/admin-ui";
 import { loc } from "@/lib/data";
 import {
+  useAdminBulkDishStatusMutation,
   useAdminDishesPaginatedQuery,
   useAdminModerateDishMutation,
   useAdminRemoveDishMutation,
@@ -40,6 +41,7 @@ import { formatPrice } from "@/lib/utils";
 
 type DishRow = {
   id: string;
+  dbId: string;
   name: string;
   desc: string;
   image: string;
@@ -79,11 +81,14 @@ export default function AdminDishesPage() {
   }, [filter, query]);
   const moderateDish = useAdminModerateDishMutation();
   const removeDish = useAdminRemoveDishMutation();
+  const bulkStatus = useAdminBulkDishStatusMutation();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const rows = useMemo<DishRow[]>(
     () =>
       apiDishes.map((dish: AdminDishRecord) => ({
         id: dish.id,
+        dbId: dish.dbId,
         name: loc(dish.name, lang),
         desc: loc(dish.desc, lang),
         image: dish.image,
@@ -214,9 +219,27 @@ export default function AdminDishesPage() {
           </p>
         ) : (
           <>
+            {selectedIds.size > 0 ? (
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-[13px] font-semibold text-charcoal">{selectedIds.size} selected</span>
+                <Button size="sm" onClick={() => { bulkStatus.mutate({ ids: [...selectedIds], status: "LIVE" }); setSelectedIds(new Set()); }}>Approve</Button>
+                <Button size="sm" variant="secondary" onClick={() => { bulkStatus.mutate({ ids: [...selectedIds], status: "PAUSED" }); setSelectedIds(new Set()); }}>Pause</Button>
+              </div>
+            ) : null}
+
             <AdminTable>
             <thead>
               <tr>
+                <Th>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === filtered.length && filtered.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedIds(new Set(filtered.map((r) => r.dbId)));
+                      else setSelectedIds(new Set());
+                    }}
+                  />
+                </Th>
                 <Th>{t("adminNavDishes")}</Th>
                 <Th className="hidden lg:table-cell">{t("cookCol")}</Th>
                 <Th className="hidden md:table-cell">{t("filterCuisine")}</Th>
@@ -231,6 +254,9 @@ export default function AdminDishesPage() {
               {filtered.map((row) => (
                 <tr key={row.id} className="transition hover:bg-cream/40">
                   <Td>
+                   <Td>
+                     <input type="checkbox" checked={selectedIds.has(row.dbId)} onChange={(e) => { const next = new Set(selectedIds); if (e.target.checked) next.add(row.dbId); else next.delete(row.dbId); setSelectedIds(next); }} className="size-4" />
+                   </Td>
                     <button
                       type="button"
                       onClick={() => setSelectedId(row.id)}
