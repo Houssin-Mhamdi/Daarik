@@ -246,6 +246,9 @@ export class OrdersService {
     if (!order) {
       throw new NotFoundException("Order not found");
     }
+    if (order.customerId !== userId) {
+      throw new ForbiddenException("This order belongs to another customer");
+    }
 
     const includeInstructions =
       PAID_STATUSES.includes(order.paymentStatus) &&

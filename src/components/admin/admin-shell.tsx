@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -69,6 +69,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== "ADMIN") {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, user, router]);
 
   const activeItem = navGroups
     .flatMap((group) => group.items)
