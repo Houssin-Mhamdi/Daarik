@@ -76,6 +76,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, user, router]);
 
+  if (!isAuthenticated || user?.role !== "ADMIN") {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-cream">
+        <p className="text-sm text-muted">Redirecting to login…</p>
+      </div>
+    );
+  }
+
   const activeItem = navGroups
     .flatMap((group) => group.items)
     .find(
