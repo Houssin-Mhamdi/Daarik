@@ -28,7 +28,8 @@ import {
   useAdminDisputesPaginatedQuery,
   useAdminResolveDisputeMutation,
 } from "@/lib/queries";
-import { cn, formatPrice } from "@/lib/utils";
+import { cn, errorMessage, formatPrice } from "@/lib/utils";
+import { darnaApi } from "@/lib/api";
 
 type DisputeStatus = "open" | "review" | "resolved";
 
@@ -449,6 +450,20 @@ export default function AdminDisputesPage() {
                 ))}
               </div>
             </div>
+
+             <div className="rounded-xl border border-line bg-white p-4">
+               <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted-soft">
+                 Evidence (R2)
+               </p>
+               <input type="file" accept="image/*" onChange={async (e) => { const file = e.target.files?.[0]; if (!file || !selected) return; try { await darnaApi.admin.uploadDisputeEvidence(selected.id, file); toast(t("toastSaved")); } catch (err) { toast(errorMessage(err, "Upload failed"), { variant: "error" }); } }} className="mt-2 block w-full text-[13px]" />
+               {selected.evidence?.length ? (
+                 <div className="mt-2 flex flex-wrap gap-2">
+                   {selected.evidence.map((u: string) => (
+                     <a key={u} href={u} target="_blank" rel="noreferrer" className="text-[12px] text-terracotta underline">evidence</a>
+                   ))}
+                 </div>
+               ) : null}
+             </div>
 
             <div className="rounded-xl border border-line bg-white p-4">
               <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted-soft">

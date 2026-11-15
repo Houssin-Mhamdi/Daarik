@@ -149,6 +149,7 @@ export type AdminDisputeRecord = {
   status: "open" | "review" | "resolved";
   opened: string;
   resolvedAt: string | null;
+  evidence?: string[];
 };
 
 export type CookDashboardResponse = {

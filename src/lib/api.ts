@@ -855,6 +855,20 @@ export const darnaApi = {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    uploadDisputeEvidence: async (id: string, file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      const token = getAccessToken();
+      const res = await fetch(
+        `${API_BASE_URL}/admin/disputes/${encodeURIComponent(id)}/evidence`,
+        {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: form,
+        },
+      );
+      return (await res.json()) as { url: string; dispute: unknown };
+    },
     settings: () => apiRequest<Record<string, unknown>>("/admin/settings"),
     updateSettings: (body: Record<string, unknown>) =>
       apiRequest<Record<string, unknown>>("/admin/settings", {
