@@ -37,6 +37,7 @@ import {
 } from "@/components/admin/verification-sheet";
 import {
   useAdminApproveVerificationMutation,
+  useAdminBulkCookStatusMutation,
   useAdminCooksQuery,
   useAdminRequestVerificationChangesMutation,
   useAdminUpdateCookStatusMutation,
@@ -80,6 +81,8 @@ export default function AdminCooksPage() {
     page: String(page),
     limit: "15",
   });
+  const bulkCookStatus = useAdminBulkCookStatusMutation();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const approveVerification = useAdminApproveVerificationMutation();
   const requestVerificationChanges =
     useAdminRequestVerificationChangesMutation();
@@ -269,9 +272,26 @@ export default function AdminCooksPage() {
           </p>
         ) : (
           <>
+            {selectedIds.size > 0 ? (
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-[13px] font-semibold text-charcoal">{selectedIds.size} selected</span>
+                <Button size="sm" onClick={() => { bulkCookStatus.mutate({ ids: [...selectedIds], status: "VERIFIED" }); setSelectedIds(new Set()); }}>Approve</Button>
+                <Button size="sm" variant="secondary" onClick={() => { bulkCookStatus.mutate({ ids: [...selectedIds], status: "SUSPENDED" }); setSelectedIds(new Set()); }}>Suspend</Button>
+              </div>
+            ) : null}
             <AdminTable>
             <thead>
               <tr>
+                <Th>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === filtered.length && filtered.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedIds(new Set(filtered.map((r) => r.id)));
+                      else setSelectedIds(new Set());
+                    }}
+                  />
+                </Th>
                 <Th>{t("cookCol")}</Th>
                 <Th className="hidden md:table-cell">{t("cuisine")}</Th>
                 <Th className="hidden lg:table-cell">{t("totalOrders")}</Th>
@@ -285,6 +305,9 @@ export default function AdminCooksPage() {
               {filtered.map((row) => (
                 <tr key={row.id} className="transition hover:bg-cream/40">
                   <Td>
+                   <Td>
+                     <input type="checkbox" checked={selectedIds.has(row.id)} onChange={(e) => { const next = new Set(selectedIds); if (e.target.checked) next.add(row.id); else next.delete(row.id); setSelectedIds(next); }} className="size-4" />
+                   </Td>
                     <button
                       type="button"
                       onClick={() => setSelectedId(row.id)}
