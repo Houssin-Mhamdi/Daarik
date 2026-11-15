@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -50,6 +50,7 @@ export default function CookProfilePage() {
   >("dishesTab");
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>("all");
+  const categoryBarRef = useRef<HTMLDivElement>(null);
 
   const dishes: Dish[] = cookData?.dishes ?? [];
   const categories: string[] =
@@ -76,6 +77,20 @@ export default function CookProfilePage() {
     });
     return () => observer.disconnect();
   }, [categories, dishes]);
+
+  // Keep the active category tab visible inside the horizontal bar.
+  useEffect(() => {
+    const bar = categoryBarRef.current;
+    if (!bar) return;
+    const active = bar.querySelector(`[data-cat="${activeCategory}"]`) as HTMLElement | null;
+    if (active) {
+      const barRect = bar.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
+      if (activeRect.left < barRect.left || activeRect.right > barRect.right) {
+        active.scrollIntoView({ inline: "center", behavior: "smooth", block: "nearest" });
+      }
+    }
+  }, [activeCategory]);
 
   if (cookLoading) {
     return (
@@ -327,10 +342,10 @@ export default function CookProfilePage() {
 
               {tab === "dishesTab" ? (
                 <>
-                  <div className="sticky top-16 z-30 -mx-4 mt-2 flex gap-2 overflow-x-auto bg-cream/95 px-4 py-2 backdrop-blur md:static md:mx-0 md:bg-transparent md:px-0">
-                    <button type="button" onClick={() => scrollToCategory("all")} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", activeCategory === "all" ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{t("allCuisines")}</button>
+                  <div ref={categoryBarRef} className="sticky top-16 z-30 -mx-4 mt-2 flex gap-2 overflow-x-auto bg-cream/95 px-4 py-2 backdrop-blur md:static md:mx-0 md:bg-transparent md:px-0">
+                    <button type="button" data-cat="all" onClick={() => scrollToCategory("all")} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", activeCategory === "all" ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{t("allCuisines")}</button>
                     {categories.map((cat) => (
-                      <button key={cat} type="button" onClick={() => scrollToCategory(cat)} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", activeCategory === cat ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{translateCategory(cat, t)}</button>
+                      <button key={cat} type="button" data-cat={cat} onClick={() => scrollToCategory(cat)} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", activeCategory === cat ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{translateCategory(cat, t)}</button>
                     ))}
                   </div>
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-4">
