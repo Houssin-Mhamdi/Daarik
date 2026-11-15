@@ -60,9 +60,36 @@ export default function CookEarningsPage() {
   const canReceive = Boolean(settings?.canReceiveOrders);
 
   const totals = earnings?.totals;
+  const payouts = (earnings?.payouts ?? []) as { status?: string; amountCents?: number; netCents?: number }[];
   const balance = earnings?.balance ?? settings?.balance;
   const holdDays = earnings?.holdDays ?? settings?.holdDays ?? 7;
   const interval = earnings?.payoutPolicy.interval ?? "WEEKLY";
+
+  // Earnings forecast: if you sell 5 more, you earn X.
+  const avgOrderNet = (earnings?.orders?.length ?? 0) > 0
+    ? (totals?.thisMonthNetCents ?? 0) / (earnings?.orders?.length ?? 1)
+    : 0;
+  const forecast5 = Math.round(avgOrderNet * 5);
+
+  // Next payout: sum of released (available) balance.
+  const nextPayoutCents = payouts
+    .filter((p) => p.status === "PENDING" || p.status === "SCHEDULED" || p.status === "IN_TRANSIT")
+    .reduce((s, p) => s + (p.amountCents ?? p.netCents ?? 0), 0);
+  const nextPayoutDate = (() => {
+    const d = new Date();
+    const day = interval === "WEEKLY" ? earnings?.payoutPolicy?.weeklyAnchor ?? "monday" : null;
+    if (day) {
+      const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+      const target = days.indexOf(day.toLowerCase());
+      if (target >= 0) {
+        const today = d.getDay();
+        let diff = target - today;
+        if (diff <= 0) diff += 7;
+        d.setDate(d.getDate() + diff);
+      }
+    }
+    return d;
+  })();
 
   const stripeLabel = (status?: string) => {
     switch (status) {
@@ -424,6 +451,37 @@ export default function CookEarningsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Forecast & Next Payout */}
+            <Card className="mt-3 p-4">
+              <h2 className="text-[15.5px] font-semibold text-charcoal">
+                Forecast &amp; Next Payout
+              </h2>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-line bg-cream-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-soft">
+                    If you sell 5 more
+                  </p>
+                  <p className="mt-1 text-[18px] font-bold text-charcoal">
+                    {formatPrice(forecast5 / 100, lang)}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    based on avg order net
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-line bg-cream-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-soft">
+                    Next payout
+                  </p>
+                  <p className="mt-1 text-[18px] font-bold text-charcoal">
+                    {formatPrice(nextPayoutCents / 100, lang)}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    {nextPayoutDate.toLocaleDateString("nl-NL", { day: "2-digit", month: "short" })}
+                  </p>
+                </div>
+              </div>
+            </Card>
 
             {/* Orders */}
             <Card className="mt-3 p-4">

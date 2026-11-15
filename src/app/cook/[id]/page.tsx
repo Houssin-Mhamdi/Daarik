@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -52,11 +52,14 @@ export default function CookProfilePage() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const categoryBarRef = useRef<HTMLDivElement>(null);
 
-  const dishes: Dish[] = cookData?.dishes ?? [];
-  const categories: string[] =
-    cookData?.cook?.categories?.length
-      ? cookData.cook.categories
-      : ["Best selling", "Discount", "Drinks", "Mains", "Desserts", "Sides"];
+  const dishes: Dish[] = useMemo(() => cookData?.dishes ?? [], [cookData]);
+  const categories: string[] = useMemo(
+    () =>
+      cookData?.cook?.categories?.length
+        ? cookData.cook.categories
+        : ["Best selling", "Discount", "Drinks", "Mains", "Desserts", "Sides"],
+    [cookData],
+  );
 
   useEffect(() => {
     if (!cookData) return;
@@ -76,7 +79,7 @@ export default function CookProfilePage() {
       if (el) observer.observe(el);
     });
     return () => observer.disconnect();
-  }, [categories, dishes]);
+  }, [categories, dishes, cookData]);
 
   // Keep the active category tab visible inside the horizontal bar.
   useEffect(() => {

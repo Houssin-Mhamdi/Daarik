@@ -603,7 +603,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       conflictResolver.current?.(false);
       conflictResolver.current = null;
     };
-  }, [apiUser?.id, cartHydrated, applyServerCart, lang, toast]);
+  }, [apiUser?.id, cartHydrated, applyServerCart, lang, toast, queryClient]);
 
   const addToCart = useCallback(
     (dishId: string, qty = 1, dishFallback?: Dish) => {

@@ -149,7 +149,7 @@ function ExploreContent() {
   );
 
   const paginated = useDishesPaginatedQuery(params);
-  const fetched = paginated.data?.items ?? [];
+  const fetched = useMemo(() => paginated.data?.items ?? [], [paginated.data]);
   const filtered = useMemo(() => {
     if (!nearMe || !userCoords) return fetched;
     const nearbyCookIds = new Set(
@@ -548,6 +548,34 @@ function ExploreContent() {
                   {t(item.key)}
                 </button>
               ))}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <label className="text-[12px] text-muted">
+                Min €
+                <input
+                  type="range"
+                  min={0}
+                  max={25}
+                  step={1}
+                  value={priceMin}
+                  onChange={(e) => setPriceMin(Number(e.target.value))}
+                  className="mt-1 w-full"
+                />
+                <span className="block text-center text-[12px] font-semibold">{priceMin}</span>
+              </label>
+              <label className="text-[12px] text-muted">
+                Max €
+                <input
+                  type="range"
+                  min={0}
+                  max={25}
+                  step={1}
+                  value={priceMax}
+                  onChange={(e) => setPriceMax(Number(e.target.value))}
+                  className="mt-1 w-full"
+                />
+                <span className="block text-center text-[12px] font-semibold">{priceMax}</span>
+              </label>
             </div>
           </section>
 

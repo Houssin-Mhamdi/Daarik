@@ -497,7 +497,7 @@ export function useDishAutocompleteQuery(q: string, limit = 8) {
   return useQuery({
     queryKey: ["dishes", "autocomplete", q, limit],
     queryFn: async () => {
-      if (!q || q.trim().length < 2) return [] as any[];
+      if (!q || q.trim().length < 2) return [] as unknown[];
       const result = await darnaApi.dishes.autocomplete({ q: q.trim(), limit: String(limit) });
       return (result?.items ?? []).map(normalizeDish);
     },

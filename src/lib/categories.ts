@@ -1,4 +1,4 @@
-import type { TranslationKey } from "@/lib/i18n";
+
 
 const DEFAULT_CATEGORIES = [
   "Best selling",
@@ -18,11 +18,11 @@ const KEY_MAP: Record<string, string> = {
   "Sides": "catSides",
 };
 
-export function translateCategory(cat: string, t: (key: any) => string): string {
+export function translateCategory(cat: string, t: (key: string) => string): string {
   const key = KEY_MAP[cat];
   if (key) {
     try {
-      return t(key as any);
+      return t(key);
     } catch {
       return cat;
     }

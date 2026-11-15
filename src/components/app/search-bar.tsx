@@ -8,7 +8,7 @@ import { Sheet } from "@/components/ui/overlays";
 import { Rating } from "@/components/ui/controls";
 import { useApp } from "@/components/providers/app-provider";
 import { Highlight } from "@/components/app/highlight";
-import { loc } from "@/lib/data";
+import { loc, type Dish } from "@/lib/data";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useDishAutocompleteQuery } from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
@@ -40,8 +40,8 @@ export function SearchBar({
 
   const results = useMemo(() => {
     const q = debouncedQuery.trim();
-    if (q.length < 3) return [];
-    return autocompleteDishes.slice(0, 6);
+    if (q.length < 3) return [] as Dish[];
+    return (autocompleteDishes as Dish[]).slice(0, 6);
   }, [debouncedQuery, autocompleteDishes]);
 
   const cookResults = useMemo(() => {
