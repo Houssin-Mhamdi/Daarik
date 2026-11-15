@@ -51,6 +51,32 @@ export default function CookProfilePage() {
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>("all");
 
+  const dishes: Dish[] = cookData?.dishes ?? [];
+  const categories: string[] =
+    cookData?.cook?.categories?.length
+      ? cookData.cook.categories
+      : ["Best selling", "Discount", "Drinks", "Mains", "Desserts", "Sides"];
+
+  useEffect(() => {
+    if (!cookData) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const id = entry.target.id.replace("cat-", "");
+            if (id) setActiveCategory(id);
+          }
+        }
+      },
+      { rootMargin: "-80px 0px -70% 0px", threshold: 0 },
+    );
+    categories.forEach((cat) => {
+      const el = document.getElementById(`cat-${cat}`);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [categories, dishes]);
+
   if (cookLoading) {
     return (
       <div className="mx-auto max-w-[1240px] px-4 py-12 md:px-8">
@@ -76,12 +102,6 @@ export default function CookProfilePage() {
     );
   }
 
-  const dishes: Dish[] = cookData?.dishes ?? [];
-  const categories: string[] =
-    cookData?.cook?.categories?.length
-      ? cookData.cook.categories
-      : ["Best selling", "Discount", "Drinks", "Mains", "Desserts", "Sides"];
-
   const scrollToCategory = (cat: string) => {
     if (cat === "all") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -95,26 +115,7 @@ export default function CookProfilePage() {
     }
   };
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const id = entry.target.id.replace("cat-", "");
-            if (id) setActiveCategory(id);
-          }
-        }
-      },
-      { rootMargin: "-80px 0px -70% 0px", threshold: 0 },
-    );
-    categories.forEach((cat) => {
-      const el = document.getElementById(`cat-${cat}`);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-  }, [categories, dishes]);
 
-  const visibleDishes = dishes;
   const cookReviews = cookData?.reviews ?? [];
   const saved = isFavoriteCook(cook.id);
   const cuisineLabels = cook.cuisineIds
