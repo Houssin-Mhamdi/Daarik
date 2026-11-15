@@ -937,6 +937,16 @@ export function useCookEarningsQuery() {
 // ---------------------------------------------------------------------------
 // ADMIN QUERIES & MUTATIONS
 // ---------------------------------------------------------------------------
+export function useAdminAnalyticsQuery(range: "7d" | "30d" | "90d" = "30d") {
+  return useQuery({
+    queryKey: ["admin", "analytics", range],
+    queryFn: async () => {
+      if (!getAccessToken()) return null;
+      return await darnaApi.admin.analytics(range);
+    },
+  });
+}
+
 export function useAdminOverviewQuery(range: "30d" | "90d" = "30d") {
   return useQuery({
     queryKey: queryKeys.adminOverview(range),
