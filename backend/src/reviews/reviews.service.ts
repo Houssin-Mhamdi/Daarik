@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateReviewDto } from "./dto/review.dto";
 
@@ -25,6 +25,21 @@ export class ReviewsService {
           : {}),
       },
       orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async reply(reviewId: string, userId: string, text: string) {
+    const review = await this.prisma.review.findUnique({ where: { id: reviewId } });
+    if (!review) throw new NotFoundException("Review not found");
+    const cook = await this.prisma.cookProfile.findFirst({
+      where: { userId },
+    });
+    if (!cook || cook.id !== review.cookId) {
+      throw new ForbiddenException("Not your review");
+    }
+    return this.prisma.review.update({
+      where: { id: reviewId },
+      data: { reply: { nl: text, en: text, ar: text }, repliedAt: new Date() },
     });
   }
 

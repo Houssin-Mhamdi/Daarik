@@ -422,6 +422,17 @@ export const darnaApi = {
     },
   },
   dishes: {
+    autocomplete: (params?: { q?: string; limit?: string }) => {
+      const qs = new URLSearchParams(
+        Object.entries(params ?? {}).filter(([, v]) => Boolean(v)) as [
+          string,
+          string,
+        ][],
+      ).toString();
+      return apiRequest<{
+        items: { id: string; name: unknown; price: number; image: string; cook?: string; cookSlug?: string }[];
+      }>(`/dishes/autocomplete${qs ? `?${qs}` : ""}`);
+    },
     list: (params?: Record<string, string>) => {
       const qs = new URLSearchParams(params ?? {}).toString();
       return apiRequest<{

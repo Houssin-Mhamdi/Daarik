@@ -493,6 +493,18 @@ export function useDishesPaginatedQuery(
   });
 }
 
+export function useDishAutocompleteQuery(q: string, limit = 8) {
+  return useQuery({
+    queryKey: ["dishes", "autocomplete", q, limit],
+    queryFn: async () => {
+      if (!q || q.trim().length < 2) return [] as any[];
+      const result = await darnaApi.dishes.autocomplete({ q: q.trim(), limit: String(limit) });
+      return (result?.items ?? []).map(normalizeDish);
+    },
+    enabled: q.trim().length >= 2,
+  });
+}
+
 export function useDishQuery(id: string) {
   return useQuery({
     queryKey: queryKeys.dish(id),

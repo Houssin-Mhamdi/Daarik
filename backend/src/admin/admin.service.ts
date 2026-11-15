@@ -877,6 +877,23 @@ export class AdminService {
     };
   }
 
+  async getDispute(idOrCode: string) {
+    return this.prisma.dispute.findFirst({
+      where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
+    });
+  }
+
+  async appendDisputeEvidence(idOrCode: string, url: string) {
+    const dispute = await this.getDispute(idOrCode);
+    if (!dispute) throw new NotFoundException("Dispute not found");
+    const evidence = [...(dispute.evidence ?? []), url];
+    const timeline = [...(Array.isArray(dispute.timeline) ? dispute.timeline : []), { at: new Date(), action: "evidence_uploaded", url }];
+    return this.prisma.dispute.update({
+      where: { id: dispute.id },
+      data: { evidence, timeline: timeline as any },
+    });
+  }
+
   async resolveDispute(idOrCode: string, dto: ResolveDisputeDto) {
     const dispute = await this.prisma.dispute.findFirst({
       where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
@@ -1028,6 +1045,79 @@ export class AdminService {
   // ---------------------------------------------------------------------------
   // Settings
   // ---------------------------------------------------------------------------
+
+  async bulkCookStatus(ids: string[], status: string) {
+    const result = await this.prisma.cookProfile.updateMany({
+      where: { id: { in: ids } },
+      data: { status: status.toUpperCase() as CookStatus },
+    });
+    return { updated: result.count };
+  }
+
+  async bulkDishStatus(ids: string[], status: string) {
+    const result = await this.prisma.dish.updateMany({
+      where: { id: { in: ids } },
+      data: { status: status.toUpperCase() as DishStatus },
+    });
+    return { updated: result.count };
+  }
+
+  async getAnalytics(range = "30d") {
+    const days = range === "90d" ? 90 : range === "7d" ? 7 : 30;
+    const since = new Date(Date.now() - days * DAY_MS);
+
+    const [orders, cooks, customers, repeatCustomers] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { createdAt: { gte: since } },
+        select: {
+          totalCents: true,
+          commissionCents: true,
+          customerId: true,
+          cookId: true,
+          status: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.cookProfile.findMany({
+        select: { id: true, name: true, ordersCount: true, rating: true, city: true },
+        orderBy: { ordersCount: "desc" },
+        take: 10,
+      }),
+      this.prisma.user.count({ where: { role: "CUSTOMER" } }),
+      this.prisma.order.groupBy({
+        by: ["customerId"],
+        where: { createdAt: { gte: since } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const gmv = orders.reduce((s, o) => s + (o.totalCents ?? 0), 0);
+    const commission = orders.reduce((s, o) => s + (o.commissionCents ?? 0), 0);
+    const completed = orders.filter((o) => o.status === "COMPLETED").length;
+    const cancelled = orders.filter((o) => o.status === "CANCELLED").length;
+    const repeatRate =
+      repeatCustomers.length > 0
+        ? repeatCustomers.filter((c) => c._count._all > 1).length / repeatCustomers.length
+        : 0;
+
+    return {
+      range,
+      gmv: gmv / 100,
+      commission: commission / 100,
+      ordersCount: orders.length,
+      completedCount: completed,
+      cancelledCount: cancelled,
+      customersCount: customers,
+      repeatRate: Math.round(repeatRate * 1000) / 1000,
+      topCooks: cooks.map((c) => ({
+        id: c.id,
+        name: c.name,
+        orders: c.ordersCount,
+        rating: c.rating,
+        city: c.city,
+      })),
+    };
+  }
 
   async getSettings() {
     const settings = await this.prisma.platformSetting.upsert({

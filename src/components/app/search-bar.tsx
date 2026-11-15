@@ -10,6 +10,7 @@ import { useApp } from "@/components/providers/app-provider";
 import { Highlight } from "@/components/app/highlight";
 import { loc } from "@/lib/data";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useDishAutocompleteQuery } from "@/lib/queries";
 import { cn, formatPrice } from "@/lib/utils";
 
 export function SearchBar({
@@ -28,6 +29,7 @@ export function SearchBar({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounce(query, 300);
+  const { data: autocompleteDishes = [] } = useDishAutocompleteQuery(debouncedQuery);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -37,30 +39,10 @@ export function SearchBar({
   }, [open]);
 
   const results = useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase();
+    const q = debouncedQuery.trim();
     if (q.length < 3) return [];
-    return dishes
-      .filter((dish) => {
-        const cook = getCook(dish.cookId);
-        return (
-          loc(dish.name, lang).toLowerCase().includes(q) ||
-          loc(dish.desc, lang).toLowerCase().includes(q) ||
-          loc(
-            cuisines.find((cuisine) => cuisine.id === dish.cuisineId)
-              ?.label ?? {
-              nl: dish.cuisineId,
-              en: dish.cuisineId,
-              ar: dish.cuisineId,
-            },
-            lang,
-          )
-            .toLowerCase()
-            .includes(q) ||
-          cook?.name.toLowerCase().includes(q)
-        );
-      })
-      .slice(0, 6);
-  }, [debouncedQuery, lang, dishes, cuisines, getCook]);
+    return autocompleteDishes.slice(0, 6);
+  }, [debouncedQuery, autocompleteDishes]);
 
   const cookResults = useMemo(() => {
     const q = debouncedQuery.trim().toLowerCase();

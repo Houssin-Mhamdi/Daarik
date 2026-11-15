@@ -7,10 +7,16 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UploadedFile,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Role } from "@prisma/client";
 import { AdminService } from "./admin.service";
+import { AuditService } from "../audit/audit.service";
+import { R2StorageService } from "../uploads/r2-storage.service";
 import { CreateDishDto } from "../dishes/dto/dish.dto";
 import { UpdateAvailabilityDto } from "../cooks/dto/cook.dto";
 import {
@@ -34,7 +40,11 @@ import {
 @Roles(Role.ADMIN)
 @Controller("admin")
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly auditService: AuditService,
+    private readonly r2: R2StorageService,
+  ) {}
 
   @Get("overview")
   getOverview(@Query("range") range?: string) {
@@ -228,5 +238,44 @@ export class AdminController {
   @Patch("settings")
   updateSettings(@Body() dto: UpdatePlatformSettingsDto) {
     return this.adminService.updateSettings(dto);
+  }
+
+  @Get("audit")
+  getAudit(
+    @Query("entity") entity?: string,
+    @Query("actorId") actorId?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.auditService.list({ entity, actorId, page, limit });
+  }
+
+  @Get("analytics")
+  getAnalytics(@Query("range") range?: string) {
+    return this.adminService.getAnalytics(range);
+  }
+
+  @Post("cooks/bulk-status")
+  bulkCookStatus(@Body() dto: { ids: string[]; status: string }) {
+    return this.adminService.bulkCookStatus(dto.ids, dto.status);
+  }
+
+  @Post("dishes/bulk-status")
+  bulkDishStatus(@Body() dto: { ids: string[]; status: string }) {
+    return this.adminService.bulkDishStatus(dto.ids, dto.status);
+  }
+
+  @Post("disputes/:id/evidence")
+  @UseInterceptors(FileInterceptor("file"))
+  async uploadDisputeEvidence(
+    @Param("id") id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    if (!file) throw new Error("No file");
+    const origin = `${req.protocol}://${req.get("host")}`;
+    const result = await this.r2.uploadImage(file, origin, "documents");
+    const updated = await this.adminService.appendDisputeEvidence(id, result.url);
+    return { url: result.url, dispute: updated };
   }
 }

@@ -25,6 +25,15 @@ export class DishesController {
   constructor(private readonly dishesService: DishesService) {}
 
   @Public()
+  @Get("autocomplete")
+  autocomplete(
+    @Query("q") q?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.dishesService.autocomplete(q ?? "", Number(limit) || 8);
+  }
+
+  @Public()
   @Get()
   findAll(
     @Query("cuisine") cuisine?: string,

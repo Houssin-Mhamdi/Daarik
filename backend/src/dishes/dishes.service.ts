@@ -82,6 +82,30 @@ export class DishesService {
     };
   }
 
+  async autocomplete(q: string, limit = 8) {
+    const term = q.trim().toLowerCase();
+    if (term.length < 2) return { items: [] };
+    const dishes = await this.prisma.dish.findMany({
+      where: {
+        status: DishStatus.LIVE,
+        searchText: { contains: term },
+      },
+      select: { id: true, slug: true, name: true, price: true, image: true, cook: { select: { name: true, slug: true } } },
+      orderBy: [{ featured: "desc" }, { rating: "desc" }],
+      take: Math.min(20, Math.max(1, limit)),
+    });
+    return {
+      items: dishes.map((d) => ({
+        id: d.slug || d.id,
+        name: d.name,
+        price: d.price,
+        image: d.image,
+        cook: d.cook?.name,
+        cookSlug: d.cook?.slug,
+      })),
+    };
+  }
+
   async findOnePublic(idOrSlug: string) {
     const dish = await this.prisma.dish.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
@@ -140,6 +164,10 @@ export class DishesService {
   }
 
   async createDish(userId: string, dto: CreateDishDto) {
+    // Content moderation: auto-flag offensive text.
+    const OFFENSIVE = ["fuck", "shit", "damn", "bitch", "asshole"];
+    const haystack = `${dto.name?.nl ?? ""} ${dto.name?.en ?? ""} ${dto.name?.ar ?? ""} ${dto.desc?.nl ?? ""} ${dto.desc?.en ?? ""} ${dto.desc?.ar ?? ""}`.toLowerCase();
+    const flagged = OFFENSIVE.some((w) => haystack.includes(w));
     const cook = await this.resolveCook(userId);
     const baseSlug =
       dto.slug ||
@@ -176,7 +204,9 @@ export class DishesService {
         family: dto.family ?? false,
         badge: dto.badge,
         prepTime: dto.prepTime ?? { nl: "1 uur", en: "1 hour", ar: "ساعة" },
-        status: dto.status ?? DishStatus.LIVE,
+        status: flagged ? DishStatus.DRAFT : (dto.status ?? DishStatus.LIVE),
+        reported: flagged,
+        reportReason: flagged ? "auto-flagged: offensive content" : undefined,
         searchText: buildDishSearchText(dto),
       },
     });

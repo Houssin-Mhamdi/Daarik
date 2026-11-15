@@ -439,8 +439,10 @@ model Review {
   rating     Int
   date       Json
   text       Json
+  reply      Json?
+  repliedAt  DateTime?
   createdAt  DateTime    @default(now())
-
+ 
   @@index([cookId])
   @@index([dishId])
 }
@@ -560,14 +562,36 @@ model Dispute {
   /// Stripe dispute status string as delivered by the webhook.
   stripeStatus     String?
   transferReversed Boolean      @default(false)
-
+ 
+  /// Evidence file URLs (R2) uploaded by admin/customer.
+  evidence       String[]      @default([])
+  /// Timeline of events (status changes, evidence uploads, resolutions).
+  timeline       Json?
+ 
   status         DisputeStatus @default(OPEN)
   openedAt       DateTime      @default(now())
   resolvedAt     DateTime?
 
   @@index([status])
 }
-
+ 
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actorRole String?
+  action    String
+  entity    String
+  entityId  String?
+  diff      Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+ 
+  @@index([entity, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+ 
 model Notification {
   id        String   @id @default(cuid())
   userId    String?

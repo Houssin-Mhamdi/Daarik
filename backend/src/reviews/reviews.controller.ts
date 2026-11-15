@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { ReviewsService } from "./reviews.service";
@@ -28,5 +28,14 @@ export class ReviewsController {
   @Post()
   create(@CurrentUser() user: JwtPayloadUser, @Body() dto: CreateReviewDto) {
     return this.reviewsService.create(user.sub, dto);
+  }
+
+  @Patch(":id/reply")
+  reply(
+    @Param("id") id: string,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() dto: { text: string },
+  ) {
+    return this.reviewsService.reply(id, user.sub, dto.text);
   }
 }

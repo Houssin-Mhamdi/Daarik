@@ -31,6 +31,14 @@ export class OrdersService {
   ) {}
 
   async createOrder(userId: string, dto: CreateOrderDto) {
+    // Fraud guard: velocity check (max 5 orders/hour per user).
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentCount = await this.prisma.order.count({
+      where: { customerId: userId, createdAt: { gte: oneHourAgo } },
+    });
+    if (recentCount >= 5) {
+      throw new BadRequestException("Too many orders. Please try again later.");
+    }
     // Load items either from request body or from the user's cart
     let itemInputs = dto.items;
     if (!itemInputs || itemInputs.length === 0) {
