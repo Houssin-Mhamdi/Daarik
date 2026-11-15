@@ -24,7 +24,11 @@ export const DISH_FILTERS: DishFilter[] = [
   {
     key: "dietary",
     apply: (q, w) => {
-      if (q.dietary) w.dietary = { has: q.dietary };
+      if (q.dietary) {
+        const list = q.dietary.split(",").map((s) => s.trim()).filter(Boolean);
+        if (list.length === 1) w.dietary = { has: list[0] };
+        else if (list.length > 1) w.dietary = { hasEvery: list };
+      }
     },
   },
   {
@@ -77,6 +81,12 @@ export const DISH_FILTERS: DishFilter[] = [
       if (q.priceMax) {
         w.price = { ...(w.price ?? {}), lte: Number(q.priceMax) };
       }
+    },
+  },
+  {
+    key: "ratingMin",
+    apply: (q, w) => {
+      if (q.ratingMin) w.rating = { gte: Number(q.ratingMin) };
     },
   },
   {

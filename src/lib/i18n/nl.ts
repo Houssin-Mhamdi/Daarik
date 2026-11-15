@@ -185,6 +185,7 @@ const nl: Partial<Record<EnKeys, string>> = {
   filterPrice: "Prijs",
   filterAvailability: "Beschikbaarheid",
   filterDietary: "Dieetwensen",
+  filterRating: "Minimale beoordeling",
   clearFilters: "Filters wissen",
   showResults: "Toon {count} gerechten",
   resultsFound: "{count} gerechten gevonden",

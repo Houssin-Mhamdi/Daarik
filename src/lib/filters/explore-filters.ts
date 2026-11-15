@@ -1,12 +1,17 @@
-export type Sort = "recommended" | "priceLow" | "priceHigh" | "rating" | "nearest";
+export type Sort = "recommended" | "priceLow" | "priceHigh" | "rating" | "newest" | "nearest";
 
 export type ExploreFilterState = {
   query: string;
   city: string;
   cuisine: string;
   price: "low" | "mid" | "high" | null;
+  priceMin: number;
+  priceMax: number;
   availability: "today" | "weekend" | null;
   diet: string[];
+  ratingMin: number;
+  nearMe: boolean;
+  userCoords: { lat: number; lng: number } | null;
   sort: Sort;
   page: number;
 };
@@ -24,13 +29,12 @@ export const EXPLORE_FILTERS: { key: string; value: (s: ExploreFilterState) => s
   { key: "q", value: (s) => s.query.trim() || undefined },
   { key: "city", value: (s) => s.city || undefined },
   { key: "cuisine", value: (s) => (s.cuisine !== "all" ? s.cuisine : undefined) },
-  { key: "dietary", value: (s) => s.diet[0] },
+  { key: "dietary", value: (s) => (s.diet.length ? s.diet.join(",") : undefined) },
   { key: "weekend", value: (s) => (s.availability === "weekend" ? "true" : undefined) },
   { key: "sameDay", value: (s) => (s.availability === "today" ? "true" : undefined) },
-  { key: "priceMin", value: (s) =>
-      s.price === "mid" ? "10" : s.price === "high" ? "15.01" : undefined },
-  { key: "priceMax", value: (s) =>
-      s.price === "low" ? "9.99" : s.price === "mid" ? "15" : undefined },
+  { key: "priceMin", value: (s) => (s.priceMin > 0 ? String(s.priceMin) : s.price === "mid" ? "10" : s.price === "high" ? "15.01" : undefined) },
+  { key: "priceMax", value: (s) => (s.priceMax < 25 ? String(s.priceMax) : s.price === "low" ? "9.99" : s.price === "mid" ? "15" : undefined) },
+  { key: "ratingMin", value: (s) => (s.ratingMin > 0 ? String(s.ratingMin) : undefined) },
   { key: "sort", value: (s) =>
       s.sort === "priceLow"
         ? "priceLow"
@@ -38,7 +42,11 @@ export const EXPLORE_FILTERS: { key: string; value: (s: ExploreFilterState) => s
           ? "priceHigh"
           : s.sort === "rating"
             ? "rating"
-            : undefined },
+            : s.sort === "newest"
+              ? "newest"
+              : s.sort === "nearest"
+                ? "nearest"
+                : undefined },
 ];
 
 export function buildExploreParams(state: ExploreFilterState): Record<string, string> {

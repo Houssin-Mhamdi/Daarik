@@ -26,6 +26,7 @@ import { useDishesPaginatedQuery } from "@/lib/queries";
 
 import { loc } from "@/lib/data";
 import { cn, formatPrice } from "@/lib/utils";
+import { cookPoint, distanceKm } from "@/lib/cities";
 
 import { buildExploreParams, type Sort } from "@/lib/filters/explore-filters";
 type PriceFilter = "low" | "mid" | "high" | null;
@@ -64,8 +65,13 @@ function ExploreContent() {
   const [query, setQuery] = useState("");
   const [cuisine, setCuisine] = useState<string>("all");
   const [price, setPrice] = useState<PriceFilter>(null);
+  const [priceMin, setPriceMin] = useState<number>(0);
+  const [priceMax, setPriceMax] = useState<number>(25);
   const [availability, setAvailability] = useState<Availability>(null);
   const [diet, setDiet] = useState<string[]>([]);
+  const [ratingMin, setRatingMin] = useState<number>(0);
+  const [nearMe, setNearMe] = useState(false);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [sort, setSort] = useState<Sort>("recommended");
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
@@ -76,6 +82,18 @@ function ExploreContent() {
   const { city: savedCity, setCity, setArea } = useSearchArea();
   const city = urlCity !== null ? urlCity : savedCity;
   const [locationOpen, setLocationOpen] = useState(false);
+
+  const enableNearMe = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setNearMe(true);
+      },
+      () => setNearMe(false),
+      { enableHighAccuracy: false, maximumAge: 300000, timeout: 10000 },
+    );
+  };
 
   const [draftCuisine, setDraftCuisine] = useState("all");
   const [draftPrice, setDraftPrice] = useState<PriceFilter>(null);
@@ -117,16 +135,33 @@ function ExploreContent() {
         city,
         cuisine,
         price,
+        priceMin,
+        priceMax,
         availability,
         diet,
+        ratingMin,
+        nearMe,
+        userCoords,
         sort,
         page: 1,
       }),
-    [query, city, cuisine, price, availability, diet, sort],
+    [query, city, cuisine, price, priceMin, priceMax, availability, diet, ratingMin, nearMe, userCoords, sort],
   );
 
   const paginated = useDishesPaginatedQuery(params);
-  const filtered = paginated.data?.items ?? [];
+  const fetched = paginated.data?.items ?? [];
+  const filtered = useMemo(() => {
+    if (!nearMe || !userCoords) return fetched;
+    const nearbyCookIds = new Set(
+      cooks
+        .filter((c) => {
+          const pt = cookPoint(c);
+          return pt ? distanceKm(userCoords, pt) <= 25 : false;
+        })
+        .map((c) => c.id),
+    );
+    return fetched.filter((d) => nearbyCookIds.has(d.cookId));
+  }, [fetched, nearMe, userCoords, cooks]);
   const isLoading = paginated.isLoading;
 
   const groups = useMemo(() => {
@@ -222,6 +257,19 @@ function ExploreContent() {
             <MapPin className="size-3.5 text-terracotta" />
             {city || t("allNetherlands")}
             <ChevronDown className="size-3 text-muted" />
+          </button>
+          <button
+            type="button"
+            onClick={() => (nearMe ? setNearMe(false) : enableNearMe())}
+            className={cn(
+              "flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold shadow-sm transition",
+              nearMe
+                ? "border-terracotta bg-terracotta text-white"
+                : "border-line bg-white text-charcoal",
+            )}
+          >
+            <MapPin className="size-3.5" />
+            {nearMe ? "Near me ✓" : "Near me"}
           </button>
         </div>
 
@@ -530,6 +578,29 @@ function ExploreContent() {
                   )}
                 >
                   {t(item.key)}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-[14px] font-bold uppercase tracking-[0.14em] text-muted-soft">
+              {t("filterRating")}
+            </h3>
+            <div className="mt-2.5 flex gap-2">
+              {[0, 3, 4, 4.5].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRatingMin(r)}
+                  className={cn(
+                    "h-9 flex-1 rounded-xl border text-[13px] font-semibold",
+                    ratingMin === r
+                      ? "border-charcoal bg-charcoal text-cream"
+                      : "border-line bg-white text-charcoal",
+                  )}
+                >
+                  {r === 0 ? t("all") : `${r}+`}
                 </button>
               ))}
             </div>

@@ -186,6 +186,7 @@ const en = {
   filterPrice: "Price",
   filterAvailability: "Availability",
   filterDietary: "Dietary preferences",
+  filterRating: "Minimum rating",
   clearFilters: "Clear filters",
   showResults: "Show {count} dishes",
   resultsFound: "{count} dishes found",
