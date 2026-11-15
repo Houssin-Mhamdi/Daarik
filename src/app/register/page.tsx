@@ -7,6 +7,7 @@ import { ArrowRight } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
+import { CityCombobox } from "@/components/app/city-combobox";
 import { useApp } from "@/components/providers/app-provider";
 import {
   getAuthenticatedHome,
@@ -145,7 +146,11 @@ export default function RegisterPage() {
             />
           </Field>
           <Field label={t("city")}>
-            <Input value={city} onChange={(e) => setCity(e.target.value)} />
+            <CityCombobox
+              value={city}
+              onChange={setCity}
+              placeholder={t("city")}
+            />
           </Field>
           <Field label="Password (min 8 chars)" required>
             <Input

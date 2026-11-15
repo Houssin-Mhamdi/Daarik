@@ -26,6 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Textarea, Field, Select } from "@/components/ui/input";
+import { CityCombobox } from "@/components/app/city-combobox";
 import { Checkbox } from "@/components/ui/controls";
 import { Card } from "@/components/ui/misc";
 import { useApp } from "@/components/providers/app-provider";
@@ -564,11 +565,10 @@ export default function CookApplyPage() {
                     error={errors.city}
                     required
                   >
-                    <Input
-                      id="apply-city"
+                    <CityCombobox
                       value={city}
-                      onChange={(event) => setCity(event.target.value)}
-                      autoComplete="address-level2"
+                      onChange={setCity}
+                      placeholder={t("cityLabel")}
                     />
                   </Field>
                 </div>
