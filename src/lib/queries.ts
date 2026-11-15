@@ -1238,6 +1238,24 @@ export function useAdminDisputesQuery(params?: {
   });
 }
 
+export function useAdminAuditQuery(params?: {
+  entity?: string;
+  actorId?: string;
+  page?: string;
+  limit?: string;
+}) {
+  return useQuery({
+    queryKey: ["admin", "audit", params ?? {}],
+    queryFn: async () => {
+      if (!getAccessToken())
+        return { items: [] as unknown[], total: 0, page: 1, limit: 25 };
+      const result = await darnaApi.admin.audit(params);
+      const items = Array.isArray(result) ? result : (result?.items ?? []);
+      return { items, total: result?.total ?? items.length, page: result?.page ?? 1, limit: result?.limit ?? items.length };
+    },
+  });
+}
+
 export function useAdminDisputesPaginatedQuery(params?: {
   status?: string;
   page?: string;

@@ -738,6 +738,16 @@ export const darnaApi = {
       apiRequest<unknown>(`/admin/payouts/${encodeURIComponent(id)}/sync`, {
         method: "POST",
       }),
+    audit: (params?: { entity?: string; actorId?: string; page?: string; limit?: string }) => {
+      const qs = new URLSearchParams(
+        Object.entries(params ?? {}).filter(([, v]) => Boolean(v)) as [string, string][],
+      ).toString();
+      return apiRequest<{ items: unknown[]; total: number; page: number; limit: number }>(
+        `/admin/audit${qs ? `?${qs}` : ""}`,
+      );
+    },
+    analytics: (range?: string) =>
+      apiRequest<unknown>(`/admin/analytics${range ? `?range=${range}` : ""}`),
     marketplace: () =>
       apiRequest<{
         balance: { availableCents: number; pendingCents: number } | null;
