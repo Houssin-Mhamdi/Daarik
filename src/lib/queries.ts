@@ -422,6 +422,33 @@ export function useNotificationsQuery() {
   });
 }
 
+export function useSavedAddressesQuery() {
+  return useQuery({
+    queryKey: ["users", "addresses"],
+    queryFn: async () => {
+      if (!getAccessToken()) return [] as unknown[];
+      const result = await darnaApi.users.addresses();
+      return Array.isArray(result) ? result : [];
+    },
+  });
+}
+
+export function useCreateSavedAddressMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => darnaApi.users.createAddress(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users", "addresses"] }),
+  });
+}
+
+export function useDeleteSavedAddressMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => darnaApi.users.deleteAddress(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users", "addresses"] }),
+  });
+}
+
 export function useFavoritesQuery() {
   return useQuery({
     queryKey: queryKeys.favorites,

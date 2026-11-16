@@ -104,6 +104,21 @@ enum DisputeStatus {
   RESOLVED
 }
 
+model SavedAddress {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String   @default("Home")
+  address   String
+  lat       Float?
+  lng       Float?
+  radiusKm  Int      @default(10)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
 model User {
   id               String   @id @default(cuid())
   email            String   @unique
@@ -128,6 +143,7 @@ model User {
   cartItems        CartItem[]
   favoriteDishes   FavoriteDish[]
   favoriteCooks    FavoriteCook[]
+  savedAddresses   SavedAddress[]
   orders           Order[]           @relation("CustomerOrders")
   reviews          Review[]
   notifications    Notification[]
