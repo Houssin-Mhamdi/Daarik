@@ -360,7 +360,7 @@ export default function CookProfilePage() {
                           <h2 className="mb-3 font-display text-[24px] font-bold text-charcoal md:text-[28px]">{translateCategory(cat, t)}</h2>
                           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
                             {catDishes.map((dish) => (
-                              <DishCard key={dish.id} dish={dish} showCook={false} variant="wide" />
+                              <DishCard key={dish.id} dish={dish} showCook={false} />
                             ))}
                           </div>
                         </section>
