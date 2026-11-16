@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input, Textarea, Field, Select } from "@/components/ui/input";
 import { Switch } from "@/components/ui/controls";
 import { ConfirmDialog, Sheet } from "@/components/ui/overlays";
+import { MeetingPointPicker } from "@/components/app/meeting-point-picker";
 import { Card, SettingRow } from "@/components/ui/misc";
 import { CookMobileHeader } from "@/components/cook/cook-mobile-header";
 import { useApp } from "@/components/providers/app-provider";
@@ -159,6 +160,7 @@ export default function CookProfilePage() {
       ? (cook.meetingPoints as { id: string; name: string; address: string }[])
       : [],
   );
+  const [mpPickerOpen, setMpPickerOpen] = useState(false);
 
   const chooseCity = (name: string) => {
     setKitchenCity(name);
@@ -810,35 +812,24 @@ export default function CookProfilePage() {
                       </button>
                     </div>
                   ))}
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Name"
-                      className="flex-1"
-                      id="mp-name"
-                    />
-                    <Input
-                      placeholder="Address"
-                      className="flex-1"
-                      id="mp-address"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        const name = (document.getElementById("mp-name") as HTMLInputElement)?.value?.trim();
-                        const address = (document.getElementById("mp-address") as HTMLInputElement)?.value?.trim();
-                        if (name && address) {
-                          setMeetingPoints((prev) => [
-                            ...prev,
-                            { id: `mp-${Date.now()}`, name, address },
-                          ]);
-                          (document.getElementById("mp-name") as HTMLInputElement).value = "";
-                          (document.getElementById("mp-address") as HTMLInputElement).value = "";
-                        }
-                      }}
-                    >
-                      Add
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setMpPickerOpen(true)}
+                    className="w-full"
+                  >
+                    Add meeting point on map
+                  </Button>
+                  <MeetingPointPicker
+                    open={mpPickerOpen}
+                    onClose={() => setMpPickerOpen(false)}
+                    onCommit={(pt) => {
+                      setMeetingPoints((prev) => [
+                        ...prev,
+                        { id: `mp-${Date.now()}`, name: pt.name, address: pt.address },
+                      ]);
+                    }}
+                  />
                 </div>
               ) : null}
             </section>

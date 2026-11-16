@@ -23,6 +23,7 @@ import { Input, Field } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/overlays";
 import { StickyActionBar } from "@/components/ui/misc";
+import { LocationPicker } from "@/components/app/location-picker";
 import { PickupPicker } from "@/components/app/pickup-picker";
 import { useApp } from "@/components/providers/app-provider";
 import { loc } from "@/lib/data";
@@ -95,6 +96,7 @@ export default function CheckoutPage() {
   const [pickupMethod, setPickupMethod] = useState<string>("home");
   const [meetingPoint, setMeetingPoint] = useState<string>("");
   const [deliveryAddress, setDeliveryAddress] = useState<string>("");
+  const [deliveryPickerOpen, setDeliveryPickerOpen] = useState(false);
   const createOrderMutation = useCreateOrderMutation();
   const createSessionMutation = useCreateCheckoutSessionMutation();
 
@@ -575,12 +577,23 @@ export default function CheckoutPage() {
                   ) : null}
 
                   {pickupMethod === "courier" ? (
-                    <input
-                      value={deliveryAddress}
-                      onChange={(e) => setDeliveryAddress(e.target.value)}
-                      placeholder="Delivery address"
-                      className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[14px]"
-                    />
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setDeliveryPickerOpen(true)}
+                        className="flex h-11 w-full items-center gap-2 rounded-xl border border-line bg-white px-3 text-[14px] text-charcoal"
+                      >
+                        <MapPin className="size-4 text-terracotta" />
+                        {deliveryAddress || "Choose delivery location"}
+                      </button>
+                      <LocationPicker
+                        open={deliveryPickerOpen}
+                        onClose={() => setDeliveryPickerOpen(false)}
+                        currentCity={deliveryAddress}
+                        onCityChange={setDeliveryAddress}
+                        onAreaChange={() => {}}
+                      />
+                    </div>
                   ) : null}
 
                   <PickupPicker
