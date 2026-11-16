@@ -6,6 +6,17 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: false,
   partialPrefetching: false,
+  images: {
+    remotePatterns: [
+      { protocol: "http", hostname: "localhost", port: "4000", pathname: "/api/uploads/r2/**" },
+      { protocol: "http", hostname: "localhost", port: "4000", pathname: "/uploads/**" },
+      { protocol: "https", hostname: "**.r2.cloudflarestorage.com", pathname: "/**" },
+      { protocol: "https", hostname: "**.r2.dev", pathname: "/**" },
+    ],
+    formats: ["image/avif", "image/webp"],
+    deviceSizes: [390, 640, 768, 1024, 1280],
+    imageSizes: [16, 32, 64, 76, 96, 128, 168, 210],
+  },
   async headers() {
     return [
       {

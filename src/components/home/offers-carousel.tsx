@@ -27,7 +27,7 @@ export function OffersCarousel({ offers }: { offers: Dish[] }) {
         className="mt-2.5 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-2 no-scrollbar"
       >
         {offers.length > 0 ? (
-          offers.map((dish) => {
+          offers.map((dish, index) => {
             const cook = cooks.find((item) => item.id === dish.cookId);
             return (
               <Link
@@ -40,8 +40,9 @@ export function OffersCarousel({ offers }: { offers: Dish[] }) {
                   alt={loc(dish.name, lang)}
                   fill
                   sizes="82vw"
+                  priority={index === 0}
                   loading="eager"
-                  unoptimized
+                  unoptimized={String(dish.image || "").startsWith("http")}
                   className="object-cover transition duration-700 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/35 to-transparent" />
