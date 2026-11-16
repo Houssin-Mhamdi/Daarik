@@ -351,7 +351,7 @@ export default function CookProfilePage() {
                       <button key={cat} type="button" data-cat={cat} onClick={() => scrollToCategory(cat)} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition", activeCategory === cat ? "border-terracotta bg-terracotta text-white" : "border-line bg-white text-charcoal")}>{translateCategory(cat, t)}</button>
                     ))}
                   </div>
-                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-4">
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-1 md:gap-6">
                     {categories.map((cat) => {
                       const catDishes = dishes.filter((d) => d.category === cat);
                       if (catDishes.length === 0) return null;
