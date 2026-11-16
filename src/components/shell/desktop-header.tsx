@@ -15,7 +15,6 @@ import {
   Search,
   ShieldCheck,
   ShoppingBag,
-  Sparkles,
   UserRound,
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
@@ -132,7 +131,7 @@ export function DesktopHeader() {
               href="/cook"
               className="flex h-10 items-center gap-1.5 rounded-full bg-olive-50 px-3.5 text-[14.5px] font-semibold text-olive-600 transition hover:bg-olive-100"
             >
-              <Sparkles className="size-3.5" />
+              <ChefHat className="size-3.5" />
               {t("becomeCookCta")}
             </Link>
 
