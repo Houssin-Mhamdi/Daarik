@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -92,6 +92,9 @@ export default function CheckoutPage() {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [pendingOrderCode, setPendingOrderCode] = useState<string | null>(null);
+  const [pickupMethod, setPickupMethod] = useState<string>("home");
+  const [meetingPoint, setMeetingPoint] = useState<string>("");
+  const [deliveryAddress, setDeliveryAddress] = useState<string>("");
   const createOrderMutation = useCreateOrderMutation();
   const createSessionMutation = useCreateCheckoutSessionMutation();
 
@@ -203,6 +206,11 @@ export default function CheckoutPage() {
           items: cart.map((line) => ({ dishId: line.dishId, qty: line.qty })),
           pickup,
           pickupTime,
+           pickupMethod,
+           pickupPoint: meetingPoint
+             ? cook?.meetingPoints?.find((m) => m.id === meetingPoint) ?? null
+             : null,
+           deliveryAddress: deliveryAddress || undefined,
           customerName: `${firstName} ${lastName}`.trim(),
           customerEmail: email,
           customerPhone: phone,
@@ -526,7 +534,55 @@ export default function CheckoutPage() {
                     <p className="text-[12.5px] text-muted">{t("pickupSub")}</p>
                   </div>
                 </div>
-                <div className="mt-4">
+                <div className="mt-4 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {(cook?.pickupMethods?.length
+                      ? cook.pickupMethods
+                      : ["home"]
+                    ).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setPickupMethod(m)}
+                        className={`rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition ${
+                          pickupMethod === m
+                            ? "border-terracotta bg-terracotta text-white"
+                            : "border-line bg-white text-charcoal"
+                        }`}
+                      >
+                        {m === "home"
+                          ? "Pickup at cook"
+                          : m === "meet"
+                            ? "Meet at location"
+                            : "Courier delivery"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {pickupMethod === "meet" && cook?.meetingPoints?.length ? (
+                    <select
+                      value={meetingPoint}
+                      onChange={(e) => setMeetingPoint(e.target.value)}
+                      className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[14px]"
+                    >
+                      <option value="">Select meeting point</option>
+                      {cook.meetingPoints.map((mp) => (
+                        <option key={mp.id} value={mp.id}>
+                          {mp.name} — {mp.address}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+
+                  {pickupMethod === "courier" ? (
+                    <input
+                      value={deliveryAddress}
+                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      placeholder="Delivery address"
+                      className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[14px]"
+                    />
+                  ) : null}
+
                   <PickupPicker
                     available={availablePickups}
                     dishes={lines

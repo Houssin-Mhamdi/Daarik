@@ -86,6 +86,7 @@ export class R2StorageService {
     file: Express.Multer.File,
     origin: string,
     folderRaw?: string,
+    ownerId?: string,
   ) {
     const folder = this.normalizeFolder(folderRaw);
     const ext = (
@@ -103,12 +104,17 @@ export class R2StorageService {
           Key: objectKey,
           Body: file.buffer,
           ContentType: file.mimetype,
-          CacheControl: "public, max-age=31536000, immutable",
+          CacheControl: folder === "documents"
+            ? "private, no-store"
+            : "public, max-age=31536000, immutable",
+          Metadata: ownerId ? { ownerid: ownerId } : undefined,
         }),
       );
-      const url = this.publicUrl
-        ? `${this.publicUrl}/${objectKey}`
-        : `${origin}/api/uploads/r2/${objectKey}`;
+      // Documents are never served from a public URL; always proxy (auth-gated).
+      const url =
+        folder === "documents" || !this.publicUrl
+          ? `${origin}/api/uploads/r2/${objectKey}`
+          : `${this.publicUrl}/${objectKey}`;
       return {
         url,
         path: `/api/uploads/r2/${objectKey}`,
@@ -148,10 +154,11 @@ export class R2StorageService {
     );
     const bytes = await res.Body?.transformToByteArray();
     if (!bytes) return null;
-    return {
-      buffer: Buffer.from(bytes),
-      contentType: res.ContentType || "application/octet-stream",
-      cacheControl: res.CacheControl || "public, max-age=31536000, immutable",
-    };
+      return {
+        buffer: Buffer.from(bytes),
+        contentType: res.ContentType || "application/octet-stream",
+        cacheControl: res.CacheControl || "public, max-age=31536000, immutable",
+        metadata: (res.Metadata ?? {}) as Record<string, string>,
+      };
   }
 }

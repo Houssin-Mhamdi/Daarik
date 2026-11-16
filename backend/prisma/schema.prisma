@@ -199,6 +199,12 @@ model CookProfile {
 
   maxPortionsPerDay Int    @default(20)
   availableDays String[]   @default(["fri-30", "sat-31", "sun-01"])
+
+  // ---- Pickup / delivery options ----
+  /// Enabled pickup methods: "home" (pickup at cook), "meet" (meet at a chosen point), "courier" (PostNL/DHL/etc).
+  pickupMethods  String[]  @default(["home"])
+  /// Meeting points the cook offers (for "meet" method). JSON array of { id, name, address, lat, lng }.
+  meetingPoints  Json?
   availableSlots String[]  @default(["17:00", "17:30", "18:00", "18:30"])
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -363,6 +369,12 @@ model Order {
   status        OrderStatus   @default(CONFIRMED)
   pickup        String
   pickupTime    String
+  /// Pickup method: "home" | "meet" | "courier".
+  pickupMethod  String    @default("home")
+  /// Selected meeting point (for "meet" method): { name, address, lat, lng }.
+  pickupPoint   Json?
+  /// Customer delivery address (for "courier" method).
+  deliveryAddress String?
   /// All money is stored as integer euro cents. Never Float.
   subtotalCents    Int
   serviceFeeCents  Int           @default(150)

@@ -274,6 +274,10 @@ export function normalizeCook(value: unknown): Cook {
     area: localizedValue(raw.area),
     cuisineIds: stringList(raw.cuisineIds) as Cook["cuisineIds"],
   categories: stringList(raw.categories),
+  pickupMethods: stringList(raw.pickupMethods),
+  meetingPoints: Array.isArray(raw.meetingPoints)
+    ? (raw.meetingPoints as { id: string; name: string; address: string }[])
+    : [], // eslint-disable-line @typescript-eslint/no-explicit-any
     rating: numberValue(raw.rating),
     reviewCount: numberValue(raw.reviewCount),
     verified: raw.verified === true,

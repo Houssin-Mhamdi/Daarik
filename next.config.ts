@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const localBackend = process.env.NODE_ENV === "development" ? " http://localhost:4000" : "";
+
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: false,
@@ -16,7 +18,7 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https:; font-src 'self' data:;",
+              `default-src 'self'; img-src 'self' data: https:${localBackend}; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https:${localBackend}; font-src 'self' data:;`,
           },
         ],
       },

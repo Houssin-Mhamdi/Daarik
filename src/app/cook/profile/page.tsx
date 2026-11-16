@@ -78,6 +78,9 @@ export default function CookProfilePage() {
     city: user.city || "",
     area: { nl: "", en: "", ar: "" },
     cuisineIds: [],
+    categories: [],
+    pickupMethods: ["home"],
+    meetingPoints: [],
     rating: 0,
     reviewCount: 0,
     verified: false,
@@ -146,6 +149,16 @@ export default function CookProfilePage() {
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [kitchenCity, setKitchenCity] = useState("");
   const [pin, setPin] = useState<MapPoint | null>(null);
+  const [pickupMethods, setPickupMethods] = useState<string[]>(
+    cook.pickupMethods?.length ? cook.pickupMethods : ["home"],
+  );
+  const [meetingPoints, setMeetingPoints] = useState<
+    { id: string; name: string; address: string }[]
+  >(
+    Array.isArray(cook.meetingPoints)
+      ? (cook.meetingPoints as { id: string; name: string; address: string }[])
+      : [],
+  );
 
   const chooseCity = (name: string) => {
     setKitchenCity(name);
@@ -237,6 +250,8 @@ export default function CookProfilePage() {
         bio: { ...cook.bio, [lang]: bio },
         instructions: { ...cook.instructions, [lang]: instructions },
         cuisineIds,
+        pickupMethods,
+        meetingPoints,
       });
       toast(t("profileSaved"));
     } catch {
@@ -740,6 +755,92 @@ export default function CookProfilePage() {
                   onClick={() => setDeactivateOpen(true)}
                 />
               </div>
+            </section>
+
+            <section className="rounded-[22px] border border-line bg-white p-4 shadow-card">
+              <h2 className="text-[15px] font-semibold text-charcoal">
+                Pickup &amp; Delivery
+              </h2>
+              <div className="mt-3 space-y-2">
+                {[
+                  { key: "home", label: "Pickup at my place" },
+                  { key: "meet", label: "Meet at a chosen location" },
+                  { key: "courier", label: "Courier delivery (PostNL/DHL)" },
+                ].map((opt) => (
+                  <label
+                    key={opt.key}
+                    className="flex items-center gap-2 rounded-xl border border-line bg-cream-50 px-3 py-2 text-[13.5px]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={pickupMethods.includes(opt.key)}
+                      onChange={(e) => {
+                        setPickupMethods((prev) =>
+                          e.target.checked
+                            ? [...prev, opt.key]
+                            : prev.filter((k) => k !== opt.key),
+                        );
+                      }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+              {pickupMethods.includes("meet") ? (
+                <div className="mt-3 space-y-2">
+                  <p className="text-[12.5px] font-bold uppercase tracking-[0.1em] text-muted-soft">
+                    Meeting points
+                  </p>
+                  {meetingPoints.map((mp, idx) => (
+                    <div
+                      key={mp.id}
+                      className="flex items-center justify-between rounded-xl border border-line bg-cream-50 px-3 py-2 text-[13px]"
+                    >
+                      <span>
+                        {mp.name} — {mp.address}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMeetingPoints((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                        className="text-danger"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Name"
+                      className="flex-1"
+                      id="mp-name"
+                    />
+                    <Input
+                      placeholder="Address"
+                      className="flex-1"
+                      id="mp-address"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const name = (document.getElementById("mp-name") as HTMLInputElement)?.value?.trim();
+                        const address = (document.getElementById("mp-address") as HTMLInputElement)?.value?.trim();
+                        if (name && address) {
+                          setMeetingPoints((prev) => [
+                            ...prev,
+                            { id: `mp-${Date.now()}`, name, address },
+                          ]);
+                          (document.getElementById("mp-name") as HTMLInputElement).value = "";
+                          (document.getElementById("mp-address") as HTMLInputElement).value = "";
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </section>
 
             <div className="grid gap-2 sm:grid-cols-2">

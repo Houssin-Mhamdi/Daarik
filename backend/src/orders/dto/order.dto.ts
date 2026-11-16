@@ -55,6 +55,18 @@ export class CreateOrderDto {
   note?: string;
 
   @IsOptional()
+  @IsString()
+  pickupMethod?: string;
+
+  @IsOptional()
+  pickupPoint?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  deliveryAddress?: string;
+
+  @IsOptional()
   @IsEnum(PaymentMethod)
   paymentMethod?: PaymentMethod;
 }
