@@ -104,6 +104,21 @@ enum DisputeStatus {
   RESOLVED
 }
 
+model SavedAddress {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String   @default("Home")
+  address   String
+  lat       Float?
+  lng       Float?
+  radiusKm  Int      @default(10)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
 model User {
   id               String   @id @default(cuid())
   email            String   @unique
@@ -128,6 +143,7 @@ model User {
   cartItems        CartItem[]
   favoriteDishes   FavoriteDish[]
   favoriteCooks    FavoriteCook[]
+  savedAddresses   SavedAddress[]
   orders           Order[]           @relation("CustomerOrders")
   reviews          Review[]
   notifications    Notification[]
@@ -199,6 +215,12 @@ model CookProfile {
 
   maxPortionsPerDay Int    @default(20)
   availableDays String[]   @default(["fri-30", "sat-31", "sun-01"])
+
+  // ---- Pickup / delivery options ----
+  /// Enabled pickup methods: "home" (pickup at cook), "meet" (meet at a chosen point), "courier" (PostNL/DHL/etc).
+  pickupMethods  String[]  @default(["home"])
+  /// Meeting points the cook offers (for "meet" method). JSON array of { id, name, address, lat, lng }.
+  meetingPoints  Json?
   availableSlots String[]  @default(["17:00", "17:30", "18:00", "18:30"])
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -363,6 +385,12 @@ model Order {
   status        OrderStatus   @default(CONFIRMED)
   pickup        String
   pickupTime    String
+  /// Pickup method: "home" | "meet" | "courier".
+  pickupMethod  String    @default("home")
+  /// Selected meeting point (for "meet" method): { name, address, lat, lng }.
+  pickupPoint   Json?
+  /// Customer delivery address (for "courier" method).
+  deliveryAddress String?
   /// All money is stored as integer euro cents. Never Float.
   subtotalCents    Int
   serviceFeeCents  Int           @default(150)

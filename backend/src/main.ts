@@ -62,6 +62,16 @@ async function bootstrap() {
     next();
   });
 
+  // Prevent browsers from caching API responses (avoids stale 204/304 after deploys).
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith("/api")) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+    }
+    next();
+  });
+
   // Global prefix /api
   app.setGlobalPrefix("api");
 

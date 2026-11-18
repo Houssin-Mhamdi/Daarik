@@ -274,6 +274,10 @@ export function normalizeCook(value: unknown): Cook {
     area: localizedValue(raw.area),
     cuisineIds: stringList(raw.cuisineIds) as Cook["cuisineIds"],
   categories: stringList(raw.categories),
+  pickupMethods: stringList(raw.pickupMethods),
+  meetingPoints: Array.isArray(raw.meetingPoints)
+    ? (raw.meetingPoints as { id: string; name: string; address: string }[])
+    : [], // eslint-disable-line @typescript-eslint/no-explicit-any
     rating: numberValue(raw.rating),
     reviewCount: numberValue(raw.reviewCount),
     verified: raw.verified === true,
@@ -415,6 +419,33 @@ export function useNotificationsQuery() {
       if (!getAccessToken()) return [];
       return darnaApi.users.notifications();
     },
+  });
+}
+
+export function useSavedAddressesQuery() {
+  return useQuery({
+    queryKey: ["users", "addresses"],
+    queryFn: async () => {
+      if (!getAccessToken()) return [] as unknown[];
+      const result = await darnaApi.users.addresses();
+      return Array.isArray(result) ? result : [];
+    },
+  });
+}
+
+export function useCreateSavedAddressMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => darnaApi.users.createAddress(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users", "addresses"] }),
+  });
+}
+
+export function useDeleteSavedAddressMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => darnaApi.users.deleteAddress(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users", "addresses"] }),
   });
 }
 

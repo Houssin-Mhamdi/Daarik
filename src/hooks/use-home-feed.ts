@@ -2,13 +2,28 @@
 
 import { useMemo } from "react";
 import { useApp } from "@/components/providers/app-provider";
+import { useCooksPaginatedQuery, useDishesPaginatedQuery } from "@/lib/queries";
 import type { SearchArea } from "@/components/app/location-picker";
 import { cooksWithin } from "@/lib/cities";
 import { cityMatches } from "@/lib/utils";
 
-/** Everything the home page derives from the catalog for the chosen location. */
+/**
+ * Home feed. Uses server-side paginated queries for the catalog (so we never
+ * load the whole table), then derives location-aware slices on the client.
+ */
 export function useHomeFeed(city: string, area: SearchArea | null) {
-  const { dishes, cooks } = useApp();
+  const { cooks: contextCooks, dishes: contextDishes } = useApp();
+
+  // Server-side: fetch a small page of cooks/dishes for the chosen city.
+  const cooksQuery = useCooksPaginatedQuery(
+    city ? { city, limit: "50" } : { limit: "50" },
+  );
+  const dishesQuery = useDishesPaginatedQuery(
+    city ? { city, limit: "50" } : { limit: "50" },
+  );
+
+  const cooks = cooksQuery.data?.items ?? contextCooks;
+  const dishes = dishesQuery.data?.items ?? contextDishes;
 
   const nearbyCooks = useMemo(
     () =>
@@ -35,7 +50,6 @@ export function useHomeFeed(city: string, area: SearchArea | null) {
     [nearbyDishes],
   );
 
-  // One featured dish per cook, so the hero rotates through different kitchens.
   const heroList = useMemo(() => {
     const seen = new Set<string>();
     const picks = [...nearbyDishes, ...dishes].filter((dish) => {

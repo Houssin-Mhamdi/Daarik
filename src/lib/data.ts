@@ -64,6 +64,8 @@ export type Cook = {
   area: Localized;
   cuisineIds: CuisineId[];
   categories: string[];
+  pickupMethods: string[];
+  meetingPoints: { id: string; name: string; address: string }[];
   rating: number;
   reviewCount: number;
   verified: boolean;

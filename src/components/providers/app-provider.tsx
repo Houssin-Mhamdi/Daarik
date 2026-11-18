@@ -950,7 +950,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPickupTime,
     cartNote,
     setCartNote,
-    cartSyncing: cartSyncing || (Boolean(getAccessToken()) && (!cartHydrated || authPending)),
+    cartSyncing: !cartHydrated || cartSyncing || (Boolean(getAccessToken()) && authPending),
     cartSyncError,
     flushCart,
     guestCartConflict,

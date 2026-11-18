@@ -33,10 +33,14 @@ import { Switch } from "@/components/ui/controls";
 import { ConfirmDialog, Sheet } from "@/components/ui/overlays";
 import { PageHeader, SettingRow, KeyValue } from "@/components/ui/misc";
 import { LanguageSheet } from "@/components/app/language-sheet";
+import { LocationPicker } from "@/components/app/location-picker";
 import { useApp } from "@/components/providers/app-provider";
 import { langMeta } from "@/lib/i18n";
 import {
+  useCreateSavedAddressMutation,
   useCurrentUserQuery,
+  useDeleteSavedAddressMutation,
+  useSavedAddressesQuery,
   useUpdateUserProfileMutation,
   useUploadImageMutation,
 } from "@/lib/queries";
@@ -55,6 +59,10 @@ export default function ProfilePage() {
   } = useApp();
   const router = useRouter();
   const { data: currentUser, isPending: authPending } = useCurrentUserQuery();
+  const { data: savedAddresses = [] } = useSavedAddressesQuery();
+  const createAddress = useCreateSavedAddressMutation();
+  const deleteAddress = useDeleteSavedAddressMutation();
+  const [addressPickerOpen, setAddressPickerOpen] = useState(false);
   const updateProfile = useUpdateUserProfileMutation();
   const uploadAvatar = useUploadImageMutation("avatars");
   const avatarFileRef = useRef<HTMLInputElement>(null);
@@ -653,6 +661,48 @@ export default function ProfilePage() {
           </div>
         </div>
       </Sheet>
+
+      <section className="mx-auto mt-6 w-full max-w-[480px] px-4 md:max-w-[1080px] md:px-8">
+        <h2 className="text-[15px] font-semibold text-charcoal">Saved addresses</h2>
+        <div className="mt-3 space-y-2">
+          {(savedAddresses as { id: string; label: string; address: string }[]).map((a) => (
+            <div
+              key={a.id}
+              className="flex items-center justify-between rounded-2xl border border-line bg-white p-3"
+            >
+              <div>
+                <p className="text-[14px] font-semibold text-charcoal">{a.label}</p>
+                <p className="text-[12.5px] text-muted">{a.address}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => deleteAddress.mutate(a.id)}
+                className="text-[12px] text-danger"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setAddressPickerOpen(true)}
+          className="mt-3 rounded-full border border-line bg-white px-4 py-2 text-[13px] font-semibold text-charcoal"
+        >
+          + Add address
+        </button>
+        <LocationPicker
+          open={addressPickerOpen}
+          onClose={() => setAddressPickerOpen(false)}
+          currentCity=""
+          onCityChange={(city) => {
+            if (city) {
+              createAddress.mutate({ label: city, address: city });
+            }
+          }}
+          onAreaChange={() => {}}
+        />
+      </section>
 
       <ConfirmDialog
         open={signOutOpen}

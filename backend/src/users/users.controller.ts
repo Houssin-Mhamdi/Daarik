@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { UsersService } from "./users.service";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
@@ -50,6 +50,27 @@ export class UsersController {
   @Get("me/notifications")
   getNotifications(@CurrentUser() user: JwtPayloadUser) {
     return this.usersService.getNotifications(user.sub);
+  }
+
+  @Get("me/addresses")
+  getAddresses(@CurrentUser() user: JwtPayloadUser) {
+    return this.usersService.getSavedAddresses(user.sub);
+  }
+
+  @Post("me/addresses")
+  createAddress(
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() dto: { label?: string; address: string; lat?: number; lng?: number; radiusKm?: number },
+  ) {
+    return this.usersService.createSavedAddress(user.sub, dto);
+  }
+
+  @Delete("me/addresses/:id")
+  deleteAddress(
+    @CurrentUser() user: JwtPayloadUser,
+    @Param("id") id: string,
+  ) {
+    return this.usersService.deleteSavedAddress(user.sub, id);
   }
 
   @Post("me/notifications/read-all")

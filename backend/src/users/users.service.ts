@@ -142,6 +142,38 @@ export class UsersService {
     };
   }
 
+  async getSavedAddresses(userId: string) {
+    return this.prisma.savedAddress.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async createSavedAddress(
+    userId: string,
+    dto: { label?: string; address: string; lat?: number; lng?: number; radiusKm?: number },
+  ) {
+    return this.prisma.savedAddress.create({
+      data: {
+        userId,
+        label: dto.label || "Home",
+        address: dto.address,
+        lat: dto.lat,
+        lng: dto.lng,
+        radiusKm: dto.radiusKm ?? 10,
+      },
+    });
+  }
+
+  async deleteSavedAddress(userId: string, id: string) {
+    const existing = await this.prisma.savedAddress.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) throw new NotFoundException("Address not found");
+    await this.prisma.savedAddress.delete({ where: { id } });
+    return { success: true };
+  }
+
   async toggleFavoriteDish(userId: string, dishIdOrSlug: string) {
     const dish = await this.prisma.dish.findFirst({
       where: { OR: [{ id: dishIdOrSlug }, { slug: dishIdOrSlug }] },

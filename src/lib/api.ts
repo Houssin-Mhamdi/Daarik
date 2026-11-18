@@ -916,6 +916,16 @@ export const darnaApi = {
       apiRequest<{ dishes: FavoriteRecord[]; cooks: FavoriteRecord[] }>(
         "/users/me/favorites",
       ),
+    addresses: () => apiRequest<unknown[]>("/users/me/addresses"),
+    createAddress: (body: Record<string, unknown>) =>
+      apiRequest<unknown>("/users/me/addresses", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    deleteAddress: (id: string) =>
+      apiRequest<unknown>(`/users/me/addresses/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      }),
     toggleFavoriteDish: (dishId: string) =>
       apiRequest<{ favorited: boolean }>(
         `/users/me/favorites/dishes/${encodeURIComponent(dishId)}`,

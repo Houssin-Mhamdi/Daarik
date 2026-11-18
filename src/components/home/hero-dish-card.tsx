@@ -24,7 +24,7 @@ export function HeroDishCard({ dish, cook }: { dish: Dish; cook: Cook }) {
         width={1200}
         height={420}
         priority
-        unoptimized
+        unoptimized={String(dish.image || "").startsWith("http")}
         className="h-[420px] w-full object-cover transition duration-700 group-hover:scale-[1.03]"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-charcoal/85 via-charcoal/10 to-transparent" />
