@@ -7,7 +7,6 @@ import {
   ArrowRight,
   ChevronDown,
   MapPin,
-  Sparkles,
   Star,
   Sun,
 } from "lucide-react";
@@ -244,7 +243,7 @@ function HomeContent() {
                 onClick={() => setCityOpen(true)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-terracotta/25 bg-terracotta-50 px-3 py-1.5 text-[12.5px] font-bold uppercase tracking-[0.14em] text-terracotta-700"
               >
-                <Sparkles className="size-3" />
+                <MapPin className="size-3" />
                 {t("homemadeNear")} · {city || t("allNetherlands")}
                 <ChevronDown className="size-3" />
               </button>
