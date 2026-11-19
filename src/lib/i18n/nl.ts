@@ -1594,8 +1594,10 @@ const nl: Partial<Record<EnKeys, string>> = {
   hygieneCertificate: "Hygiëneverklaring",
   last30days: "Laatste 30 dagen",
   last90days: "Laatste 90 dagen",
+  maintenanceBanner:
+    "Daarik is in onderhoudsmodus. Bestellen en wijzigen zijn tijdelijk niet mogelijk.",
   maintenanceConfirmDesc:
-    "De marktplaats is alleen-lezen totdat je dit uitschakelt.",
+    "De marktplaats wordt alleen-lezen totdat je dit uitschakelt. Admins kunnen nog steeds inloggen.",
   maintenanceConfirmTitle: "Onderhoudsmodus inschakelen?",
   maintenanceDesc: "Toon een onderhoudsbanner aan alle gebruikers",
   maintenanceEnabled: "Onderhoudsmodus ingeschakeld",

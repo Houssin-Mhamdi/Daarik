@@ -1592,8 +1592,10 @@ const en = {
   languageNote: "You can change this later in your profile.",
   last30days: "Last 30 days",
   last90days: "Last 90 days",
+  maintenanceBanner:
+    "Daarik is in maintenance mode. Orders and changes are temporarily unavailable.",
   maintenanceConfirmDesc:
-    "The marketplace will be read-only until you turn it off.",
+    "The marketplace becomes read-only until you turn it off. Admins can still sign in.",
   maintenanceConfirmTitle: "Enable maintenance mode?",
   maintenanceDesc: "Show a maintenance banner to all users",
   maintenanceEnabled: "Maintenance mode enabled",

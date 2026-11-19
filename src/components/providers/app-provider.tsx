@@ -379,6 +379,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [lang],
   );
 
+  // A blocked mutation (503 MAINTENANCE_MODE) refreshes the banner and explains why.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.catalog });
+      toast(t("maintenanceMode"), {
+        description: t("maintenanceBanner"),
+        variant: "error",
+      });
+    };
+    window.addEventListener("darna:maintenance", handler);
+    return () => window.removeEventListener("darna:maintenance", handler);
+  }, [queryClient, t, toast]);
+
   const login = useCallback(
     async (email: string, password: string) => {
       await loginMutation.mutateAsync({ email, password });

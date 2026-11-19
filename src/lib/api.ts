@@ -295,6 +295,13 @@ export async function apiRequest<T>(
     const errorBody = await res.json().catch(() => ({}));
     const message = errorBody.message || `API Error ${res.status}`;
     if (
+      res.status === 503 &&
+      errorBody?.code === "MAINTENANCE_MODE" &&
+      typeof window !== "undefined"
+    ) {
+      window.dispatchEvent(new CustomEvent("darna:maintenance"));
+    }
+    if (
       res.status === 401 &&
       typeof message === "string" &&
       /inactive|not found|unauthorized/i.test(message)

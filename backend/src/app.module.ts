@@ -17,6 +17,7 @@ import { AuditModule } from "./audit/audit.module";
 import { UploadsModule } from "./uploads/uploads.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
+import { MaintenanceGuard } from "./common/guards/maintenance.guard";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 
 @Module({
@@ -60,6 +61,10 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: MaintenanceGuard,
     },
     {
       provide: APP_FILTER,
