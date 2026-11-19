@@ -1037,7 +1037,16 @@ const nl: Partial<Record<EnKeys, string>> = {
   cookNotifications: "Meldingen voor koks",
   newOrderAlert: "Nieuwe bestellingen",
   newOrderAlertDesc:
-    "Ontvang direct een push en e-mail bij een nieuwe bestelling.",
+    "Ontvang direct een melding zodra een betaalde bestelling binnenkomt.",
+  pushEnable: "Meldingen inschakelen",
+  pushDisable: "Meldingen uitschakelen",
+  pushEnabling: "Inschakelen…",
+  pushOn: "Aan — je krijgt ook bericht als de app gesloten is",
+  pushOff: "Uit — alleen updates zolang de app open is",
+  pushDenied:
+    "Geblokkeerd in je browsermogelijkheden. Sta meldingen daar eerst toe.",
+  pushUnsupported: "Niet ondersteund op dit apparaat of in deze browser",
+  pushFailed: "Meldingen konden niet worden ingeschakeld. Probeer het opnieuw.",
   payoutAlerts: "Uitbetalingen",
   payoutAlertsDesc: "Weet wanneer je geld onderweg is.",
   reviewAlerts: "Nieuwe beoordelingen",

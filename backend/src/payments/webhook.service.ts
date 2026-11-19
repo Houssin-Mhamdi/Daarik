@@ -164,6 +164,7 @@ export class WebhookService {
             : []),
         ],
       },
+      include: { cook: { select: { userId: true } } },
     });
     if (!order) {
       this.logger.warn(`No order for payment intent ${intent.id}`);
@@ -216,7 +217,7 @@ export class WebhookService {
 
     // Live cook dashboard notification. Deliberately contain no customer PII.
     try {
-      this.notifications.notifyNewOrder(order.cookId, {
+      this.notifications.notifyNewOrder(order.cookId, order.cook.userId, {
         orderId: order.id,
         code: order.code,
         status:

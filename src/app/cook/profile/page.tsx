@@ -35,6 +35,7 @@ import { MeetingPointPicker } from "@/components/app/meeting-point-picker";
 import { Card, SettingRow } from "@/components/ui/misc";
 import { CookMobileHeader } from "@/components/cook/cook-mobile-header";
 import { useApp } from "@/components/providers/app-provider";
+import { useWebPush } from "@/hooks/use-web-push";
 import { loc } from "@/lib/data";
 import {
   useCookAvailabilityQuery,
@@ -143,7 +144,12 @@ export default function CookProfilePage() {
   const [instructions, setInstructions] = useState(cook.instructions[lang]);
   const [cuisineIds, setCuisineIds] = useState<string[]>(cook.cuisineIds);
   const paused = availability?.kitchenOpen === false;
-  const [newOrders, setNewOrders] = useState(true);
+  const {
+    status: pushStatus,
+    busy: pushBusy,
+    enable: enablePush,
+    disable: disablePush,
+  } = useWebPush();
   const [payoutAlerts, setPayoutAlerts] = useState(true);
   const [reviews, setReviews] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -260,6 +266,42 @@ export default function CookProfilePage() {
       toast(t("loadError"), { variant: "error" });
     }
   };
+
+  async function handlePushChange(enabled: boolean) {
+    if (pushBusy) return;
+    if (!enabled) {
+      const result = await disablePush();
+      if (result === "disabled") toast(t("pushOff"), { variant: "info" });
+      else toast(t("pushFailed"), { variant: "error" });
+      return;
+    }
+    const result = await enablePush();
+    if (result === "enabled") {
+      toast(t("pushOn"), { variant: "success" });
+    } else {
+      toast(
+        result === "denied"
+          ? t("pushDenied")
+          : result === "unsupported"
+            ? t("pushUnsupported")
+            : t("pushFailed"),
+        { variant: "error" },
+      );
+    }
+  }
+
+  const pushDescription =
+    pushStatus === "loading"
+      ? t("loading")
+      : pushBusy
+        ? t("pushEnabling")
+        : pushStatus === "on"
+        ? t("pushOn")
+        : pushStatus === "denied"
+          ? t("pushDenied")
+          : pushStatus === "unsupported"
+            ? t("pushUnsupported")
+            : t("pushOff");
 
   return (
     <div className="pb-8 md:pb-14">
@@ -656,12 +698,12 @@ export default function CookProfilePage() {
                 <ToggleRow
                   icon={<Bell className="size-4" />}
                   title={t("newOrderAlert")}
-                  description={t("newOrderAlertDesc")}
-                  checked={newOrders}
-                  onChange={(value) => {
-                    setNewOrders(value);
-                    toast(t("cookSettingsSaved"));
-                  }}
+                  description={pushDescription}
+                  checked={pushStatus === "on"}
+                  disabled={
+                    pushBusy || pushStatus === "loading" || pushStatus === "denied"
+                  }
+                  onChange={handlePushChange}
                   label={t("newOrderAlert")}
                 />
                 <ToggleRow
@@ -949,6 +991,7 @@ function ToggleRow({
   checked,
   onChange,
   label,
+  disabled,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -956,6 +999,7 @@ function ToggleRow({
   checked: boolean;
   onChange: (value: boolean) => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
@@ -968,7 +1012,12 @@ function ToggleRow({
           {description}
         </p>
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} label={label} />
+      <Switch
+        checked={checked}
+        onCheckedChange={onChange}
+        label={label}
+        disabled={disabled}
+      />
     </div>
   );
 }

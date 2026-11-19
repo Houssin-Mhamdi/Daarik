@@ -423,6 +423,27 @@ export const darnaApi = {
       apiRequest<{ success: boolean }>("/auth/logout", { method: "POST" }),
     me: () => apiRequest<AuthUserRecord>("/auth/me"),
   },
+  notifications: {
+    /** Public VAPID key; the private key never leaves the API. */
+    pushKey: () =>
+      apiRequest<{ publicKey: string | null; enabled: boolean }>(
+        "/notifications/push/key",
+      ),
+    subscribe: (body: {
+      endpoint: string;
+      keys: { p256dh: string; auth: string };
+      userAgent?: string;
+    }) =>
+      apiRequest<{ success: true }>("/notifications/push/subscribe", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    unsubscribe: (endpoint: string) =>
+      apiRequest<{ success: true }>("/notifications/push/subscribe", {
+        method: "DELETE",
+        body: JSON.stringify({ endpoint }),
+      }),
+  },
   cooks: {
     list: (params?: {
       city?: string;

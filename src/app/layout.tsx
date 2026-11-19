@@ -8,6 +8,7 @@ import "./globals.css";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { AppProvider } from "@/components/providers/app-provider";
 import { AppShell } from "@/components/shell/app-shell";
+import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -77,6 +78,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <body className="min-h-dvh">
+        <ServiceWorkerRegistrar />
         <QueryProvider>
           <AppProvider>
             <AppShell>{children}</AppShell>
