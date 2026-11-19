@@ -894,6 +894,7 @@ export const darnaApi = {
         minOrderCents: number;
         cuisines: CatalogCuisine[];
         pickupOptions: PickupOption[];
+        maintenanceMode?: boolean;
       }>("/support/catalog"),
     createTicket: (body: {
       email?: string;

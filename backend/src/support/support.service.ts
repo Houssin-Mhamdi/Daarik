@@ -77,6 +77,7 @@ export class SupportService {
         "spicy",
       ],
       pickupOptions,
+      maintenanceMode: settings?.maintenanceMode ?? false,
     };
   }
 

@@ -34,6 +34,7 @@ import {
   type CatalogCuisine,
 } from "@/lib/api";
 import { buildPickupOptions } from "@/lib/pickup";
+import { MaintenanceBanner } from "@/components/app/maintenance-banner";
 import {
   queryKeys,
   useCatalogQuery,
@@ -958,7 +959,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     serviceFee: catalog?.serviceFee ?? SERVICE_FEE,
   };
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={value}>
+      <MaintenanceBanner />
+      {children}
+    </AppContext.Provider>
+  );
 }
 
 export function useApp() {
