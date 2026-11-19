@@ -129,7 +129,7 @@ export function DesktopHeader() {
 
             <Link
               href="/cook"
-              className="flex h-10 items-center gap-1.5 rounded-full bg-olive-50 px-3.5 text-[14.5px] font-semibold text-olive-600 transition hover:bg-olive-100"
+              className="flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full bg-olive-50 px-3.5 text-[14.5px] font-semibold text-olive-600 transition hover:bg-olive-100"
             >
               <ChefHat className="size-3.5" />
               {t("becomeCookCta")}
