@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Bell,
+  ChartNoAxesCombined,
   ChefHat,
   ClipboardList,
-  Command,
   ExternalLink,
   Globe2,
   LayoutDashboard,
   LogOut,
   Menu,
+  ScrollText,
   Search,
   Settings,
   ShieldAlert,
@@ -23,6 +23,10 @@ import {
 import { LanguageSheet } from "@/components/app/language-sheet";
 import { Avatar } from "@/components/ui/controls";
 import { useApp } from "@/components/providers/app-provider";
+import {
+  ADMIN_BUILD_VERSION,
+} from "@/components/admin/admin-ui";
+import { useAdminOverviewQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { SignOutDialog } from "@/components/shell/sign-out-dialog";
 import type { LucideIcon } from "lucide-react";
@@ -54,6 +58,8 @@ const navGroups = [
   {
     label: "operations",
     items: [
+      { href: "/admin/analytics", key: "Analytics", icon: ChartNoAxesCombined },
+      { href: "/admin/audit", key: "Audit log", icon: ScrollText },
       { href: "/admin/settings", key: "adminNavSettings", icon: Settings },
     ],
   },
@@ -65,16 +71,29 @@ const navGroups = [
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { t, lang, user, isAuthenticated } = useApp();
+  const { t, lang, user, isAuthenticated, authPending } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const { data: overview } = useAdminOverviewQuery("30d");
 
+  // Wait for /auth/me to settle before deciding: the session lives in an
+  // httpOnly cookie, so an early check would always see "signed out" and would
+  // bounce a valid admin to /login on refresh.
   useEffect(() => {
+    if (authPending) return;
     if (!isAuthenticated || user?.role !== "ADMIN") {
       router.replace("/login");
     }
-  }, [isAuthenticated, user, router]);
+  }, [authPending, isAuthenticated, user, router]);
+
+  if (authPending) {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-cream">
+        <p className="text-sm text-muted">{t("loading")}</p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated || user?.role !== "ADMIN") {
     return (
@@ -134,6 +153,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
           <SidebarNav
             pathname={pathname}
+            overview={overview}
             onNavigate={() => setMenuOpen(false)}
           />
         </div>
@@ -144,7 +164,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="flex h-[72px] items-center px-6">
           <AdminLogo />
         </div>
-        <SidebarNav pathname={pathname} />
+        <SidebarNav pathname={pathname} overview={overview} />
       </aside>
 
       <div className="lg:ps-[260px]">
@@ -184,11 +204,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={t("searchAdmin")}
                 aria-label={t("searchAdmin")}
-                className="h-10 w-full rounded-xl border border-[#e4dbc9] bg-white ps-9 pe-12 text-[14.5px] text-charcoal outline-none transition placeholder:text-muted-soft focus:border-terracotta/50 focus:ring-4 focus:ring-terracotta/10"
+                className="h-10 w-full rounded-xl border border-[#e4dbc9] bg-white ps-9 pe-3 text-[14.5px] text-charcoal outline-none transition placeholder:text-muted-soft focus:border-terracotta/50 focus:ring-4 focus:ring-terracotta/10"
               />
-              <span className="pointer-events-none absolute end-2.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5 rounded-md border border-line bg-cream px-1.5 py-0.5 text-[11.5px] font-semibold text-muted-soft">
-                <Command className="size-2.5" />K
-              </span>
             </form>
 
             <div className="ms-auto flex items-center gap-1.5 md:gap-2">
@@ -208,14 +225,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 <ExternalLink className="size-3.5 text-muted" />
                 {t("switchToCustomer")}
               </Link>
-              <button
-                type="button"
-                className="relative grid size-9 place-items-center rounded-full border border-[#e4dbc9] bg-white text-charcoal transition hover:border-line-strong"
-                aria-label={t("notifications")}
-              >
-                <Bell className="size-4" />
-                <span className="absolute end-2 top-2 size-1.5 rounded-full bg-terracotta ring-2 ring-white" />
-              </button>
               <div className="ms-1 flex items-center gap-2 border-s border-[#e4dbc9] ps-2">
                 <Avatar src="/img/user-sarah.jpg" alt="Admin" size={32} />
                 <div className="hidden leading-tight xl:block">
@@ -236,7 +245,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <footer className="flex flex-col gap-1 px-4 pb-8 text-[12.5px] text-muted-soft md:flex-row md:items-center md:justify-between md:px-8">
           <span>{t("adminFooterNote")}</span>
           <span>
-            {t("buildVersion")} 1.4.0 · {t("region")} NL
+            {t("buildVersion")} {ADMIN_BUILD_VERSION} · {t("region")} NL
           </span>
         </footer>
       </div>
@@ -274,9 +283,13 @@ function AdminLogo() {
 
 function SidebarNav({
   pathname,
+  overview,
   onNavigate,
 }: {
   pathname: string;
+  overview?: {
+    kpis?: { activeCooks?: number; pendingVerifications?: number };
+  } | null;
   onNavigate?: () => void;
 }) {
   const { t, user, isAuthenticated } = useApp();
@@ -333,13 +346,19 @@ function SidebarNav({
 
       <div className="mx-3 mb-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
         <div className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-[#9db879]" />
+          <span
+            className={cn(
+              "size-1.5 rounded-full",
+              overview ? "bg-[#9db879]" : "bg-terracotta",
+            )}
+          />
           <p className="text-[12.5px] font-semibold text-cream/80">
-            {t("allSystemsOk")}
+            {overview ? "Live data" : "Loading…"}
           </p>
         </div>
         <p className="mt-1 text-[12px] text-cream/40">
-          {t("liveKitchens")}: 184 · 99.98% {t("uptime").toLowerCase()}
+          {t("liveKitchens")}: {overview?.kpis?.activeCooks ?? "—"} ·{" "}
+          {t("verificationQueue")}: {overview?.kpis?.pendingVerifications ?? "—"}
         </p>
       </div>
 

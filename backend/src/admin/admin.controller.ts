@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -20,6 +21,8 @@ import { R2StorageService } from "../uploads/r2-storage.service";
 import { CreateDishDto } from "../dishes/dto/dish.dto";
 import { UpdateAvailabilityDto } from "../cooks/dto/cook.dto";
 import {
+  BulkCookStatusDto,
+  BulkDishStatusDto,
   ModerateDishDto,
   ResolveDisputeDto,
   ReviewApplicationDto,
@@ -31,9 +34,18 @@ import {
 } from "./dto/admin.dto";
 import { Roles } from "../common/decorators/roles.decorator";
 import {
-  CurrentUser,
-  JwtPayloadUser,
-} from "../common/decorators/current-user.decorator";
+  AdminAuditActor,
+  AuditActor,
+} from "../common/decorators/audit-actor.decorator";
+
+const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_EVIDENCE_MIME = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+  "application/pdf",
+]);
 
 @ApiTags("Admin")
 @ApiBearerAuth()
@@ -65,9 +77,9 @@ export class AdminController {
   updateOrderStatus(
     @Param("id") id: string,
     @Body() dto: UpdateAdminOrderStatusDto,
-    @CurrentUser() user: JwtPayloadUser,
+    @AuditActor() actor: AdminAuditActor,
   ) {
-    return this.adminService.updateOrderStatus(id, dto, user.sub);
+    return this.adminService.updateOrderStatus(id, dto, actor.actorId, actor);
   }
 
   @Post("orders/:id/refund")
@@ -78,9 +90,9 @@ export class AdminController {
   refundOrder(
     @Param("id") id: string,
     @Body() dto: { amount?: number; reason?: string },
-    @CurrentUser() user: JwtPayloadUser,
+    @AuditActor() actor: AdminAuditActor,
   ) {
-    return this.adminService.refundOrder(id, dto, user.sub);
+    return this.adminService.refundOrder(id, dto, actor.actorId, actor);
   }
 
   @Get("cooks")
@@ -99,21 +111,30 @@ export class AdminController {
   }
 
   @Post("cooks/:id/dishes")
-  createCookDish(@Param("id") id: string, @Body() dto: CreateDishDto) {
-    return this.adminService.createCookDish(id, dto);
+  createCookDish(
+    @Param("id") id: string,
+    @Body() dto: CreateDishDto,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.createCookDish(id, dto, actor);
   }
 
   @Patch("cooks/:id/availability")
   updateCookAvailability(
     @Param("id") id: string,
     @Body() dto: UpdateAvailabilityDto,
+    @AuditActor() actor: AdminAuditActor,
   ) {
-    return this.adminService.updateCookAvailability(id, dto);
+    return this.adminService.updateCookAvailability(id, dto, actor);
   }
 
   @Patch("cooks/:id/status")
-  updateCookStatus(@Param("id") id: string, @Body() dto: UpdateCookStatusDto) {
-    return this.adminService.updateCookStatus(id, dto);
+  updateCookStatus(
+    @Param("id") id: string,
+    @Body() dto: UpdateCookStatusDto,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.updateCookStatus(id, dto, actor);
   }
 
   @Patch("cooks/:id/compliance")
@@ -124,31 +145,36 @@ export class AdminController {
   updateCookCompliance(
     @Param("id") id: string,
     @Body() dto: UpdateCookComplianceDto,
-    @CurrentUser() user: JwtPayloadUser,
+    @AuditActor() actor: AdminAuditActor,
   ) {
-    return this.adminService.updateCookCompliance(id, dto, user.sub);
+    return this.adminService.updateCookCompliance(id, dto, actor.actorId, actor);
   }
 
   @Post("cooks/:id/sync-stripe")
   @ApiOperation({ summary: "Re-read the connected account from Stripe" })
-  syncCookAccount(@Param("id") id: string) {
-    return this.adminService.syncCookAccount(id);
+  syncCookAccount(
+    @Param("id") id: string,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.syncCookAccount(id, actor);
   }
 
   @Post("verifications/:id/approve")
   approveApplication(
     @Param("id") id: string,
     @Body() dto: ReviewApplicationDto,
+    @AuditActor() actor: AdminAuditActor,
   ) {
-    return this.adminService.approveApplication(id, dto);
+    return this.adminService.approveApplication(id, dto, actor);
   }
 
   @Post("verifications/:id/request-changes")
   requestApplicationChanges(
     @Param("id") id: string,
     @Body() dto: ReviewApplicationDto,
+    @AuditActor() actor: AdminAuditActor,
   ) {
-    return this.adminService.requestApplicationChanges(id, dto);
+    return this.adminService.requestApplicationChanges(id, dto, actor);
   }
 
   @Get("dishes")
@@ -162,13 +188,20 @@ export class AdminController {
   }
 
   @Patch("dishes/:id/status")
-  moderateDish(@Param("id") id: string, @Body() dto: ModerateDishDto) {
-    return this.adminService.moderateDish(id, dto);
+  moderateDish(
+    @Param("id") id: string,
+    @Body() dto: ModerateDishDto,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.moderateDish(id, dto, actor);
   }
 
   @Delete("dishes/:id")
-  removeDish(@Param("id") id: string) {
-    return this.adminService.removeDish(id);
+  removeDish(
+    @Param("id") id: string,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.removeDish(id, actor);
   }
 
   // ---------------------------------------------------------------------------
@@ -185,8 +218,8 @@ export class AdminController {
 
   @Post("marketplace/release")
   @ApiOperation({ summary: "Release all eligible order earnings now" })
-  releaseTransfers() {
-    return this.adminService.releaseTransfers();
+  releaseTransfers(@AuditActor() actor: AdminAuditActor) {
+    return this.adminService.releaseTransfers(actor);
   }
 
   @Get("payouts")
@@ -196,24 +229,28 @@ export class AdminController {
 
   @Post("payouts/:id/sync")
   @ApiOperation({ summary: "Re-read one bank payout from Stripe" })
-  syncPayout(@Param("id") id: string) {
-    return this.adminService.syncPayout(id);
+  syncPayout(
+    @Param("id") id: string,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.syncPayout(id, actor);
   }
 
   @Patch("payouts/:id/status")
   updatePayoutStatus(
     @Param("id") id: string,
     @Body() dto: UpdatePayoutStatusDto,
+    @AuditActor() actor: AdminAuditActor,
   ) {
-    return this.adminService.updatePayoutStatus(id, dto);
+    return this.adminService.updatePayoutStatus(id, dto, actor);
   }
 
   @Post("payouts/run")
   @ApiOperation({
     summary: "Deprecated alias of /admin/marketplace/release",
   })
-  runScheduledPayouts() {
-    return this.adminService.releaseTransfers();
+  runScheduledPayouts(@AuditActor() actor: AdminAuditActor) {
+    return this.adminService.releaseTransfers(actor);
   }
 
   @Get("disputes")
@@ -225,9 +262,19 @@ export class AdminController {
     return this.adminService.getDisputes(status, page, limit);
   }
 
+  @Get("disputes/:id")
+  @ApiOperation({ summary: "Full dispute detail including evidence and timeline" })
+  getDispute(@Param("id") id: string) {
+    return this.adminService.getDisputeView(id);
+  }
+
   @Post("disputes/:id/resolve")
-  resolveDispute(@Param("id") id: string, @Body() dto: ResolveDisputeDto) {
-    return this.adminService.resolveDispute(id, dto);
+  resolveDispute(
+    @Param("id") id: string,
+    @Body() dto: ResolveDisputeDto,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.resolveDispute(id, dto, actor);
   }
 
   @Get("settings")
@@ -236,8 +283,11 @@ export class AdminController {
   }
 
   @Patch("settings")
-  updateSettings(@Body() dto: UpdatePlatformSettingsDto) {
-    return this.adminService.updateSettings(dto);
+  updateSettings(
+    @Body() dto: UpdatePlatformSettingsDto,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.updateSettings(dto, actor);
   }
 
   @Get("audit")
@@ -256,13 +306,19 @@ export class AdminController {
   }
 
   @Post("cooks/bulk-status")
-  bulkCookStatus(@Body() dto: { ids: string[]; status: string }) {
-    return this.adminService.bulkCookStatus(dto.ids, dto.status);
+  bulkCookStatus(
+    @Body() dto: BulkCookStatusDto,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.bulkCookStatus(dto.ids, dto.status, actor);
   }
 
   @Post("dishes/bulk-status")
-  bulkDishStatus(@Body() dto: { ids: string[]; status: string }) {
-    return this.adminService.bulkDishStatus(dto.ids, dto.status);
+  bulkDishStatus(
+    @Body() dto: BulkDishStatusDto,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.bulkDishStatus(dto.ids, dto.status, actor);
   }
 
   @Post("disputes/:id/evidence")
@@ -271,11 +327,29 @@ export class AdminController {
     @Param("id") id: string,
     @UploadedFile() file: Express.Multer.File,
     @Req() req: any,
+    @AuditActor() actor: AdminAuditActor,
   ) {
-    if (!file) throw new Error("No file");
+    if (!file) {
+      throw new BadRequestException("No evidence file was uploaded");
+    }
+    if (!ALLOWED_EVIDENCE_MIME.has(file.mimetype)) {
+      throw new BadRequestException(
+        "Unsupported evidence file type. Use JPG, PNG, WEBP, AVIF or PDF.",
+      );
+    }
+    if (file.size <= 0 || file.size > MAX_EVIDENCE_BYTES) {
+      throw new BadRequestException(
+        "Evidence file must be non-empty and at most 10 MB.",
+      );
+    }
+
     const origin = `${req.protocol}://${req.get("host")}`;
     const result = await this.r2.uploadImage(file, origin, "documents");
-    const updated = await this.adminService.appendDisputeEvidence(id, result.url);
+    const updated = await this.adminService.appendDisputeEvidence(
+      id,
+      result.url,
+      actor,
+    );
     return { url: result.url, dispute: updated };
   }
 }

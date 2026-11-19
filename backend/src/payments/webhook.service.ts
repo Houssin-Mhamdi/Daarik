@@ -7,6 +7,7 @@ import {
   TransferStatus,
 } from "@prisma/client";
 import Stripe from "stripe";
+import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { StripeService } from "./stripe.service";
 import { PaymentsService } from "./payments.service";
@@ -29,6 +30,7 @@ export class WebhookService {
     private readonly prisma: PrismaService,
     private readonly stripe: StripeService,
     private readonly payments: PaymentsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async handle(event: Stripe.Event): Promise<void> {
@@ -211,6 +213,22 @@ export class WebhookService {
     });
 
     this.logger.log(`Order ${order.code} paid (${intent.id})`);
+
+    // Live cook dashboard notification. Deliberately contain no customer PII.
+    try {
+      this.notifications.notifyNewOrder(order.cookId, {
+        orderId: order.id,
+        code: order.code,
+        status:
+          order.status === OrderStatus.CANCELLED
+            ? OrderStatus.CONFIRMED
+            : order.status,
+        totalCents: order.totalCents,
+        createdAt: order.createdAt.toISOString(),
+      });
+    } catch (err) {
+      this.logger.warn(`Cook notification failed for ${order.code}: ${String(err)}`);
+    }
   }
 
   private async onPaymentFailed(intent: Stripe.PaymentIntent) {

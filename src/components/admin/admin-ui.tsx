@@ -3,8 +3,32 @@
 import * as React from "react";
 import { ArrowDownRight, ArrowUpRight, MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useApp } from "@/components/providers/app-provider";
 import { cn, formatPrice } from "@/lib/utils";
+
+export {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+};
+
+/** Single source of truth for the build shown in the shell and settings. */
+export const ADMIN_BUILD_VERSION = "2.0.0-connect";
 
 export function AdminCard({
   children,
@@ -425,6 +449,13 @@ const statusStyles: Record<
   open: { label: "open", variant: "destructive" },
   review: { label: "underReviewStatus", variant: "saffron" },
   resolved: { label: "resolved", variant: "success" },
+  won: { label: "won", variant: "success" },
+  lost: { label: "lost", variant: "destructive" },
+  canceled: { label: "statusCancelled", variant: "destructive" },
+  failed: { label: "failed", variant: "destructive" },
+  enabled: { label: "enabled", variant: "success" },
+  disabled: { label: "disabled", variant: "outline" },
+  changes_requested: { label: "pending", variant: "saffron" },
   suspended: { label: "suspended", variant: "destructive" },
   verified: { label: "verified", variant: "success" },
   approved: { label: "approved", variant: "success" },
@@ -445,49 +476,46 @@ export function StatusPill({ status, className }: { status: string; className?: 
   );
 }
 
-export function AdminTable({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full min-w-[660px] border-collapse text-start">{children}</table>
-    </div>
-  );
+export function AdminTable({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <Table className={cn("min-w-[660px]", className)}>{children}</Table>;
 }
 
 export function Th({
   children,
   className,
-}: {
-  children?: React.ReactNode;
-  className?: string;
-}) {
+  ...props
+}: React.ThHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <th
+    <TableHead
       className={cn(
-        "border-b border-[#f0e9dc] px-4 py-2.5 text-start text-[11.5px] font-bold uppercase tracking-[0.13em] text-muted-soft first:ps-5 last:pe-5",
+        "border-b border-[#f0e9dc] py-2.5 first:ps-5 last:pe-5",
         className,
       )}
+      {...props}
     >
       {children}
-    </th>
+    </TableHead>
   );
 }
 
 export function Td({
   children,
   className,
-}: {
-  children?: React.ReactNode;
-  className?: string;
-}) {
+  ...props
+}: React.TdHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <td
-      className={cn(
-        "border-b border-[#f4eee3] px-4 py-3 text-[14px] text-charcoal first:ps-5 last:pe-5",
-        className,
-      )}
+    <TableCell
+      className={cn("border-b border-[#f4eee3] first:ps-5 last:pe-5", className)}
+      {...props}
     >
       {children}
-    </td>
+    </TableCell>
   );
 }
 

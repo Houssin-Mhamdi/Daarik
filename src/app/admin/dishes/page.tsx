@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ChefHat,
-  Check,
   Eye,
   EyeOff,
   Flame,
@@ -26,6 +25,9 @@ import {
   AdminTable,
   KpiCard,
   StatusPill,
+  TableBody,
+  TableHeader,
+  TableRow,
   Td,
   Th,
 } from "@/components/admin/admin-ui";
@@ -37,7 +39,7 @@ import {
   useAdminRemoveDishMutation,
   type AdminDishRecord,
 } from "@/lib/queries";
-import { formatPrice } from "@/lib/utils";
+import { errorMessage, formatPrice } from "@/lib/utils";
 
 type DishRow = {
   id: string;
@@ -53,42 +55,52 @@ type DishRow = {
   reviewCount: number;
   portionsLeft: number;
   status: "live" | "paused" | "draft";
-  reported?: boolean;
+  reported: boolean;
+  reportReason?: string | null;
 };
 
 type Filter = "all" | "live" | "paused" | "draft" | "reported";
+
+const PAGE_SIZE = 15;
+
+function bulkUpdated(value: unknown): number {
+  if (typeof value !== "object" || value === null) return 0;
+  const raw = value as Record<string, unknown>;
+  return typeof raw.updated === "number" ? raw.updated : 0;
+}
 
 export default function AdminDishesPage() {
   const { t, lang, toast } = useApp();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hideId, setHideId] = useState<string | null>(null);
+  const [removeId, setRemoveId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   const { data: paginated, isPending, isError } = useAdminDishesPaginatedQuery({
     filter: filter === "all" ? undefined : filter,
     q: query.trim() || undefined,
     page: String(page),
-    limit: "15",
+    limit: String(PAGE_SIZE),
   });
-  const apiDishes = useMemo(() => paginated?.items ?? [], [paginated]);
   const total = paginated?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / 15));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-    useEffect(() => {
+  useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [filter, query]);
+
   const moderateDish = useAdminModerateDishMutation();
   const removeDish = useAdminRemoveDishMutation();
   const bulkStatus = useAdminBulkDishStatusMutation();
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const rows = useMemo<DishRow[]>(
     () =>
-      apiDishes.map((dish: AdminDishRecord) => ({
+      (paginated?.items ?? []).map((dish: AdminDishRecord) => ({
         id: dish.id,
-        dbId: dish.dbId,
+        dbId: dish.dbId ?? dish.id,
         name: loc(dish.name, lang),
         desc: loc(dish.desc, lang),
         image: dish.image,
@@ -101,25 +113,61 @@ export default function AdminDishesPage() {
         portionsLeft: Number(dish.portionsLeft),
         status: dish.status,
         reported: dish.reported,
+        reportReason: dish.reportReason,
       })),
-    [apiDishes, lang],
+    [paginated?.items, lang],
   );
 
+  const serverCounts = paginated?.counts;
   const counts = useMemo(
     () => ({
-      all: rows.length,
-      live: rows.filter((row) => row.status === "live").length,
-      paused: rows.filter((row) => row.status === "paused").length,
-      draft: rows.filter((row) => row.status === "draft").length,
-      reported: rows.filter((row) => row.reported).length,
+      all: serverCounts?.all ?? total,
+      live: serverCounts?.live ?? rows.filter((row) => row.status === "live").length,
+      paused:
+        serverCounts?.paused ?? rows.filter((row) => row.status === "paused").length,
+      draft: serverCounts?.draft ?? rows.filter((row) => row.status === "draft").length,
+      reported:
+        serverCounts?.reported ?? rows.filter((row) => row.reported).length,
     }),
-    [rows],
+    [rows, serverCounts, total],
   );
 
-  const filtered = rows;
-
   const selected = rows.find((row) => row.id === selectedId) ?? null;
-  const hideTarget = rows.find((row) => row.id === hideId) ?? null;
+  const removeTarget = rows.find((row) => row.id === removeId) ?? null;
+  const allSelected = rows.length > 0 && rows.every((row) => selectedIds.has(row.dbId));
+
+  const runBulk = async (status: "LIVE" | "PAUSED") => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    try {
+      const result = await bulkStatus.mutateAsync({ ids, status });
+      const updated = bulkUpdated(result);
+      setSelectedIds(new Set());
+      toast(t("savedSettingsToast"), {
+        description: `${updated} ${t("adminNavDishes").toLowerCase()} ${status === "LIVE" ? "approved" : "paused"}`,
+      });
+    } catch (err) {
+      toast(errorMessage(err, t("loadError")), { variant: "error" });
+    }
+  };
+
+  const toggleStatus = async (row: DishRow) => {
+    const status = row.status === "live" ? "PAUSED" : "LIVE";
+    try {
+      await moderateDish.mutateAsync({ id: row.id, status });
+      toast(
+        status === "PAUSED" ? t("dishHiddenToast") : t("dishRestoredToast"),
+      );
+    } catch (err) {
+      toast(errorMessage(err, t("loadError")), { variant: "error" });
+    }
+    setSelectedId(null);
+  };
+
+  const clearFilters = () => {
+    setFilter("all");
+    setQuery("");
+  };
 
   return (
     <div className="mx-auto max-w-[1360px]">
@@ -143,28 +191,24 @@ export default function AdminDishesPage() {
           label={t("liveDishes")}
           value={counts.live}
           icon={<UtensilsCrossed className="size-4" />}
-          foot={t("liveKitchens")}
         />
         <KpiCard
           label={t("pausedDishes")}
           value={counts.paused}
           icon={<EyeOff className="size-4" />}
           accent="#d9a441"
-          foot={t("today")}
         />
         <KpiCard
           label={t("drafts")}
           value={counts.draft}
           icon={<Flame className="size-4" />}
           accent="#697653"
-          foot={t("thisWeek")}
         />
         <KpiCard
           label={t("flaggedReviews")}
           value={counts.reported}
           icon={<AlertTriangle className="size-4" />}
           accent="#b3402f"
-          foot={t("awaitingReview")}
         />
       </div>
 
@@ -209,35 +253,60 @@ export default function AdminDishesPage() {
           />
         </div>
 
+        {selectedIds.size > 0 ? (
+          <div className="m-3 flex flex-wrap items-center gap-2 rounded-xl bg-cream/60 p-2 md:m-4">
+            <span className="text-[13px] font-semibold text-charcoal">
+              {selectedIds.size} {t("selected").toLowerCase()}
+            </span>
+            <Button size="sm" loading={bulkStatus.isPending} onClick={() => void runBulk("LIVE")}>
+              {t("approve")}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={bulkStatus.isPending}
+              onClick={() => void runBulk("PAUSED")}
+            >
+              {t("hideDish")}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+              {t("clearFiltersShort")}
+            </Button>
+          </div>
+        ) : null}
+
         {isError ? (
           <p role="alert" className="px-5 py-8 text-center text-sm text-danger">
             {t("loadError")}
           </p>
         ) : isPending ? (
-          <p className="px-5 py-8 text-center text-sm text-muted">
-            {t("loading")}
-          </p>
+          <p className="px-5 py-8 text-center text-sm text-muted">{t("loading")}</p>
+        ) : rows.length === 0 ? (
+          <div className="px-5 py-14 text-center">
+            <UtensilsCrossed className="mx-auto size-7 text-muted-soft" />
+            <p className="mt-3 text-[15.5px] font-semibold text-charcoal">{t("noResults")}</p>
+            <p className="mt-1 text-[13.5px] text-muted">{t("noResultsFilters")}</p>
+            <Button variant="secondary" size="sm" className="mt-4" onClick={clearFilters}>
+              {t("clearFiltersShort")}
+            </Button>
+          </div>
         ) : (
-          <>
-            {selectedIds.size > 0 ? (
-              <div className="mb-3 flex items-center gap-2">
-                <span className="text-[13px] font-semibold text-charcoal">{selectedIds.size} selected</span>
-                <Button size="sm" onClick={() => { bulkStatus.mutate({ ids: [...selectedIds], status: "LIVE" }); setSelectedIds(new Set()); }}>Approve</Button>
-                <Button size="sm" variant="secondary" onClick={() => { bulkStatus.mutate({ ids: [...selectedIds], status: "PAUSED" }); setSelectedIds(new Set()); }}>Pause</Button>
-              </div>
-            ) : null}
-
-            <AdminTable>
-            <thead>
-              <tr>
-                <Th>
+          <AdminTable>
+            <TableHeader>
+              <TableRow>
+                <Th className="w-10">
                   <input
                     type="checkbox"
-                    checked={selectedIds.size === filtered.length && filtered.length > 0}
-                    onChange={(e) => {
-                      if (e.target.checked) setSelectedIds(new Set(filtered.map((r) => r.dbId)));
-                      else setSelectedIds(new Set());
-                    }}
+                    aria-label={t("selectAll")}
+                    checked={allSelected}
+                    onChange={(event) =>
+                      setSelectedIds(
+                        event.target.checked
+                          ? new Set(rows.map((row) => row.dbId))
+                          : new Set(),
+                      )
+                    }
+                    className="size-4 accent-terracotta"
                   />
                 </Th>
                 <Th>{t("adminNavDishes")}</Th>
@@ -248,15 +317,26 @@ export default function AdminDishesPage() {
                 <Th className="hidden xl:table-cell">{t("portionsLeft")}</Th>
                 <Th>{t("statusCol")}</Th>
                 <Th className="text-end">{t("actionCol")}</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr key={row.id} className="transition hover:bg-cream/40">
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.id}>
                   <Td>
-                   <Td>
-                     <input type="checkbox" checked={selectedIds.has(row.dbId)} onChange={(e) => { const next = new Set(selectedIds); if (e.target.checked) next.add(row.dbId); else next.delete(row.dbId); setSelectedIds(next); }} className="size-4" />
-                   </Td>
+                    <input
+                      type="checkbox"
+                      aria-label={`${t("select")} ${row.name}`}
+                      checked={selectedIds.has(row.dbId)}
+                      onChange={(event) => {
+                        const next = new Set(selectedIds);
+                        if (event.target.checked) next.add(row.dbId);
+                        else next.delete(row.dbId);
+                        setSelectedIds(next);
+                      }}
+                      className="size-4 accent-terracotta"
+                    />
+                  </Td>
+                  <Td>
                     <button
                       type="button"
                       onClick={() => setSelectedId(row.id)}
@@ -285,22 +365,16 @@ export default function AdminDishesPage() {
                       </span>
                     </button>
                   </Td>
-                  <Td className="hidden text-muted lg:table-cell">
-                    {row.cook}
-                  </Td>
+                  <Td className="hidden text-muted lg:table-cell">{row.cook}</Td>
                   <Td className="hidden md:table-cell">
                     <Badge variant="outline">{row.cuisine}</Badge>
                   </Td>
-                  <Td className="font-semibold">
-                    {formatPrice(row.price, lang)}
-                  </Td>
+                  <Td className="font-semibold">{formatPrice(row.price, lang)}</Td>
                   <Td className="hidden sm:table-cell">
                     <span className="inline-flex items-center gap-1 text-[13px] font-semibold">
                       <Star className="size-3 fill-saffron text-saffron" />
                       {row.rating.toFixed(1)}
-                      <span className="font-normal text-muted">
-                        ({row.reviewCount})
-                      </span>
+                      <span className="font-normal text-muted">({row.reviewCount})</span>
                     </span>
                   </Td>
                   <Td className="hidden xl:table-cell">
@@ -326,30 +400,18 @@ export default function AdminDishesPage() {
                       {t("viewDetails")}
                     </button>
                   </Td>
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
+            </TableBody>
           </AdminTable>
-          {filtered.length > 0 ? (
-            <Pagination page={page} totalPages={totalPages} onPage={setPage} className="mt-4" />
-          ) : null}
-          </>
         )}
 
-        {filtered.length === 0 ? (
-          <div className="px-5 py-14 text-center">
-            <UtensilsCrossed className="mx-auto size-7 text-muted-soft" />
-            <p className="mt-3 text-[15.5px] font-semibold text-charcoal">
-              {t("noResults")}
-            </p>
-            <p className="mt-1 text-[13.5px] text-muted">
-              {t("noResultsFilters")}
-            </p>
-          </div>
+        {totalPages > 1 ? (
+          <Pagination page={page} totalPages={totalPages} onPage={setPage} className="m-4" />
         ) : null}
 
         <div className="px-4 py-3 text-[13px] text-muted md:px-5">
-          {t("showingResults", { shown: filtered.length, total: rows.length })}
+          {t("showingResults", { shown: rows.length, total: counts.all })}
         </div>
       </AdminCard>
 
@@ -357,9 +419,7 @@ export default function AdminDishesPage() {
         open={Boolean(selected)}
         onClose={() => setSelectedId(null)}
         title={selected?.name}
-        description={
-          selected ? `${selected.cook} · ${selected.cuisine}` : undefined
-        }
+        description={selected ? `${selected.cook} · ${selected.cuisine}` : undefined}
         className="md:max-w-lg"
         footer={
           selected ? (
@@ -367,20 +427,8 @@ export default function AdminDishesPage() {
               <Button
                 variant="secondary"
                 className="flex-1"
-                onClick={async () => {
-                  const status = selected.status === "live" ? "PAUSED" : "LIVE";
-                  try {
-                    await moderateDish.mutateAsync({ id: selected.id, status });
-                    toast(
-                      status === "PAUSED"
-                        ? t("dishHiddenToast")
-                        : t("dishRestoredToast"),
-                    );
-                  } catch {
-                    toast(t("loadError"), { variant: "error" });
-                  }
-                  setSelectedId(null);
-                }}
+                loading={moderateDish.isPending}
+                onClick={() => void toggleStatus(selected)}
               >
                 {selected.status === "live" ? (
                   <>
@@ -397,7 +445,7 @@ export default function AdminDishesPage() {
               <Button
                 variant="destructive"
                 className="flex-1"
-                onClick={() => setHideId(selected.id)}
+                onClick={() => setRemoveId(selected.id)}
               >
                 {t("removeDish")}
               </Button>
@@ -440,21 +488,19 @@ export default function AdminDishesPage() {
                     {t("flaggedReviews")}
                   </p>
                   <p className="mt-0.5 text-[12.5px] leading-relaxed text-[#8a5040]">
-                    {t("flaggedDishDesc")}
+                    {selected.reportReason || t("flaggedDishDesc")}
                   </p>
                 </div>
               </div>
             ) : null}
 
-            <p className="text-[14px] leading-relaxed text-muted">
-              {selected.desc}
-            </p>
+            <p className="text-[14px] leading-relaxed text-muted">{selected.desc}</p>
 
             <div className="grid grid-cols-3 gap-2">
               {[
                 { label: t("ratingCol"), value: selected.rating.toFixed(1) },
-                { label: t("reviews"), value: selected.reviewCount },
-                { label: t("portionsLeft"), value: selected.portionsLeft },
+                { label: t("reviews"), value: String(selected.reviewCount) },
+                { label: t("portionsLeft"), value: String(selected.portionsLeft) },
               ].map((stat) => (
                 <div
                   key={stat.label}
@@ -463,9 +509,7 @@ export default function AdminDishesPage() {
                   <p className="text-[18px] font-semibold leading-none text-charcoal">
                     {stat.value}
                   </p>
-                  <p className="mt-1 text-[11.5px] text-muted-soft">
-                    {stat.label}
-                  </p>
+                  <p className="mt-1 text-[11.5px] text-muted-soft">{stat.label}</p>
                 </div>
               ))}
             </div>
@@ -474,47 +518,38 @@ export default function AdminDishesPage() {
               <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted-soft">
                 {t("moderation")}
               </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#edf3e6] px-2 py-1 text-[12px] font-semibold text-[#4f6b3a]">
-                  <Check className="size-3" />
-                  {t("allergens")} OK
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#edf3e6] px-2 py-1 text-[12px] font-semibold text-[#4f6b3a]">
-                  <Check className="size-3" />
-                  {t("photo")} OK
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#fdf5e3] px-2 py-1 text-[12px] font-semibold text-[#8a5d13]">
-                  <AlertTriangle className="size-3" />
-                  {selected.reported
-                    ? t("flaggedReviews")
-                    : t("awaitingReview")}
-                </span>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <StatusPill status={selected.status} />
+                {selected.reported ? (
+                  <Badge variant="destructive" size="sm">
+                    {t("flaggedReviews")}
+                  </Badge>
+                ) : null}
               </div>
+              <p className="mt-2 text-[12.5px] leading-relaxed text-muted-soft">
+                {t("adminDishNote")}
+              </p>
             </div>
-
-            <p className="text-[12.5px] leading-relaxed text-muted-soft">
-              {t("adminDishNote")}
-            </p>
           </div>
         ) : null}
       </Sheet>
 
       <ConfirmDialog
-        open={Boolean(hideTarget)}
-        onClose={() => setHideId(null)}
+        open={Boolean(removeTarget)}
+        onClose={() => setRemoveId(null)}
         onConfirm={async () => {
-          if (hideTarget) {
+          if (removeTarget) {
             try {
-              await removeDish.mutateAsync(hideTarget.id);
+              await removeDish.mutateAsync(removeTarget.id);
               toast(t("dishHiddenToast"), {
-                description: hideTarget.name,
+                description: removeTarget.name,
                 variant: "info",
               });
-            } catch {
-              toast(t("loadError"), { variant: "error" });
+            } catch (err) {
+              toast(errorMessage(err, t("loadError")), { variant: "error" });
             }
           }
-          setHideId(null);
+          setRemoveId(null);
           setSelectedId(null);
         }}
         title={t("removeDishTitle")}

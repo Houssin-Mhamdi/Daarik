@@ -7,7 +7,13 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  type AdminCounts,
+  type AdminDisputeEvidence,
+  type AdminDisputeResolution,
+  type AdminDisputeTimelineEvent,
+  type AdminOverviewResponse,
   type AdminPayoutRecord,
+  type AdminVerificationQueueItem,
   type CookApplicationStatus,
   type CookAvailabilityRecord,
   clearAuthTokens,
@@ -42,6 +48,8 @@ export const queryKeys = {
   cookEarnings: ["cook", "me", "earnings"] as const,
   cookOrders: (status?: string) =>
     ["cook", "me", "orders", status ?? "all"] as const,
+  /** Prefix for every cook order query (all statuses, paginated or not). */
+  cookOrdersRoot: ["cook", "me", "orders"] as const,
   cookDishes: ["cook", "me", "dishes"] as const,
   dishes: (filters?: Record<string, string | undefined>) =>
     ["dishes", filters ?? {}] as const,
@@ -65,11 +73,15 @@ export const queryKeys = {
   adminPayouts: ["admin", "payouts"] as const,
   adminDisputes: (status?: string) =>
     ["admin", "disputes", status ?? "all"] as const,
+  adminDispute: (id: string) => ["admin", "dispute", id] as const,
   adminSettings: ["admin", "settings"] as const,
 };
 
 export type AdminCookRecord = {
+  /** Public slug used by admin routes. */
   id: string;
+  /** Database id; preferred for bulk operations. */
+  dbId?: string;
   name: string;
   city: string;
   avatar: string | null;
@@ -78,18 +90,42 @@ export type AdminCookRecord = {
   rating: number;
   ordersCount: number;
   createdAt: string;
+  kitchenOpen?: boolean;
+  maxPortionsPerDay?: number;
+  availableDays?: string[];
+  availableSlots?: string[];
+  bankName?: string | null;
+  ibanLast4?: string | null;
+  payoutHoldDays?: number;
+  canReceiveOrders?: boolean;
+  stripe?: {
+    connected?: boolean;
+    status?: string;
+    chargesEnabled?: boolean;
+    payoutsEnabled?: boolean;
+    requirementsDue?: string[];
+    disabledReason?: string | null;
+    syncedAt?: string | null;
+  };
+  compliance?: {
+    status?: string;
+    note?: string | null;
+    checkedAt?: string | null;
+    kvkNumber?: string | null;
+    nvwaRegistered?: boolean | null;
+  };
 };
 
-export type AdminCookApplicationRecord = {
-  id: string;
-  name: string;
-  city: string;
-  cuisine: string;
-  email: string;
-  phone: string;
-  documentsCount: number;
-  submittedAt: string;
+export type AdminCookWorkspace = {
+  cook: AdminCookRecord;
+  dishes: Dish[];
 };
+
+export type AdminCookApplicationRecord =
+  AdminVerificationQueueItem & {
+    email?: string;
+    phone?: string;
+  };
 
 export type AdminCooksResponse = {
   cooks: AdminCookRecord[];
@@ -97,6 +133,7 @@ export type AdminCooksResponse = {
   total?: number;
   page?: number;
   limit?: number;
+  counts?: AdminCounts;
 };
 
 export type AdminDishRecord = {
@@ -114,6 +151,16 @@ export type AdminDishRecord = {
   portionsLeft: number;
   status: "live" | "paused" | "draft";
   reported: boolean;
+  reportReason?: string | null;
+};
+
+export type AdminOrderRefund = {
+  id?: string;
+  amount?: number;
+  amountCents?: number;
+  reason?: string | null;
+  createdAt?: string;
+  status?: string;
 };
 
 export type AdminOrderRecord = {
@@ -123,8 +170,21 @@ export type AdminOrderRecord = {
   customerEmail: string;
   customerPhone: string;
   cook: string;
+  cookId?: string;
   amount: number;
+  subtotal?: number;
   serviceFee: number;
+  commission?: number;
+  cookNet?: number;
+  stripeFee?: number;
+  refunded?: number;
+  refunds?: AdminOrderRefund[];
+  transfer?: {
+    status: string;
+    amount: number;
+    reversed: number;
+  } | null;
+  transferEligibleAt?: string | null;
   status: "confirmed" | "preparing" | "ready" | "completed" | "cancelled";
   paymentStatus: string;
   paid: boolean;
@@ -139,6 +199,7 @@ export type AdminOrderRecord = {
 
 export type AdminDisputeRecord = {
   id: string;
+  dbId?: string;
   code: string;
   customer: string;
   cook: string;
@@ -147,10 +208,26 @@ export type AdminDisputeRecord = {
   resolutionNote: string | null;
   amount: number;
   refundAmount: number | null;
-  status: "open" | "review" | "resolved";
+  status: "open" | "review" | "won" | "lost" | "resolved";
   opened: string;
   resolvedAt: string | null;
-  evidence?: string[];
+  orderId?: string | null;
+  cookId?: string | null;
+  stripeDisputeId?: string | null;
+  stripeStatus?: string | null;
+  evidenceDueBy?: string | null;
+  transferReversed?: boolean;
+  evidence?: AdminDisputeEvidence[];
+  timeline?: AdminDisputeTimelineEvent[];
+  resolution?: AdminDisputeResolution | null;
+};
+
+export type AdminPagedResult<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  counts?: AdminCounts;
 };
 
 export type CookDashboardResponse = {
@@ -193,6 +270,33 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+/** Evidence may be a URL string or an object as the backend evolves. */
+function normalizeDisputeEvidence(value: unknown): AdminDisputeEvidence[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item): AdminDisputeEvidence => {
+    if (typeof item === "string") return { url: item, name: item.split("/").pop() };
+    const raw = toRecord(item);
+    const url = stringValue(raw.url ?? raw.href);
+    return {
+      ...(raw as AdminDisputeEvidence),
+      url,
+      name:
+        stringValue(raw.name ?? raw.fileName ?? raw.filename) ||
+        url.split("/").pop() ||
+        "Evidence",
+    };
+  });
+}
+
+function normalizeDisputeTimeline(
+  value: unknown,
+): AdminDisputeTimelineEvent[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => toRecord(item) as AdminDisputeTimelineEvent)
+    .filter((item) => Object.keys(item).length > 0);
 }
 
 function localizedValue(value: unknown, fallback = EMPTY_LOCALIZED): Localized {
@@ -983,7 +1087,7 @@ export function useAdminAnalyticsQuery(range: "7d" | "30d" | "90d" = "30d") {
 export function useAdminOverviewQuery(range: "30d" | "90d" = "30d") {
   return useQuery({
     queryKey: queryKeys.adminOverview(range),
-    queryFn: async () => {
+    queryFn: async (): Promise<AdminOverviewResponse | null> => {
       if (!getAccessToken()) return null;
       return darnaApi.admin.overview(range);
     },
@@ -1025,8 +1129,10 @@ export function useAdminOrdersPaginatedQuery(params?: {
         total: Array.isArray(result) ? items.length : (result?.total ?? items.length),
         page: Array.isArray(result) ? 1 : (result?.page ?? 1),
         limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
-      };
+        counts: Array.isArray(result) ? undefined : result?.counts,
+      } satisfies AdminPagedResult<AdminOrderRecord>;
     },
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -1106,6 +1212,18 @@ export function useAdminUpdateCookComplianceMutation() {
   });
 }
 
+export function useSyncAdminCookStripeMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => darnaApi.admin.syncCookStripe(id),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: queryKeys.adminCookWorkspace(id) });
+      qc.invalidateQueries({ queryKey: ["admin", "cooks"] });
+      qc.invalidateQueries({ queryKey: ["admin", "marketplace"] });
+    },
+  });
+}
+
 export function useAdminApproveVerificationMutation() {
   const qc = useQueryClient();
   return useMutation({
@@ -1133,23 +1251,15 @@ export function useAdminRequestVerificationChangesMutation() {
 export function useAdminCookWorkspaceQuery(id: string) {
   return useQuery({
     queryKey: queryKeys.adminCookWorkspace(id),
-    queryFn: async () =>
-      (await darnaApi.admin.cookWorkspace(id)) as {
-        cook: {
-          id: string;
-          name: string;
-          city: string;
-          avatar: string;
-          cuisineIds: string[];
-          status: string;
-          verified: boolean;
-          kitchenOpen: boolean;
-          maxPortionsPerDay: number;
-          availableDays: string[];
-          availableSlots: string[];
-        };
-        dishes: Dish[];
-      },
+    queryFn: async (): Promise<AdminCookWorkspace> => {
+      const raw = toRecord(await darnaApi.admin.getCookWorkspace(id));
+      return {
+        cook: { ...(toRecord(raw.cook) as unknown as AdminCookRecord), id },
+        dishes: Array.isArray(raw.dishes)
+          ? raw.dishes.map(normalizeDish).filter((dish) => dish.id)
+          : [],
+      };
+    },
     enabled: Boolean(id),
   });
 }
@@ -1212,8 +1322,10 @@ export function useAdminDishesPaginatedQuery(params?: {
         total: Array.isArray(result) ? items.length : (result?.total ?? items.length),
         page: Array.isArray(result) ? 1 : (result?.page ?? 1),
         limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
-      };
+        counts: Array.isArray(result) ? undefined : result?.counts,
+      } satisfies AdminPagedResult<AdminDishRecord>;
     },
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -1264,6 +1376,17 @@ export function useSyncAdminPayoutMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => darnaApi.admin.syncPayout(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.adminPayouts });
+      qc.invalidateQueries({ queryKey: ["admin", "marketplace"] });
+    },
+  });
+}
+
+export function useCancelAdminPayoutMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => darnaApi.admin.cancelPayout(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.adminPayouts });
       qc.invalidateQueries({ queryKey: ["admin", "marketplace"] });
@@ -1331,12 +1454,21 @@ export function useAdminDisputesPaginatedQuery(params?: {
       const result = await darnaApi.admin.disputes(params);
       const items = Array.isArray(result) ? result : (result?.items ?? []);
       return {
-        items: items as AdminDisputeRecord[],
+        items: items.map((item) => {
+          const raw = toRecord(item);
+          return {
+            ...raw,
+            evidence: normalizeDisputeEvidence(raw.evidence),
+            timeline: normalizeDisputeTimeline(raw.timeline),
+          } as AdminDisputeRecord;
+        }),
         total: Array.isArray(result) ? items.length : (result?.total ?? items.length),
         page: Array.isArray(result) ? 1 : (result?.page ?? 1),
         limit: Array.isArray(result) ? items.length : (result?.limit ?? items.length),
-      };
+        counts: Array.isArray(result) ? undefined : result?.counts,
+      } satisfies AdminPagedResult<AdminDisputeRecord>;
     },
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -1353,6 +1485,35 @@ export function useAdminResolveDisputeMutation() {
       status?: string;
     }) => darnaApi.admin.resolveDispute(id, body),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "disputes"] });
+      qc.invalidateQueries({ queryKey: ["admin", "overview"] });
+      qc.invalidateQueries({ queryKey: ["admin", "marketplace"] });
+    },
+  });
+}
+
+export function useAdminDisputeQuery(id: string) {
+  return useQuery({
+    queryKey: queryKeys.adminDispute(id),
+    queryFn: async () => {
+      if (!getAccessToken() || !id) return null;
+      const raw = toRecord(await darnaApi.admin.getDispute(id));
+      return {
+        ...raw,
+        evidence: normalizeDisputeEvidence(raw.evidence),
+        timeline: normalizeDisputeTimeline(raw.timeline),
+      } as AdminDisputeRecord;
+    },
+    enabled: Boolean(id),
+  });
+}
+
+export function useUploadAdminDisputeEvidenceMutation(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => darnaApi.admin.uploadDisputeEvidence(id, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.adminDispute(id) });
       qc.invalidateQueries({ queryKey: ["admin", "disputes"] });
       qc.invalidateQueries({ queryKey: ["admin", "overview"] });
       qc.invalidateQueries({ queryKey: ["admin", "marketplace"] });

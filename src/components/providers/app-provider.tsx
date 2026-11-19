@@ -100,6 +100,8 @@ type AppContextValue = {
   pickupOptions: PickupOption[];
   user: AuthUser;
   isAuthenticated: boolean;
+  /** True while /auth/me is still loading; used to avoid premature auth redirects. */
+  authPending: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: {
     email: string;
@@ -174,6 +176,19 @@ function readStored<T>(key: string, fallback: T): T {
 }
 
 let toastSeq = 0;
+
+// Same-browser tabs share cart changes without hitting the API every few seconds.
+let cartChannel: BroadcastChannel | null = null;
+function getCartChannel(): BroadcastChannel | null {
+  if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") {
+    return null;
+  }
+  cartChannel ??= new BroadcastChannel("darna-cart");
+  return cartChannel;
+}
+function broadcastCartChange(): void {
+  getCartChannel()?.postMessage({ type: "changed", at: Date.now() });
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -468,6 +483,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (server && cartPending.current === 0 && !detailsTimer.current) {
             applyServerCart(server);
             setCartSyncing(false);
+            broadcastCartChange();
           }
           return Boolean(server);
         },
@@ -605,16 +621,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
     void sync();
-    const interval = setInterval(() => {
+
+    // Event-driven instead of polling: refresh when the tab becomes active,
+    // when connectivity returns, or when another tab changed the cart.
+    const onVisible = () => {
       if (document.visibilityState === "visible") void sync();
-    }, 10000);
+    };
+    const onCartMessage = () => void sync();
+    document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", sync);
     window.addEventListener("online", sync);
+    const channel = getCartChannel();
+    channel?.addEventListener("message", onCartMessage);
+
     return () => {
       active = false;
-      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", sync);
       window.removeEventListener("online", sync);
+      channel?.removeEventListener("message", onCartMessage);
       conflictResolver.current?.(false);
       conflictResolver.current = null;
     };
@@ -934,6 +959,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pickupOptions: catalogPickupOptions,
     user,
     isAuthenticated: Boolean(apiUser),
+    authPending,
     login,
     register,
     logout,

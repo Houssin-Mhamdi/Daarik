@@ -27,63 +27,203 @@ import {
   MoneyText,
   SectionHead,
   StatusPill,
+  TableBody,
+  TableHeader,
+  TableRow,
   Td,
   Th,
 } from "@/components/admin/admin-ui";
 import {
   useAdminMarketplaceQuery,
   useAdminPayoutsQuery,
+  useCancelAdminPayoutMutation,
   useReleaseTransfersMutation,
   useSyncAdminPayoutMutation,
 } from "@/lib/queries";
 import { errorMessage, formatPrice } from "@/lib/utils";
 import { usePagination } from "@/hooks/use-pagination";
 
+type TransferRecord = {
+  id: string;
+  orderCode: string;
+  cook: string;
+  cookId: string;
+  amount: number;
+  reversed: number;
+  status: string;
+  stripeTransferId: string | null;
+  failureReason: string | null;
+  createdAt: string;
+};
+
+const TRANSFER_PAGE_SIZE = 10;
+const PAYOUT_PAGE_SIZE = 10;
+
+/** Quote CSV cells and neutralise spreadsheet formula injection. */
+function csvCell(value: unknown): string {
+  let text = value == null ? "" : String(value);
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function csvRow(cells: unknown[]): string {
+  return cells.map(csvCell).join(",");
+}
+
+function isInFlight(status: string): boolean {
+  return status === "scheduled" || status === "in_transit" || status === "pending";
+}
+
 export default function AdminPayoutsPage() {
   const { t, lang, toast } = useApp();
   const { data: payouts = [] } = useAdminPayoutsQuery();
-  const payoutPagination = usePagination(payouts, 10);
   const { data: marketplace, refetch: refetchMarketplace } =
     useAdminMarketplaceQuery();
   const releaseMutation = useReleaseTransfersMutation();
   const syncPayoutMutation = useSyncAdminPayoutMutation();
+  const cancelPayoutMutation = useCancelAdminPayoutMutation();
+
+  const transfers = (marketplace?.transfers ?? []) as TransferRecord[];
+  const transferPagination = usePagination(transfers, TRANSFER_PAGE_SIZE);
+  const payoutPagination = usePagination(payouts, PAYOUT_PAGE_SIZE);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [cancelId, setCancelId] = useState<string | null>(null);
   const [runOpen, setRunOpen] = useState(false);
 
   const totals = useMemo(() => {
-    const gross = payouts.reduce((sum, p) => sum + (p.gross ?? 0), 0);
-    const commission = payouts.reduce((sum, p) => sum + (p.commission ?? 0), 0);
-    const net = payouts.reduce((sum, p) => sum + (p.net ?? 0), 0);
+    const gross = payouts.reduce((sum, payout) => sum + (payout.gross ?? 0), 0);
+    const commission = payouts.reduce(
+      (sum, payout) => sum + (payout.commission ?? 0),
+      0,
+    );
+    const net = payouts.reduce((sum, payout) => sum + (payout.net ?? 0), 0);
     const scheduled = payouts
-      .filter((p) => (p.status as string) !== "paid")
-      .reduce((sum, p) => sum + (p.net ?? 0), 0);
+      .filter((payout) => isInFlight(payout.status))
+      .reduce((sum, payout) => sum + (payout.net ?? 0), 0);
     return { gross, commission, net, scheduled };
   }, [payouts]);
 
-  const selected = payouts.find((p) => p.id === selectedId) ?? null;
+  const selected = payouts.find((payout) => payout.id === selectedId) ?? null;
+  const canCancelSelected =
+    Boolean(selected) &&
+    selected?.status === "scheduled" &&
+    !selected?.stripePayoutId;
+  const pricing = marketplace?.pricing;
+  const payoutPolicy = marketplace?.payoutPolicy;
+  const webhookEvents = marketplace?.webhookEvents ?? [];
   const availableEuros = (marketplace?.balance?.availableCents ?? 0) / 100;
   const pendingEuros = (marketplace?.balance?.pendingCents ?? 0) / 100;
+  const commissionRate = pricing
+    ? Number(pricing.commissionRate ?? 0)
+    : null;
+  const fixedCommissionEuros = (pricing?.commissionFixedCents ?? 0) / 100;
+  const serviceFeeEuros =
+    pricing?.serviceFee ?? (pricing?.serviceFeeCents ?? 0) / 100;
+  const inFlightCount = payouts.filter((payout) =>
+    isInFlight(payout.status),
+  ).length;
+  const payoutInterval = payoutPolicy?.interval ?? "WEEKLY";
+  const payoutAnchor =
+    payoutInterval === "MONTHLY"
+      ? `day ${payoutPolicy?.monthlyAnchor ?? 1}`
+      : payoutInterval === "WEEKLY"
+        ? payoutPolicy?.weeklyAnchor ?? "monday"
+        : payoutInterval.toLowerCase();
 
   const runRelease = async () => {
     try {
-      const res = await releaseMutation.mutateAsync();
+      const result = await releaseMutation.mutateAsync();
       setRunOpen(false);
       toast(t("payoutsProcessed"), {
-        description: `Released: ${res.released} · Skipped: ${res.skipped} · Failed: ${res.failed}`,
+        description: `Released: ${result.released} · Skipped: ${result.skipped} · Failed: ${result.failed}`,
       });
     } catch (err) {
       toast(errorMessage(err, t("paymentFailed")), { variant: "error" });
     }
   };
 
-  const syncSelectedPayout = async (id: string) => {
+  const syncSelectedPayout = async () => {
+    if (!selected) return;
     try {
-      await syncPayoutMutation.mutateAsync(id);
-      toast(t("stripeSynced"), { description: id });
+      await syncPayoutMutation.mutateAsync(selected.id);
+      toast(t("dataRefreshed"), { description: selected.cook });
     } catch (err) {
       toast(errorMessage(err, t("paymentFailed")), { variant: "error" });
     }
+  };
+
+  const cancelPayout = async () => {
+    if (!cancelId) return;
+    try {
+      await cancelPayoutMutation.mutateAsync(cancelId);
+      setSelectedId(null);
+      toast(t("payoutUpdated"));
+    } catch (err) {
+      toast(errorMessage(err, t("paymentFailed")), { variant: "error" });
+    } finally {
+      setCancelId(null);
+    }
+  };
+
+  const exportCsv = () => {
+    const lines = [
+      csvRow([
+        "Payout batch",
+        "Cook",
+        "Period",
+        "Gross",
+        "Commission",
+        "Net",
+        "Status",
+        "Stripe payout",
+      ]),
+      ...payouts.map((payout) =>
+        csvRow([
+          payout.id,
+          payout.cook,
+          payout.period,
+          payout.gross,
+          payout.commission,
+          payout.net,
+          payout.status,
+          payout.stripePayoutId ?? "",
+        ]),
+      ),
+      "",
+      csvRow([
+        "Transfer",
+        "Order",
+        "Cook",
+        "Stripe transfer",
+        "Amount",
+        "Reversed",
+        "Status",
+      ]),
+      ...transfers.map((transfer) =>
+        csvRow([
+          transfer.id,
+          transfer.orderCode,
+          transfer.cook,
+          transfer.stripeTransferId ?? "",
+          transfer.amount,
+          transfer.reversed,
+          transfer.status,
+        ]),
+      ),
+    ];
+    const blob = new Blob([`\uFEFF${lines.join("\n")}`], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "daarik-payouts.csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    toast(t("exportReady"));
   };
 
   return (
@@ -98,7 +238,7 @@ export default function AdminPayoutsPage() {
               variant="secondary"
               size="sm"
               className="h-9"
-              onClick={() => refetchMarketplace()}
+              onClick={() => void refetchMarketplace()}
             >
               <RefreshCw className="size-4" />
               {t("syncStripe")}
@@ -107,14 +247,10 @@ export default function AdminPayoutsPage() {
               variant="secondary"
               size="sm"
               className="h-9"
-              onClick={() =>
-                toast(t("statementReady"), {
-                  description: t("statementReadyDesc"),
-                })
-              }
+              onClick={exportCsv}
             >
               <Download className="size-4" />
-              {t("downloadStatement")}
+              {t("exportCsv")}
             </Button>
             <Button size="sm" className="h-9" onClick={() => setRunOpen(true)}>
               <Play className="size-3.5" />
@@ -136,7 +272,7 @@ export default function AdminPayoutsPage() {
           value={<MoneyText value={totals.net} compact />}
           icon={<CalendarClock className="size-4" />}
           accent="#d9a441"
-          foot={`In transit: ${formatPrice(totals.scheduled, lang)}`}
+          foot={`In transit: ${formatPrice(totals.scheduled, lang)} · ${inFlightCount} ${t("processingPayouts").toLowerCase()}`}
         />
         <KpiCard
           label="Cook Onboarding Readiness"
@@ -148,122 +284,121 @@ export default function AdminPayoutsPage() {
         <KpiCard
           label={t("commissionRevenue")}
           value={
-            <MoneyText
-              value={
-                marketplace?.pricing
-                  ? marketplace.pricing.commissionRate * 100
-                  : totals.commission
-              }
-              compact={false}
-            />
+            commissionRate === null ? (
+              <MoneyText value={totals.commission} compact />
+            ) : (
+              <span className="tabular-nums">
+                {Math.round(commissionRate * 100)}%
+              </span>
+            )
           }
           icon={<Banknote className="size-4" />}
           accent="#b98a68"
-          foot={`Commission ${Math.round((marketplace?.pricing.commissionRate ?? 0.15) * 100)}% + ${formatPrice(marketplace?.pricing.serviceFee ?? 1.5, lang)} fee`}
+          foot={`Earned ${formatPrice(totals.commission, lang)} · Fixed ${formatPrice(fixedCommissionEuros, lang)} · Fee ${formatPrice(serviceFeeEuros, lang)}`}
         />
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-12">
         <div className="space-y-4 xl:col-span-8">
-          {/* Transfers (order earnings release) */}
           <AdminCard>
             <SectionHead
               title="Order Transfers (Separate Charges & Transfers)"
-              subtitle={`Released after COMPLETED + ${marketplace?.payoutPolicy.holdDays ?? 7} hold days via source_transaction`}
-              action={
-                <Badge variant="olive">
-                  {marketplace?.transfers.length ?? 0} transfers
-                </Badge>
-              }
+              subtitle={`Released after COMPLETED + ${payoutPolicy?.holdDays ?? 7} hold days via source_transaction`}
+              action={<Badge variant="olive">{transfers.length} transfers</Badge>}
             />
             <AdminTable className="mt-3">
-              <thead>
-                <tr>
+              <TableHeader>
+                <TableRow>
                   <Th>Order</Th>
                   <Th>{t("cookCol")}</Th>
                   <Th>Stripe Transfer</Th>
                   <Th>Reversed</Th>
                   <Th>{t("netCol")}</Th>
                   <Th>{t("statusCol")}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {marketplace?.transfers.length ? (
-                  marketplace.transfers.map((tr) => (
-                    <tr key={tr.id} className="transition hover:bg-cream/40">
-                      <Td className="font-semibold">{tr.orderCode}</Td>
-                      <Td>{tr.cook}</Td>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transferPagination.pageItems.length ? (
+                  transferPagination.pageItems.map((transfer) => (
+                    <TableRow key={transfer.id}>
+                      <Td className="font-semibold">{transfer.orderCode}</Td>
+                      <Td>{transfer.cook}</Td>
                       <Td className="font-mono text-[12px] text-muted">
-                        {tr.stripeTransferId ?? "—"}
+                        {transfer.stripeTransferId ?? "—"}
                       </Td>
                       <Td className="text-muted">
-                        {tr.reversed > 0 ? `−${formatPrice(tr.reversed, lang)}` : "—"}
+                        {transfer.reversed > 0
+                          ? `−${formatPrice(transfer.reversed, lang)}`
+                          : "—"}
                       </Td>
                       <Td>
-                        <MoneyText value={tr.amount} />
+                        <MoneyText value={transfer.amount} />
                       </Td>
                       <Td>
                         <Badge
                           variant={
-                            tr.status === "CREATED"
+                            transfer.status === "CREATED"
                               ? "olive"
-                              : tr.status === "FAILED" || tr.status === "REVERSED"
+                              : transfer.status === "FAILED" ||
+                                  transfer.status === "REVERSED"
                                 ? "terracotta"
                                 : "saffron"
                           }
                           size="sm"
                         >
-                          {tr.status}
+                          {transfer.status}
                         </Badge>
                       </Td>
-                    </tr>
+                    </TableRow>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-[13.5px] text-muted">
-                      No transfers recorded yet. Complete a paid order to schedule a transfer.
-                    </td>
-                  </tr>
+                  <TableRow>
+                    <Td
+                      colSpan={6}
+                      className="px-4 py-6 text-center text-[13.5px] text-muted"
+                    >
+                      No transfers recorded yet. Complete a paid order to
+                      schedule a transfer.
+                    </Td>
+                  </TableRow>
                 )}
-              </tbody>
+              </TableBody>
             </AdminTable>
-            {payouts.length > 10 ? (
+            {transferPagination.totalPages > 1 ? (
               <Pagination
-                page={payoutPagination.page}
-                totalPages={payoutPagination.totalPages}
-                onPage={payoutPagination.setPage}
-                className="mt-4"
+                page={transferPagination.page}
+                totalPages={transferPagination.totalPages}
+                onPage={transferPagination.setPage}
+                className="m-4"
               />
             ) : null}
           </AdminCard>
 
-          {/* Bank payouts */}
           <AdminCard>
             <SectionHead
               title={t("payoutBatch")}
               subtitle="Bank payouts are confirmed exclusively via Stripe webhooks (payout.paid / payout.failed)"
               action={
                 <Badge variant="saffron">
-                  {payouts.filter((p) => p.status !== "paid").length}{" "}
-                  {t("pending")}
+                  {inFlightCount} {t("pending")}
                 </Badge>
               }
             />
             <AdminTable className="mt-3">
-              <thead>
-                <tr>
+              <TableHeader>
+                <TableRow>
                   <Th>{t("payoutBatch")}</Th>
                   <Th>{t("cookCol")}</Th>
                   <Th className="hidden md:table-cell">{t("period")}</Th>
                   <Th>{t("netCol")}</Th>
                   <Th>{t("statusCol")}</Th>
                   <Th className="text-end">{t("actionCol")}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {payouts.length ? (
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payoutPagination.pageItems.length ? (
                   payoutPagination.pageItems.map((payout) => (
-                    <tr key={payout.id} className="transition hover:bg-cream/40">
+                    <TableRow key={payout.id}>
                       <Td className="font-semibold">{payout.id}</Td>
                       <Td>{payout.cook}</Td>
                       <Td className="hidden whitespace-nowrap text-muted md:table-cell">
@@ -284,17 +419,28 @@ export default function AdminPayoutsPage() {
                           {t("viewDetails")}
                         </button>
                       </Td>
-                    </tr>
+                    </TableRow>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-[13.5px] text-muted">
+                  <TableRow>
+                    <Td
+                      colSpan={6}
+                      className="px-4 py-6 text-center text-[13.5px] text-muted"
+                    >
                       {t("noPayouts")}
-                    </td>
-                  </tr>
+                    </Td>
+                  </TableRow>
                 )}
-              </tbody>
+              </TableBody>
             </AdminTable>
+            {payoutPagination.totalPages > 1 ? (
+              <Pagination
+                page={payoutPagination.page}
+                totalPages={payoutPagination.totalPages}
+                onPage={payoutPagination.setPage}
+                className="m-4"
+              />
+            ) : null}
           </AdminCard>
         </div>
 
@@ -306,11 +452,10 @@ export default function AdminPayoutsPage() {
                   Payout Policy & Architecture
                 </p>
                 <p className="mt-2 text-[22px] font-semibold leading-none text-charcoal">
-                  {marketplace?.payoutPolicy.interval ?? "WEEKLY"} ·{" "}
-                  {marketplace?.payoutPolicy.weeklyAnchor ?? "monday"}
+                  {payoutInterval} · {payoutAnchor}
                 </p>
                 <p className="mt-1.5 text-[13px] text-muted">
-                  Hold after COMPLETED: {marketplace?.payoutPolicy.holdDays ?? 7}{" "}
+                  Hold after COMPLETED: {payoutPolicy?.holdDays ?? 7}{" "}
                   days
                 </p>
               </div>
@@ -334,13 +479,13 @@ export default function AdminPayoutsPage() {
               <div className="flex items-center justify-between">
                 <span className="text-muted">Stripe fee bearer</span>
                 <span className="font-semibold text-charcoal">
-                  {marketplace?.pricing.stripeFeeBearer ?? "PLATFORM"}
+                  {pricing?.stripeFeeBearer ?? "PLATFORM"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted">Commission base</span>
                 <span className="font-semibold text-charcoal">
-                  {marketplace?.pricing.commissionBase ?? "SUBTOTAL"}
+                  {pricing?.commissionBase ?? "SUBTOTAL"}
                 </span>
               </div>
             </div>
@@ -354,31 +499,31 @@ export default function AdminPayoutsPage() {
               Idempotent Stripe events (signature-verified)
             </p>
             <div className="mt-3 divide-y divide-line/70">
-              {marketplace?.webhookEvents.length ? (
-                marketplace.webhookEvents.slice(0, 8).map((ev) => (
+              {webhookEvents.length ? (
+                webhookEvents.slice(0, 8).map((event) => (
                   <div
-                    key={ev.stripeEventId}
+                    key={event.stripeEventId}
                     className="flex items-center justify-between gap-2 py-2 text-[12.5px]"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-mono font-semibold text-charcoal">
-                        {ev.type}
+                        {event.type}
                       </p>
                       <p className="truncate font-mono text-[11px] text-muted">
-                        {ev.stripeEventId}
+                        {event.stripeEventId}
                       </p>
                     </div>
                     <Badge
                       variant={
-                        ev.error
+                        event.error
                           ? "terracotta"
-                          : ev.processedAt
+                          : event.processedAt
                             ? "olive"
                             : "saffron"
                       }
                       size="sm"
                     >
-                      {ev.error ? "ERR" : ev.processedAt ? "OK" : "PENDING"}
+                      {event.error ? "ERR" : event.processedAt ? "OK" : "PENDING"}
                     </Badge>
                   </div>
                 ))
@@ -414,15 +559,24 @@ export default function AdminPayoutsPage() {
         }
         footer={
           selected ? (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 className="flex-1"
                 loading={syncPayoutMutation.isPending}
-                onClick={() => syncSelectedPayout(selected.id)}
+                onClick={() => void syncSelectedPayout()}
               >
                 <RefreshCw className="size-4" />
-                {t("syncStripe")}
+                Pull Stripe status
               </Button>
+              {canCancelSelected ? (
+                <Button
+                  variant="destructive"
+                  loading={cancelPayoutMutation.isPending}
+                  onClick={() => setCancelId(selected.id)}
+                >
+                  Cancel local payout
+                </Button>
+              ) : null}
               <Button
                 variant="secondary"
                 onClick={() => setSelectedId(null)}
@@ -464,6 +618,18 @@ export default function AdminPayoutsPage() {
                   <span>{t("netCol")}</span>
                   <span>{formatPrice(selected.net, lang)}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">Orders</span>
+                  <span className="font-medium">{selected.ordersCount}</span>
+                </div>
+                {selected.arrivalDate ? (
+                  <div className="flex justify-between">
+                    <span className="text-muted">Arrival</span>
+                    <span className="font-medium">
+                      {new Date(selected.arrivalDate).toLocaleDateString(lang)}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -477,11 +643,31 @@ export default function AdminPayoutsPage() {
                     {selected.cook}
                   </p>
                   <p className="text-[12.5px] text-muted">
-                    Managed by Stripe Connect (no manual mark-paid)
+                    {selected.automatic
+                      ? "Automatic Stripe payout"
+                      : "Local scheduled payout"}{" "}
+                    · no manual mark-paid
                   </p>
+                  {selected.stripePayoutId ? (
+                    <p className="mt-1 font-mono text-[11.5px] text-muted-soft">
+                      {selected.stripePayoutId}
+                    </p>
+                  ) : null}
+                  {selected.failureMessage ? (
+                    <p className="mt-1 text-[12.5px] text-danger">
+                      {selected.failureMessage}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
+
+            {canCancelSelected ? (
+              <p className="rounded-xl border border-line bg-cream/60 p-3 text-[12.5px] leading-relaxed text-muted">
+                This payout has not reached Stripe yet, so it can be cancelled
+                locally. Cancelling is written to the audit log.
+              </p>
+            ) : null}
           </div>
         ) : null}
       </Sheet>
@@ -495,6 +681,16 @@ export default function AdminPayoutsPage() {
         confirmLabel="Release Now"
         cancelLabel={t("cancel")}
         icon={<ArrowRight className="size-6" />}
+      />
+      <ConfirmDialog
+        open={Boolean(cancelId)}
+        onClose={() => setCancelId(null)}
+        onConfirm={cancelPayout}
+        title="Cancel local payout?"
+        description="This payout has no Stripe payout ID. The local schedule will be cancelled and recorded in the audit log."
+        confirmLabel="Cancel payout"
+        cancelLabel={t("cancel")}
+        variant="destructive"
       />
     </div>
   );

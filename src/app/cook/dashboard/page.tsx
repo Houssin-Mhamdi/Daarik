@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/controls";
 import { Card, Money } from "@/components/ui/misc";
 import { CookMobileHeader } from "@/components/cook/cook-mobile-header";
 import { useApp } from "@/components/providers/app-provider";
+import { useCookOrderNotifications } from "@/hooks/use-cook-order-notifications";
 import { loc } from "@/lib/data";
 import {
   useCookAvailabilityQuery,
@@ -43,6 +44,8 @@ export default function CookDashboardPage() {
   const { data: availability } = useCookAvailabilityQuery();
   const updateAvailability = useUpdateCookAvailabilityMutation();
   const updateOrderStatus = useUpdateCookOrderStatusMutation();
+  // Live paid-order alerts for verified cooks; no polling, no customer PII.
+  useCookOrderNotifications(Boolean(dashboard?.cook));
 
   const [openOverride, setOpenOverride] = useState<boolean | null>(null);
   const open = openOverride ?? availability?.kitchenOpen ?? true;

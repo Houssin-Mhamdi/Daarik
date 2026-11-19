@@ -15,6 +15,7 @@ import { AdminModule } from "./admin/admin.module";
 import { SupportModule } from "./support/support.module";
 import { AuditModule } from "./audit/audit.module";
 import { UploadsModule } from "./uploads/uploads.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
 import { MaintenanceGuard } from "./common/guards/maintenance.guard";
@@ -48,6 +49,7 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
     SupportModule,
     UploadsModule,
     AuditModule,
+    NotificationsModule,
   ],
   providers: [
     {

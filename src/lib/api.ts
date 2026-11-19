@@ -31,6 +31,84 @@ export type CookApplicationStatus = {
   submittedAt: string;
   reviewerNotes: string | null;
 };
+/** Global counts returned by admin list endpoints, independent of pagination. */
+export type AdminCounts = Record<string, number>;
+
+/** Paginated admin response with optional counts while the backend rolls out. */
+export type AdminPagedResponse<T = unknown> = {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  counts?: AdminCounts;
+};
+
+export type AdminDisputeEvidence = {
+  id?: string;
+  name?: string;
+  fileName?: string;
+  filename?: string;
+  url?: string;
+  mimeType?: string;
+  type?: string;
+  size?: number;
+  createdAt?: string;
+  uploadedAt?: string;
+};
+
+export type AdminDisputeTimelineEvent = {
+  id?: string;
+  type?: string;
+  action?: string;
+  label?: string;
+  description?: string;
+  message?: string;
+  note?: string;
+  at?: string;
+  createdAt?: string;
+  timestamp?: string;
+  actor?: string;
+  actorName?: string;
+};
+
+export type AdminDisputeResolution = {
+  status?: string;
+  note?: string;
+  resolutionNote?: string;
+  refundAmount?: number;
+  refundCents?: number;
+  at?: string;
+  createdAt?: string;
+  resolvedAt?: string;
+  by?: string;
+  resolvedBy?: string;
+};
+
+export type AdminOverviewCook = {
+  id: string;
+  slug?: string;
+  dbId?: string;
+  name: string;
+  avatar: string | null;
+  city: string;
+  rating: number;
+  ordersCount: number;
+  status: string;
+  complianceStatus?: string;
+  stripeAccountStatus?: string;
+};
+
+export type AdminVerificationQueueItem = {
+  id: string;
+  name: string;
+  city: string;
+  cuisine: string;
+  submittedAt: string;
+  documentsCount: number;
+  email?: string;
+  phone?: string;
+};
+
 export type AdminOverviewResponse = {
   range: string;
   kpis: {
@@ -50,15 +128,8 @@ export type AdminOverviewResponse = {
   revenueSeries: number[];
   weeklyOrders: number[];
   topCuisines: { name: string; orders: number; share: number }[];
-  topCooks: unknown[];
-  verificationQueue: {
-    id: string;
-    name: string;
-    city: string;
-    cuisine: string;
-    submittedAt: string;
-    documentsCount: number;
-  }[];
+  topCooks: AdminOverviewCook[];
+  verificationQueue: AdminVerificationQueueItem[];
   recentOrders: {
     id: string;
     code: string;
@@ -653,12 +724,9 @@ export const darnaApi = {
           string,
         ][],
       ).toString();
-      return apiRequest<{
-        items: unknown[];
-        total: number;
-        page: number;
-        limit: number;
-      }>(`/admin/orders${qs ? `?${qs}` : ""}`);
+      return apiRequest<AdminPagedResponse>(
+        `/admin/orders${qs ? `?${qs}` : ""}`,
+      );
     },
     updateOrderStatus: (id: string, status: string) =>
       apiRequest<unknown>(`/admin/orders/${encodeURIComponent(id)}/status`, {
@@ -683,9 +751,13 @@ export const darnaApi = {
         total: number;
         page: number;
         limit: number;
+        counts?: AdminCounts;
       }>(`/admin/cooks${qs ? `?${qs}` : ""}`);
     },
     cookWorkspace: (id: string) =>
+      apiRequest<unknown>(`/admin/cooks/${encodeURIComponent(id)}`),
+    /** Alias kept explicit for admin drill-down callers. */
+    getCookWorkspace: (id: string) =>
       apiRequest<unknown>(`/admin/cooks/${encodeURIComponent(id)}`),
     createCookDish: (id: string, body: Record<string, unknown>) =>
       apiRequest<unknown>(`/admin/cooks/${encodeURIComponent(id)}/dishes`, {
@@ -724,12 +796,9 @@ export const darnaApi = {
           string,
         ][],
       ).toString();
-      return apiRequest<{
-        items: unknown[];
-        total: number;
-        page: number;
-        limit: number;
-      }>(`/admin/dishes${qs ? `?${qs}` : ""}`);
+      return apiRequest<AdminPagedResponse>(
+        `/admin/dishes${qs ? `?${qs}` : ""}`,
+      );
     },
     moderateDish: (id: string, status: string) =>
       apiRequest<unknown>(`/admin/dishes/${encodeURIComponent(id)}/status`, {
@@ -755,11 +824,17 @@ export const darnaApi = {
       apiRequest<unknown>(`/admin/payouts/${encodeURIComponent(id)}/sync`, {
         method: "POST",
       }),
+    /** Cancels a local scheduled payout that Stripe has not received yet. */
+    cancelPayout: (id: string) =>
+      apiRequest<unknown>(`/admin/payouts/${encodeURIComponent(id)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "CANCELED" }),
+      }),
     audit: (params?: { entity?: string; actorId?: string; page?: string; limit?: string }) => {
       const qs = new URLSearchParams(
         Object.entries(params ?? {}).filter(([, v]) => Boolean(v)) as [string, string][],
       ).toString();
-      return apiRequest<{ items: unknown[]; total: number; page: number; limit: number }>(
+      return apiRequest<AdminPagedResponse>(
         `/admin/audit${qs ? `?${qs}` : ""}`,
       );
     },
@@ -846,6 +921,11 @@ export const darnaApi = {
         `/admin/cooks/${encodeURIComponent(id)}/sync-stripe`,
         { method: "POST" },
       ),
+    syncCookStripe: (id: string) =>
+      apiRequest<unknown>(
+        `/admin/cooks/${encodeURIComponent(id)}/sync-stripe`,
+        { method: "POST" },
+      ),
     disputes: (params?: {
       status?: string;
       page?: string;
@@ -857,13 +937,12 @@ export const darnaApi = {
           string,
         ][],
       ).toString();
-      return apiRequest<{
-        items: unknown[];
-        total: number;
-        page: number;
-        limit: number;
-      }>(`/admin/disputes${qs ? `?${qs}` : ""}`);
+      return apiRequest<AdminPagedResponse>(
+        `/admin/disputes${qs ? `?${qs}` : ""}`,
+      );
     },
+    getDispute: (id: string) =>
+      apiRequest<unknown>(`/admin/disputes/${encodeURIComponent(id)}`),
     resolveDispute: (
       id: string,
       body: { refundAmount?: number; resolutionNote?: string; status?: string },
@@ -884,7 +963,18 @@ export const darnaApi = {
           body: form,
         },
       );
-      return (await res.json()) as { url: string; dispute: unknown };
+      const body = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        dispute?: unknown;
+        message?: string;
+      };
+      if (!res.ok) {
+        throw new Error(body.message || `API Error ${res.status}`);
+      }
+      return {
+        url: body.url ?? "",
+        dispute: body.dispute ?? body,
+      };
     },
     settings: () => apiRequest<Record<string, unknown>>("/admin/settings"),
     updateSettings: (body: Record<string, unknown>) =>

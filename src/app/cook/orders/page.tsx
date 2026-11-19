@@ -20,6 +20,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Card } from "@/components/ui/misc";
 import { CookMobileHeader } from "@/components/cook/cook-mobile-header";
 import { useApp } from "@/components/providers/app-provider";
+import { useCookOrderNotifications } from "@/hooks/use-cook-order-notifications";
 import {
   loc,
   type CookOrder,
@@ -56,6 +57,8 @@ export default function CookOrdersPage() {
     page: String(page),
     limit: "8",
   });
+  // Live alerts also while the cook is working in the orders list.
+  useCookOrderNotifications(Boolean(paginated));
   const queriedOrders = useMemo(() => paginated?.items ?? [], [paginated]);
   const total = paginated?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / 8));

@@ -1,4 +1,6 @@
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsIn,
@@ -27,6 +29,28 @@ export class UpdateAdminOrderStatusDto {
 export class UpdateCookStatusDto {
   @IsEnum(CookStatus)
   status!: CookStatus;
+}
+
+/** Bulk moderation accepts cook ids AND public cook slugs from the admin UI. */
+export class BulkCookStatusDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  ids!: string[];
+
+  @IsEnum(CookStatus)
+  status!: CookStatus;
+}
+
+/** Bulk moderation accepts dish ids AND public dish slugs from the admin UI. */
+export class BulkDishStatusDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  ids!: string[];
+
+  @IsEnum(DishStatus)
+  status!: DishStatus;
 }
 
 /**

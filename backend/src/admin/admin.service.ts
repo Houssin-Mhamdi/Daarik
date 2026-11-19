@@ -15,6 +15,8 @@ import {
   TransferStatus,
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { AuditService } from "../audit/audit.service";
+import { AdminAuditActor } from "../common/decorators/audit-actor.decorator";
 import { buildDishSearchText } from "../common/dish-search";
 import { PaymentsService } from "../payments/payments.service";
 import { toEuros } from "../payments/money";
@@ -47,7 +49,102 @@ export class AdminService {
     private prisma: PrismaService,
     private payments: PaymentsService,
     private cooks: CooksService,
+    private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Audit logging is best-effort: a broken audit table must never roll back or
+   * fail the admin mutation that just succeeded.
+   */
+  private async writeAudit(params: {
+    actor?: AdminAuditActor;
+    action: string;
+    entity: string;
+    entityId?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    try {
+      await this.audit.log({
+        actorId: params.actor?.actorId,
+        actorRole: params.actor?.actorRole,
+        action: params.action,
+        entity: params.entity,
+        entityId: params.entityId,
+        diff: params.metadata ?? null,
+        ip: params.actor?.ip,
+        userAgent: params.actor?.userAgent,
+      });
+    } catch {
+      // Intentionally swallowed: auditing must never break the main request.
+    }
+  }
+
+  /** Global counts, independent of the current page/filter/search. */
+  private async getOrderCounts() {
+    const [all, grouped] = await Promise.all([
+      this.prisma.order.count(),
+      this.prisma.order.groupBy({ by: ["status"], _count: { _all: true } }),
+    ]);
+    const counts: Record<string, number> = {
+      all,
+      confirmed: 0,
+      preparing: 0,
+      ready: 0,
+      completed: 0,
+      cancelled: 0,
+    };
+    for (const row of grouped) counts[row.status.toLowerCase()] = row._count._all;
+    return counts;
+  }
+
+  private async getCookCounts() {
+    const [all, grouped] = await Promise.all([
+      this.prisma.cookProfile.count(),
+      this.prisma.cookProfile.groupBy({ by: ["status"], _count: { _all: true } }),
+    ]);
+    const counts: Record<string, number> = {
+      all,
+      verified: 0,
+      pending: 0,
+      suspended: 0,
+    };
+    for (const row of grouped) counts[row.status.toLowerCase()] = row._count._all;
+    return counts;
+  }
+
+  private async getDishCounts() {
+    const [all, grouped, reported] = await Promise.all([
+      this.prisma.dish.count(),
+      this.prisma.dish.groupBy({ by: ["status"], _count: { _all: true } }),
+      this.prisma.dish.count({ where: { reported: true } }),
+    ]);
+    const counts: Record<string, number> = {
+      all,
+      live: 0,
+      paused: 0,
+      draft: 0,
+      reported,
+    };
+    for (const row of grouped) counts[row.status.toLowerCase()] = row._count._all;
+    return counts;
+  }
+
+  private async getDisputeCounts() {
+    const [all, grouped] = await Promise.all([
+      this.prisma.dispute.count(),
+      this.prisma.dispute.groupBy({ by: ["status"], _count: { _all: true } }),
+    ]);
+    const counts: Record<string, number> = {
+      all,
+      open: 0,
+      review: 0,
+      won: 0,
+      lost: 0,
+      resolved: 0,
+    };
+    for (const row of grouped) counts[row.status.toLowerCase()] = row._count._all;
+    return counts;
+  }
 
   // ---------------------------------------------------------------------------
   // Overview
@@ -69,6 +166,7 @@ export class AdminService {
       pendingTransfers,
       payouts,
       ordersToday,
+      activeCooksCount,
     ] = await Promise.all([
       this.prisma.order.findMany({
         where: {
@@ -120,6 +218,10 @@ export class AdminService {
       }),
       this.prisma.order.count({
         where: { createdAt: { gte: startOfToday } },
+      }),
+      // Real global count: `cooks` above is a top-6 list for the leaderboard.
+      this.prisma.cookProfile.count({
+        where: { status: CookStatus.VERIFIED },
       }),
     ]);
 
@@ -185,7 +287,7 @@ export class AdminService {
         commission: toEuros(commissionCents),
         serviceFee: toEuros(serviceFeeCents),
         revenue: toEuros(revenueCents),
-        activeCooks: cooks.length,
+        activeCooks: activeCooksCount,
         activeCustomers: customersCount,
         ordersToday,
         pendingVerifications: verificationQueue.length,
@@ -274,6 +376,7 @@ export class AdminService {
         ...(usePaging ? { skip: (p - 1) * l, take: l } : {}),
       }),
     ]);
+    const counts = await this.getOrderCounts();
 
     const items = orders.map((o) => ({
       id: o.id,
@@ -316,13 +419,15 @@ export class AdminService {
       total,
       page: usePaging ? p : 1,
       limit: usePaging ? l : total,
+      counts,
     };
   }
 
   async updateOrderStatus(
     idOrCode: string,
     dto: UpdateAdminOrderStatusDto,
-    adminId: string,
+    adminId: string | undefined,
+    actor?: AdminAuditActor,
   ) {
     const order = await this.prisma.order.findFirst({
       where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
@@ -331,6 +436,7 @@ export class AdminService {
       throw new NotFoundException("Order not found");
     }
 
+    let updated;
     // Cancelling a paid order must move real money, not just relabel a row.
     if (
       dto.status === OrderStatus.CANCELLED &&
@@ -340,40 +446,59 @@ export class AdminService {
       await this.payments.refundOrder(
         order.id,
         { reason: "Cancelled by Daarik admin" },
-        `admin:${adminId}`,
+        `admin:${adminId ?? actor?.actorId ?? "unknown"}`,
       );
-      return this.prisma.order.findUnique({ where: { id: order.id } });
-    }
-
-    if (
+      updated = await this.prisma.order.findUnique({ where: { id: order.id } });
+    } else if (
       dto.status === OrderStatus.COMPLETED &&
       order.status !== OrderStatus.COMPLETED
     ) {
-      const updated = await this.prisma.order.update({
+      updated = await this.prisma.order.update({
         where: { id: order.id },
         data: { status: OrderStatus.COMPLETED },
       });
       await this.payments.scheduleEarningsRelease(order.id, new Date());
-      return updated;
+    } else {
+      updated = await this.prisma.order.update({
+        where: { id: order.id },
+        data: { status: dto.status },
+      });
     }
 
-    return this.prisma.order.update({
-      where: { id: order.id },
-      data: { status: dto.status },
+    await this.writeAudit({
+      actor,
+      action: "order.status.update",
+      entity: "Order",
+      entityId: order.id,
+      metadata: { code: order.code, from: order.status, to: dto.status },
     });
+    return updated;
   }
 
   async refundOrder(
     idOrCode: string,
     dto: { amount?: number; reason?: string },
-    adminId: string,
+    adminId: string | undefined,
+    actor?: AdminAuditActor,
   ) {
     const order = await this.prisma.order.findFirst({
       where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
     });
     if (!order) throw new NotFoundException("Order not found");
 
-    return this.payments.refundOrder(order.id, dto, `admin:${adminId}`);
+    const result = await this.payments.refundOrder(
+      order.id,
+      dto,
+      `admin:${adminId ?? actor?.actorId ?? "unknown"}`,
+    );
+    await this.writeAudit({
+      actor,
+      action: "order.refund",
+      entity: "Order",
+      entityId: order.id,
+      metadata: { code: order.code, amountCents: result.amountCents },
+    });
+    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -420,6 +545,7 @@ export class AdminService {
         orderBy: { submittedAt: "desc" },
       }),
     ]);
+    const counts = await this.getCookCounts();
 
     return {
       cooks: cooks.map((c) => this.toAdminCook(c)),
@@ -427,6 +553,7 @@ export class AdminService {
       total,
       page: usePaging ? p : 1,
       limit: usePaging ? l : total,
+      counts,
     };
   }
 
@@ -443,14 +570,18 @@ export class AdminService {
     };
   }
 
-  async createCookDish(idOrSlug: string, dto: CreateDishDto) {
+  async createCookDish(
+    idOrSlug: string,
+    dto: CreateDishDto,
+    actor?: AdminAuditActor,
+  ) {
     const cook = await this.findCook(idOrSlug);
     const baseSlug = (dto.name.en || dto.name.nl || "dish")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
 
-    return this.prisma.dish.create({
+    const dish = await this.prisma.dish.create({
       data: {
         slug: `${baseSlug || "dish"}-${Date.now().toString(36)}`,
         cookId: cook.id,
@@ -475,11 +606,23 @@ export class AdminService {
         searchText: buildDishSearchText(dto),
       },
     });
+    await this.writeAudit({
+      actor,
+      action: "cook.dish.create",
+      entity: "Dish",
+      entityId: dish.id,
+      metadata: { cookId: cook.id, slug: dish.slug, status: dish.status },
+    });
+    return dish;
   }
 
-  async updateCookAvailability(idOrSlug: string, dto: UpdateAvailabilityDto) {
+  async updateCookAvailability(
+    idOrSlug: string,
+    dto: UpdateAvailabilityDto,
+    actor?: AdminAuditActor,
+  ) {
     const cook = await this.findCook(idOrSlug);
-    return this.prisma.cookProfile.update({
+    const updated = await this.prisma.cookProfile.update({
       where: { id: cook.id },
       data: {
         ...(dto.kitchenOpen !== undefined
@@ -496,26 +639,59 @@ export class AdminService {
           : {}),
       },
     });
+    await this.writeAudit({
+      actor,
+      action: "cook.availability.update",
+      entity: "CookProfile",
+      entityId: cook.id,
+      metadata: {
+        slug: cook.slug,
+        fields: Object.keys(dto),
+        kitchenOpen: updated.kitchenOpen,
+        maxPortionsPerDay: updated.maxPortionsPerDay,
+      },
+    });
+    return updated;
   }
 
-  async updateCookStatus(idOrSlug: string, dto: UpdateCookStatusDto) {
+  async updateCookStatus(
+    idOrSlug: string,
+    dto: UpdateCookStatusDto,
+    actor?: AdminAuditActor,
+  ) {
     const cook = await this.findCook(idOrSlug);
-    return this.prisma.cookProfile.update({
+    const updated = await this.prisma.cookProfile.update({
       where: { id: cook.id },
       data: {
         status: dto.status,
         verified: dto.status === CookStatus.VERIFIED,
       },
     });
+    await this.writeAudit({
+      actor,
+      action: "cook.status.update",
+      entity: "CookProfile",
+      entityId: cook.id,
+      metadata: { slug: cook.slug, from: cook.status, to: dto.status },
+    });
+    return updated;
   }
 
   /** Re-reads the connected account so admin decisions use Stripe's real state. */
-  async syncCookAccount(idOrSlug: string) {
+  async syncCookAccount(idOrSlug: string, actor?: AdminAuditActor) {
     const cook = await this.findCook(idOrSlug);
     if (!cook.stripeAccountId) {
       throw new BadRequestException("This cook has no Stripe account yet");
     }
-    return this.payments.syncAccount(cook.stripeAccountId);
+    const result = await this.payments.syncAccount(cook.stripeAccountId);
+    await this.writeAudit({
+      actor,
+      action: "cook.stripe.sync",
+      entity: "CookProfile",
+      entityId: cook.id,
+      metadata: { slug: cook.slug, accountId: cook.stripeAccountId },
+    });
+    return result;
   }
 
   /**
@@ -525,17 +701,18 @@ export class AdminService {
   async updateCookCompliance(
     idOrSlug: string,
     dto: UpdateCookComplianceDto,
-    adminId: string,
+    adminId: string | undefined,
+    actor?: AdminAuditActor,
   ) {
     const cook = await this.findCook(idOrSlug);
 
-    return this.prisma.cookProfile.update({
+    const updated = await this.prisma.cookProfile.update({
       where: { id: cook.id },
       data: {
         complianceStatus: dto.status,
         complianceNote: dto.note ?? cook.complianceNote,
         complianceCheckedAt: new Date(),
-        complianceCheckedBy: `admin:${adminId}`,
+        complianceCheckedBy: `admin:${adminId ?? actor?.actorId ?? "unknown"}`,
         ...(dto.kvkNumber !== undefined ? { kvkNumber: dto.kvkNumber } : {}),
         ...(dto.nvwaRegistered !== undefined
           ? { nvwaRegistered: dto.nvwaRegistered }
@@ -545,6 +722,19 @@ export class AdminService {
           : {}),
       },
     });
+    await this.writeAudit({
+      actor,
+      action: "cook.compliance.update",
+      entity: "CookProfile",
+      entityId: cook.id,
+      metadata: {
+        slug: cook.slug,
+        from: cook.complianceStatus,
+        to: dto.status,
+        fields: Object.keys(dto).filter((key) => key !== "note"),
+      },
+    });
+    return updated;
   }
 
   private async findCook(idOrSlug: string) {
@@ -601,11 +791,10 @@ export class AdminService {
   // Applications
   // ---------------------------------------------------------------------------
 
-  async approveApplication(id: string, dto: ReviewApplicationDto) {
+  /** Shared by single approval and bulk approval so both create the profile. */
+  private async approveApplicationRecord(id: string, notes?: string) {
     const app = await this.prisma.cookApplication.findUnique({ where: { id } });
-    if (!app) {
-      throw new NotFoundException("Application not found");
-    }
+    if (!app) return null;
 
     let userId = app.userId;
     if (!userId && app.email) {
@@ -623,7 +812,7 @@ export class AdminService {
       data: {
         userId,
         status: ApplicationStatus.APPROVED,
-        reviewerNotes: dto.notes,
+        reviewerNotes: notes,
         reviewedAt: new Date(),
       },
     });
@@ -638,13 +827,36 @@ export class AdminService {
     return updated;
   }
 
-  async requestApplicationChanges(id: string, dto: ReviewApplicationDto) {
+  async approveApplication(
+    id: string,
+    dto: ReviewApplicationDto,
+    actor?: AdminAuditActor,
+  ) {
+    const updated = await this.approveApplicationRecord(id, dto.notes);
+    if (!updated) {
+      throw new NotFoundException("Application not found");
+    }
+    await this.writeAudit({
+      actor,
+      action: "application.approve",
+      entity: "CookApplication",
+      entityId: id,
+      metadata: { name: updated.name, status: updated.status },
+    });
+    return updated;
+  }
+
+  async requestApplicationChanges(
+    id: string,
+    dto: ReviewApplicationDto,
+    actor?: AdminAuditActor,
+  ) {
     const app = await this.prisma.cookApplication.findUnique({ where: { id } });
     if (!app) {
       throw new NotFoundException("Application not found");
     }
 
-    return this.prisma.cookApplication.update({
+    const updated = await this.prisma.cookApplication.update({
       where: { id },
       data: {
         status: ApplicationStatus.CHANGES_REQUESTED,
@@ -652,6 +864,14 @@ export class AdminService {
         reviewedAt: new Date(),
       },
     });
+    await this.writeAudit({
+      actor,
+      action: "application.changes_request",
+      entity: "CookApplication",
+      entityId: id,
+      metadata: { name: app.name, status: updated.status },
+    });
+    return updated;
   }
 
   // ---------------------------------------------------------------------------
@@ -694,6 +914,7 @@ export class AdminService {
         ...(usePaging ? { skip: (p - 1) * l, take: l } : {}),
       }),
     ]);
+    const counts = await this.getDishCounts();
 
     const items = dishes.map((d) => ({
       id: d.slug || d.id,
@@ -718,10 +939,15 @@ export class AdminService {
       total,
       page: usePaging ? p : 1,
       limit: usePaging ? l : total,
+      counts,
     };
   }
 
-  async moderateDish(idOrSlug: string, dto: ModerateDishDto) {
+  async moderateDish(
+    idOrSlug: string,
+    dto: ModerateDishDto,
+    actor?: AdminAuditActor,
+  ) {
     const dish = await this.prisma.dish.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
     });
@@ -729,16 +955,24 @@ export class AdminService {
       throw new NotFoundException("Dish not found");
     }
 
-    return this.prisma.dish.update({
+    const updated = await this.prisma.dish.update({
       where: { id: dish.id },
       data: {
         status: dto.status,
-        reported: dto.status === "LIVE" ? false : dish.reported,
+        reported: dto.status === DishStatus.LIVE ? false : dish.reported,
       },
     });
+    await this.writeAudit({
+      actor,
+      action: "dish.status.update",
+      entity: "Dish",
+      entityId: dish.id,
+      metadata: { slug: dish.slug, from: dish.status, to: dto.status },
+    });
+    return updated;
   }
 
-  async removeDish(idOrSlug: string) {
+  async removeDish(idOrSlug: string, actor?: AdminAuditActor) {
     const dish = await this.prisma.dish.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
     });
@@ -746,10 +980,18 @@ export class AdminService {
       throw new NotFoundException("Dish not found");
     }
 
-    return this.prisma.dish.update({
+    const updated = await this.prisma.dish.update({
       where: { id: dish.id },
-      data: { status: "PAUSED" },
+      data: { status: DishStatus.PAUSED },
     });
+    await this.writeAudit({
+      actor,
+      action: "dish.delete",
+      entity: "Dish",
+      entityId: dish.id,
+      metadata: { slug: dish.slug, from: dish.status, to: DishStatus.PAUSED },
+    });
+    return updated;
   }
 
   // ---------------------------------------------------------------------------
@@ -787,7 +1029,11 @@ export class AdminService {
    * that the bank transfer happened. The only manual transition kept is
    * cancelling a local scheduled row that Stripe does not know about yet.
    */
-  async updatePayoutStatus(idOrCode: string, dto: UpdatePayoutStatusDto) {
+  async updatePayoutStatus(
+    idOrCode: string,
+    dto: UpdatePayoutStatusDto,
+    actor?: AdminAuditActor,
+  ) {
     const payout = await this.prisma.payout.findFirst({
       where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
     });
@@ -806,19 +1052,55 @@ export class AdminService {
       );
     }
 
-    return this.prisma.payout.update({
+    const updated = await this.prisma.payout.update({
       where: { id: payout.id },
       data: { status: PayoutStatus.CANCELED },
     });
+    await this.writeAudit({
+      actor,
+      action: "payout.cancel",
+      entity: "Payout",
+      entityId: payout.id,
+      metadata: { code: payout.code, from: payout.status, to: PayoutStatus.CANCELED },
+    });
+
+    return {
+      ...updated,
+      id: updated.code,
+      dbId: updated.id,
+      status: updated.status.toLowerCase(),
+      canceled: true,
+      message: "Payout canceled locally (no Stripe payout existed).",
+    };
   }
 
-  async syncPayout(idOrCode: string) {
-    return this.payments.syncPayout(idOrCode);
+  async syncPayout(idOrCode: string, actor?: AdminAuditActor) {
+    const payout = await this.prisma.payout.findFirst({
+      where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
+      select: { id: true, code: true },
+    });
+    const result = await this.payments.syncPayout(idOrCode);
+    await this.writeAudit({
+      actor,
+      action: "payout.sync",
+      entity: "Payout",
+      entityId: payout?.id ?? idOrCode,
+      metadata: { code: payout?.code },
+    });
+    return result;
   }
 
   /** Releases all eligible order earnings (the same job the scheduler runs). */
-  async releaseTransfers() {
-    return this.payments.releaseNow();
+  async releaseTransfers(actor?: AdminAuditActor) {
+    const result = await this.payments.releaseNow();
+    await this.writeAudit({
+      actor,
+      action: "payout.release",
+      entity: "Payout",
+      entityId: "singleton",
+      metadata: { released: result.released, failed: result.failed, skipped: result.skipped },
+    });
+    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -846,7 +1128,19 @@ export class AdminService {
       }),
     ]);
 
-    const items = disputes.map((d) => ({
+    const counts = await this.getDisputeCounts();
+
+    return {
+      items: disputes.map((d) => this.toAdminDispute(d)),
+      total,
+      page: usePaging ? p : 1,
+      limit: usePaging ? l : total,
+      counts,
+    };
+  }
+
+  private toAdminDispute(d: any) {
+    return {
       id: d.code,
       dbId: d.id,
       code: d.orderCode,
@@ -867,43 +1161,81 @@ export class AdminService {
         year: "numeric",
       }),
       resolvedAt: d.resolvedAt,
-    }));
-
-    return {
-      items,
-      total,
-      page: usePaging ? p : 1,
-      limit: usePaging ? l : total,
+      orderId: d.orderId,
+      cookId: d.cookId,
+      transferReversed: d.transferReversed,
+      evidence: d.evidence ?? [],
+      timeline: d.timeline ?? [],
     };
   }
 
+  /** Existing helper, now exposed through GET /admin/disputes/:id. */
   async getDispute(idOrCode: string) {
     return this.prisma.dispute.findFirst({
       where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
     });
   }
 
-  async appendDisputeEvidence(idOrCode: string, url: string) {
+  async getDisputeView(idOrCode: string) {
+    const dispute = await this.getDispute(idOrCode);
+    if (!dispute) throw new NotFoundException("Dispute not found");
+    return this.toAdminDispute(dispute);
+  }
+
+  async appendDisputeEvidence(
+    idOrCode: string,
+    url: string,
+    actor?: AdminAuditActor,
+  ) {
     const dispute = await this.getDispute(idOrCode);
     if (!dispute) throw new NotFoundException("Dispute not found");
     const evidence = [...(dispute.evidence ?? []), url];
-    const timeline = [...(Array.isArray(dispute.timeline) ? dispute.timeline : []), { at: new Date(), action: "evidence_uploaded", url }];
-    return this.prisma.dispute.update({
+    const timeline = [
+      ...(Array.isArray(dispute.timeline) ? dispute.timeline : []),
+      { at: new Date(), action: "evidence_uploaded", url },
+    ];
+    const updated = await this.prisma.dispute.update({
       where: { id: dispute.id },
       data: { evidence, timeline: timeline as any },
     });
+    await this.writeAudit({
+      actor,
+      action: "dispute.evidence_upload",
+      entity: "Dispute",
+      entityId: dispute.id,
+      // Never log the evidence URL itself; it links to private documents.
+      metadata: { code: dispute.code, evidenceCount: evidence.length },
+    });
+    return this.toAdminDispute(updated);
   }
 
-  async resolveDispute(idOrCode: string, dto: ResolveDisputeDto) {
-    const dispute = await this.prisma.dispute.findFirst({
-      where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
-    });
+  async resolveDispute(
+    idOrCode: string,
+    dto: ResolveDisputeDto,
+    actor?: AdminAuditActor,
+  ) {
+    const dispute = await this.getDispute(idOrCode);
     if (!dispute) {
       throw new NotFoundException("Dispute not found");
     }
 
+    const refundCents = dto.refundAmount != null
+      ? Math.round(dto.refundAmount * 100)
+      : null;
+
     // A refund tied to a dispute must go through Stripe, not a local field.
-    if (dto.refundAmount && dto.refundAmount > 0) {
+    if (refundCents != null && refundCents > 0) {
+      if (refundCents > dispute.amountCents) {
+        throw new BadRequestException(
+          `Refund amount (€${toEuros(refundCents).toFixed(2)}) exceeds the dispute amount (€${toEuros(dispute.amountCents).toFixed(2)}).`,
+        );
+      }
+      const alreadyRefunded = dispute.refundCents ?? 0;
+      if (alreadyRefunded + refundCents > dispute.amountCents) {
+        throw new BadRequestException(
+          `Total refunds (€${toEuros(alreadyRefunded + refundCents).toFixed(2)}) would exceed the dispute amount (€${toEuros(dispute.amountCents).toFixed(2)}).`,
+        );
+      }
       if (!dispute.orderId) {
         throw new BadRequestException(
           "This dispute is not linked to an order, so it cannot be refunded automatically",
@@ -911,23 +1243,33 @@ export class AdminService {
       }
       await this.payments.refundOrder(
         dispute.orderId,
-        { amount: dto.refundAmount, reason: dto.resolutionNote ?? "dispute" },
-        "admin:dispute",
+        { amount: dto.refundAmount!, reason: dto.resolutionNote ?? "dispute" },
+        `admin:dispute:${actor?.actorId ?? "unknown"}`,
       );
     }
 
-    return this.prisma.dispute.update({
+    const updated = await this.prisma.dispute.update({
       where: { id: dispute.id },
       data: {
         status: dto.status ?? DisputeStatus.RESOLVED,
-        refundCents:
-          dto.refundAmount != null
-            ? Math.round(dto.refundAmount * 100)
-            : dispute.refundCents,
+        refundCents: refundCents ?? dispute.refundCents,
         resolutionNote: dto.resolutionNote,
         resolvedAt: new Date(),
       },
     });
+    await this.writeAudit({
+      actor,
+      action: "dispute.resolve",
+      entity: "Dispute",
+      entityId: dispute.id,
+      metadata: {
+        code: dispute.code,
+        from: dispute.status,
+        to: updated.status,
+        refundCents: updated.refundCents,
+      },
+    });
+    return this.toAdminDispute(updated);
   }
 
   // ---------------------------------------------------------------------------
@@ -1046,20 +1388,104 @@ export class AdminService {
   // Settings
   // ---------------------------------------------------------------------------
 
-  async bulkCookStatus(ids: string[], status: string) {
-    const result = await this.prisma.cookProfile.updateMany({
-      where: { id: { in: ids } },
-      data: { status: status.toUpperCase() as CookStatus },
+  /**
+   * The admin table exposes cook slugs (id = slug), while pending verification
+   * rows expose application ids. Accept both, and approve applications through
+   * the same helper the single approval endpoint uses.
+   */
+  async bulkCookStatus(ids: string[], status: string, actor?: AdminAuditActor) {
+    const nextStatus = status.toUpperCase() as CookStatus;
+    const matched = new Set<string>();
+    let updated = 0;
+
+    if (nextStatus === CookStatus.VERIFIED) {
+      const applications = await this.prisma.cookApplication.findMany({
+        where: { id: { in: ids }, status: ApplicationStatus.PENDING },
+      });
+      for (const application of applications) {
+        try {
+          await this.approveApplicationRecord(application.id);
+          matched.add(application.id);
+          updated += 1;
+        } catch {
+          // Leave the id in `failed` so the admin can retry it individually.
+        }
+      }
+    }
+
+    const cooks = await this.prisma.cookProfile.findMany({
+      where: { OR: [{ id: { in: ids } }, { slug: { in: ids } }] },
+      select: { id: true, slug: true },
     });
-    return { updated: result.count };
+    if (cooks.length) {
+      const result = await this.prisma.cookProfile.updateMany({
+        where: { id: { in: cooks.map((c) => c.id) } },
+        data: {
+          status: nextStatus,
+          verified: nextStatus === CookStatus.VERIFIED,
+        },
+      });
+      updated += result.count;
+      for (const cook of cooks) {
+        matched.add(cook.id);
+        matched.add(cook.slug);
+      }
+    }
+
+    const failed = ids.filter((id) => !matched.has(id));
+    await this.writeAudit({
+      actor,
+      action: "cook.bulk_status",
+      entity: "CookProfile",
+      entityId: "bulk",
+      metadata: {
+        status: nextStatus,
+        requested: ids.length,
+        updated,
+        failedCount: failed.length,
+      },
+    });
+    return { updated, failed };
   }
 
-  async bulkDishStatus(ids: string[], status: string) {
-    const result = await this.prisma.dish.updateMany({
-      where: { id: { in: ids } },
-      data: { status: status.toUpperCase() as DishStatus },
+  /** The admin table exposes dish slugs, so match ids and slugs. */
+  async bulkDishStatus(ids: string[], status: string, actor?: AdminAuditActor) {
+    const nextStatus = status.toUpperCase() as DishStatus;
+    const dishes = await this.prisma.dish.findMany({
+      where: { OR: [{ id: { in: ids } }, { slug: { in: ids } }] },
+      select: { id: true, slug: true },
     });
-    return { updated: result.count };
+    const dishIds = dishes.map((d) => d.id);
+    const result = dishIds.length
+      ? await this.prisma.dish.updateMany({
+          where: { id: { in: dishIds } },
+          data: {
+            status: nextStatus,
+            // Same rule as single moderation: a freshly live dish is no longer reported.
+            ...(nextStatus === DishStatus.LIVE ? { reported: false } : {}),
+          },
+        })
+      : { count: 0 };
+
+    const matched = new Set<string>();
+    for (const dish of dishes) {
+      matched.add(dish.id);
+      matched.add(dish.slug);
+    }
+    const failed = ids.filter((id) => !matched.has(id));
+    await this.writeAudit({
+      actor,
+      action: "dish.bulk_status",
+      entity: "Dish",
+      entityId: "bulk",
+      metadata: {
+        status: nextStatus,
+        requested: ids.length,
+        updated: result.count,
+        failedCount: failed.length,
+      },
+    });
+    return { updated: result.count, failed };
   }
 
   async getAnalytics(range = "30d") {
@@ -1068,7 +1494,12 @@ export class AdminService {
 
     const [orders, cooks, customers, repeatCustomers] = await Promise.all([
       this.prisma.order.findMany({
-        where: { createdAt: { gte: since } },
+        // Same captured-money definition as getOverview: unpaid orders must
+        // never inflate GMV or commission in analytics.
+        where: {
+          createdAt: { gte: since },
+          paymentStatus: { in: CAPTURED_STATUSES },
+        },
         select: {
           totalCents: true,
           commissionCents: true,
@@ -1086,7 +1517,10 @@ export class AdminService {
       this.prisma.user.count({ where: { role: "CUSTOMER" } }),
       this.prisma.order.groupBy({
         by: ["customerId"],
-        where: { createdAt: { gte: since } },
+        where: {
+          createdAt: { gte: since },
+          paymentStatus: { in: CAPTURED_STATUSES },
+        },
         _count: { _all: true },
       }),
     ]);
@@ -1128,28 +1562,28 @@ export class AdminService {
     return toEurosSettings(settings);
   }
 
-  async updateSettings(dto: UpdatePlatformSettingsDto) {
+  async updateSettings(
+    dto: UpdatePlatformSettingsDto,
+    actor?: AdminAuditActor,
+  ) {
     const { serviceFee, serviceFeeCents, ...rest } = dto;
+    const data: Record<string, unknown> = {};
+    // Only persist fields the DTO actually validated; no raw body spreading.
+    for (const [key, value] of Object.entries(rest)) {
+      if (value !== undefined) data[key] = value;
+    }
+    if (serviceFeeCents !== undefined) {
+      data.serviceFeeCents = serviceFeeCents;
+      data.serviceFee = serviceFeeCents / 100;
+    } else if (serviceFee !== undefined) {
+      data.serviceFee = serviceFee;
+      data.serviceFeeCents = Math.round(serviceFee * 100);
+    }
 
     const settings = await this.prisma.platformSetting.upsert({
       where: { id: "singleton" },
-      update: {
-        ...rest,
-        ...(serviceFeeCents !== undefined
-          ? { serviceFeeCents, serviceFee: serviceFeeCents / 100 }
-          : serviceFee !== undefined
-            ? { serviceFee, serviceFeeCents: Math.round(serviceFee * 100) }
-            : {}),
-      },
-      create: {
-        id: "singleton",
-        ...rest,
-        ...(serviceFeeCents !== undefined
-          ? { serviceFeeCents, serviceFee: serviceFeeCents / 100 }
-          : serviceFee !== undefined
-            ? { serviceFee, serviceFeeCents: Math.round(serviceFee * 100) }
-            : {}),
-      },
+      update: data as any,
+      create: { id: "singleton", ...data } as any,
     });
 
     // Keep the connected accounts' payout schedules aligned with the policy.
@@ -1157,16 +1591,48 @@ export class AdminService {
       await this.payments.applyPayoutPolicyToCooks();
     }
 
+    await this.writeAudit({
+      actor,
+      action: "settings.update",
+      entity: "PlatformSetting",
+      entityId: "singleton",
+      // Field names only: values (KVK, emails) must not leak into the audit log.
+      metadata: { fields: Object.keys(dto) },
+    });
     return toEurosSettings(settings);
   }
 }
 
-/** Adds euro views next to the cents fields the admin UI displays. */
+/**
+ * Explicit settings view so GET /admin/settings always exposes every field the
+ * PATCH DTO supports, plus the euro aliases older clients display.
+ */
 function toEurosSettings(settings: any) {
   return {
-    ...settings,
+    id: settings.id,
+    platformName: settings.platformName,
+    region: settings.region,
+    currency: settings.currency,
+    timezone: settings.timezone,
+    serviceFeeCents: settings.serviceFeeCents,
     serviceFee: toEuros(settings.serviceFeeCents),
+    commissionRate: settings.commissionRate,
+    commissionFixedCents: settings.commissionFixedCents,
     commissionFixed: toEuros(settings.commissionFixedCents),
+    commissionBase: settings.commissionBase,
+    minOrderCents: settings.minOrderCents,
     minOrder: toEuros(settings.minOrderCents),
+    stripeFeeBearer: settings.stripeFeeBearer,
+    payoutHoldDays: settings.payoutHoldDays,
+    payoutInterval: settings.payoutInterval,
+    payoutWeeklyAnchor: settings.payoutWeeklyAnchor,
+    payoutMonthlyAnchor: settings.payoutMonthlyAnchor,
+    vatRateBps: settings.vatRateBps,
+    kvkNumber: settings.kvkNumber,
+    supportEmail: settings.supportEmail,
+    requireVerification: settings.requireVerification,
+    autoApproveCooks: settings.autoApproveCooks,
+    maintenanceMode: settings.maintenanceMode,
+    updatedAt: settings.updatedAt,
   };
 }

@@ -33,12 +33,16 @@ import {
   MoneyText,
   SectionHead,
   StatusPill,
+  TableBody,
+  TableHeader,
+  TableRow,
   Td,
   Th,
 } from "@/components/admin/admin-ui";
 import {
   VerificationSheet,
   type Applicant,
+  type ApplicantDocumentLink,
 } from "@/components/admin/verification-sheet";
 import {
   useAdminApproveVerificationMutation,
@@ -46,81 +50,161 @@ import {
   useAdminOverviewQuery,
   useAdminRequestVerificationChangesMutation,
 } from "@/lib/queries";
+import type { AdminOverviewResponse } from "@/lib/api";
 import { cn, formatPrice } from "@/lib/utils";
 
-const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+type CuisineSlice = { name: string; orders: number; share: number };
+type OverviewCook = AdminOverviewResponse["topCooks"][number];
+
+function initialsOf(name: string): string {
+  return String(name || "C")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+function csvCell(value: unknown): string {
+  let text = value == null ? "" : String(value);
+  // Prevent spreadsheet formula execution when the CSV is opened in Excel.
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function dateLabels(days: number, lang: string): string[] {
+  const formatter = new Intl.DateTimeFormat(lang, {
+    day: "numeric",
+    month: "short",
+  });
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() - (days - 1 - index));
+    return formatter.format(date);
+  });
+}
+
+function extractDocumentLinks(app: Record<string, unknown>): ApplicantDocumentLink[] {
+  const candidates =
+    app.documentLinks ?? app.documents ?? app.documentUrls ?? app.files ?? [];
+  if (Array.isArray(candidates)) {
+    return candidates
+      .map((item): ApplicantDocumentLink => {
+        if (typeof item === "string") {
+          return { url: item, name: item.split("/").pop() };
+        }
+        const raw = item as Record<string, unknown>;
+        return {
+          url:
+            typeof raw.url === "string"
+              ? raw.url
+              : typeof raw.href === "string"
+                ? raw.href
+                : undefined,
+          name:
+            typeof raw.name === "string"
+              ? raw.name
+              : typeof raw.fileName === "string"
+                ? raw.fileName
+                : undefined,
+          size: typeof raw.size === "number" ? raw.size : undefined,
+          label: typeof raw.label === "string" ? raw.label : undefined,
+        };
+      })
+      .filter((doc) => Boolean(doc.url));
+  }
+  if (candidates && typeof candidates === "object") {
+    return Object.entries(candidates as Record<string, unknown>)
+      .map(([label, value]) => ({
+        label,
+        url: typeof value === "string" ? value : undefined,
+      }))
+      .filter((doc) => Boolean(doc.url));
+  }
+  return [];
+}
 
 export default function AdminDashboardPage() {
-  const { t, lang, toast, cooks } = useApp();
+  const { t, lang, toast } = useApp();
   const [range, setRange] = useState<"30d" | "90d">("30d");
   const { data: overview, refetch } = useAdminOverviewQuery(range);
   const { data: disputes = [] } = useAdminDisputesQuery();
   const approveVerification = useAdminApproveVerificationMutation();
   const requestChanges = useAdminRequestVerificationChangesMutation();
   const [selected, setSelected] = useState<Applicant | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const kpis = overview?.kpis ?? {
-    gmv: 0,
-    commission: 0,
-    activeCooks: cooks.length,
-    activeCustomers: 0,
-    ordersToday: 0,
-    disputes: disputes.length,
-    avgOrder: 0,
-  };
+  const kpis = overview?.kpis;
   const recentOrders = overview?.recentOrders ?? [];
-  const topCuisines = (overview?.topCuisines ?? []) as {
-    name: string;
-    orders: number;
-    share: number;
-  }[];
+  const days = range === "90d" ? 90 : 30;
+
+  const cuisines: CuisineSlice[] = useMemo(() => {
+    const raw = (overview as unknown as Record<string, unknown> | null)
+      ?.cuisineDistribution;
+    return (Array.isArray(raw) ? raw : (overview?.topCuisines ?? [])) as CuisineSlice[];
+  }, [overview]);
+  const cuisineOrders = cuisines.reduce((sum, item) => sum + item.orders, 0);
+
   const queue: Applicant[] = useMemo(
     () =>
-      (overview?.verificationQueue ?? []).map((app) => ({
-        id: app.id,
-        name: app.name,
-        city: app.city,
-        cuisine: app.cuisine,
-        submitted: app.submittedAt
-          ? new Date(app.submittedAt).toLocaleDateString("en-GB")
-          : "Recently",
-        documents: app.documentsCount ?? 3,
-        initials: String(app.name || "C")
-          .split(/\s+/)
-          .map((p: string) => p[0])
-          .slice(0, 2)
-          .join("")
-          .toUpperCase(),
-      })),
-    [overview?.verificationQueue],
+      (overview?.verificationQueue ?? []).map((app) => {
+        const raw = app as unknown as Record<string, unknown>;
+        const documentLinks = extractDocumentLinks(raw);
+        return {
+          id: app.id,
+          name: app.name,
+          city: app.city,
+          cuisine: app.cuisine || "—",
+          submitted: app.submittedAt
+            ? new Date(app.submittedAt).toLocaleDateString(lang)
+            : "—",
+          documents: app.documentsCount ?? documentLinks.length ?? 0,
+          documentLinks,
+          initials: initialsOf(app.name),
+        };
+      }),
+    [overview?.verificationQueue, lang],
   );
 
-  const revenue = useMemo(() => {
-    if (Array.isArray(overview?.revenueSeries) && overview.revenueSeries.length) {
-      return overview.revenueSeries as number[];
-    }
-    return [0, 0, 0, 0, 0, 0, 0];
-  }, [overview]);
+  const revenueSeries = useMemo(() => {
+    const series = overview?.revenueSeries ?? [];
+    return series.length ? series : Array.from({ length: days }, () => 0);
+  }, [overview?.revenueSeries, days]);
 
-  const totalRevenue = revenue.reduce((sum, value) => sum + value, 0);
-  const payoutsDue = overview?.payoutsSummary?.due ?? 0;
-  const pendingCount = overview?.payoutsSummary?.pendingCount ?? 0;
+  const weeklyOrders = overview?.weeklyOrders ?? [0];
+  const periodLabels = useMemo(() => dateLabels(revenueSeries.length, lang), [
+    revenueSeries.length,
+    lang,
+  ]);
+  const weekLabels = useMemo(() => dateLabels(weeklyOrders.length, lang), [
+    weeklyOrders.length,
+    lang,
+  ]);
+  const totalRevenue = revenueSeries.reduce((sum, value) => sum + value, 0);
+  const weeklyTotal = weeklyOrders.reduce((sum, value) => sum + value, 0);
 
   const exportCsv = () => {
     const header = ["Order", "Customer", "Cook", "Amount", "Status", "Pickup"];
     const lines = recentOrders.map((order) =>
-      [order.code, order.customer, order.cook, order.amount, order.status, order.pickup]
-        .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
+      [
+        order.code,
+        order.customer,
+        order.cook,
+        order.amount,
+        order.status,
+        order.pickup,
+      ]
+        .map(csvCell)
         .join(","),
     );
-    const blob = new Blob([[header.join(","), ...lines].join("\n")], {
+    const blob = new Blob([[header.map(csvCell).join(","), ...lines].join("\n")], {
       type: "text/csv;charset=utf-8;",
     });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "daarik-orders.csv";
+    anchor.download = "daarik-recent-orders.csv";
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -128,30 +212,63 @@ export default function AdminDashboardPage() {
     toast(t("exportReady"), { description: t("exportReadyDesc") });
   };
 
-  const refresh = () => {
-    setRefreshing(true);
-    refetch().finally(() => {
-      window.setTimeout(() => {
-        setRefreshing(false);
-        toast(t("dataRefreshed"));
-      }, 450);
-    });
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      await refetch();
+      toast(t("dataRefreshed"));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const gridLabels = [
-    "1 Oct",
-    "8 Oct",
-    "15 Oct",
-    "22 Oct",
-    range === "30d" ? "29 Oct" : "29 Dec",
-  ];
+  const approve = async (applicant: Applicant, reviewerNote: string) => {
+    setBusy(true);
+    try {
+      await approveVerification.mutateAsync({
+        id: applicant.id,
+        notes: reviewerNote,
+      });
+      setSelected(null);
+      toast(t("approvedToast"), { description: applicant.name });
+    } catch (error) {
+      toast(t("error"), {
+        description: error instanceof Error ? error.message : String(error),
+        variant: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reject = async (applicant: Applicant, reviewerNote: string) => {
+    setBusy(true);
+    try {
+      await requestChanges.mutateAsync({
+        id: applicant.id,
+        notes: reviewerNote,
+      });
+      setSelected(null);
+      toast(t("rejectedToast"), {
+        description: applicant.name,
+        variant: "info",
+      });
+    } catch (error) {
+      toast(t("error"), {
+        description: error instanceof Error ? error.message : String(error),
+        variant: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-[1360px]">
       <AdminPageHeader
         eyebrow={t("adminOverview")}
         title={t("adminDashboardTitle")}
-        subtitle={t("overviewOf", { city: "Rotterdam" })}
+        subtitle={`${t("adminApp")} · ${range === "30d" ? t("last30days") : t("last90days")}`}
         actions={
           <>
             <div className="flex h-9 items-center rounded-full border border-[#e4dbc9] bg-white p-0.5">
@@ -173,13 +290,19 @@ export default function AdminDashboardPage() {
             </div>
             <button
               type="button"
-              onClick={refresh}
+              onClick={() => void refresh()}
+              disabled={busy}
               aria-label={t("refresh")}
-              className="grid size-9 place-items-center rounded-full border border-[#e4dbc9] bg-white text-charcoal transition hover:border-line-strong"
+              className="grid size-9 place-items-center rounded-full border border-[#e4dbc9] bg-white text-charcoal transition hover:border-line-strong disabled:opacity-50"
             >
-              <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
+              <RefreshCw className={cn("size-4", busy && "animate-spin")} />
             </button>
-            <Button variant="secondary" size="sm" className="h-9" onClick={exportCsv}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-9"
+              onClick={exportCsv}
+            >
               <Download className="size-4" />
               {t("exportCsv")}
             </Button>
@@ -190,36 +313,29 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <KpiCard
           label={t("gmv")}
-          value={<MoneyText value={kpis.gmv ?? 0} compact />}
-          delta="+12.4%"
-          deltaLabel={t("vsLastMonth")}
+          value={<MoneyText value={kpis?.gmv ?? 0} compact />}
+          foot={`${t("avgOrder")}: ${formatPrice(kpis?.avgOrder ?? 0, lang)}`}
           icon={<Euro className="size-4" />}
-          series={[18, 22, 20, 26, 24, 30, 28, 34, 32, 38]}
         />
         <KpiCard
           label={t("commissionRevenue")}
-          value={<MoneyText value={kpis.commission ?? 0} compact />}
-          delta="+9.8%"
-          deltaLabel={t("vsLastMonth")}
+          value={<MoneyText value={kpis?.commission ?? 0} compact />}
+          foot={`${t("serviceFee")}: ${formatPrice(kpis?.serviceFee ?? 0, lang)}`}
           icon={<TrendingUp className="size-4" />}
-          series={[12, 15, 14, 18, 17, 21, 20, 24, 25, 28]}
           accent="#697653"
         />
         <KpiCard
           label={t("activeCooks")}
-          value={kpis.activeCooks ?? cooks.length}
-          deltaLabel={t("liveKitchens")}
+          value={kpis?.activeCooks ?? 0}
+          foot={t("liveKitchens")}
           icon={<Store className="size-4" />}
-          series={[190, 198, 204, 210, 208, 221, 228, 235, 240, 247]}
           accent="#d9a441"
         />
         <KpiCard
           label={t("ordersToday")}
-          value={kpis.ordersToday ?? 0}
-          delta="+6.2%"
-          deltaLabel={t("vsLastMonth")}
+          value={kpis?.ordersToday ?? 0}
+          foot={`${t("activeCustomers")}: ${(kpis?.activeCustomers ?? 0).toLocaleString(lang)}`}
           icon={<ShoppingBag className="size-4" />}
-          series={[120, 138, 130, 152, 144, 166, 158, 172, 168, 186]}
         />
       </div>
 
@@ -231,7 +347,9 @@ export default function AdminDashboardPage() {
                 <h3 className="text-[17px] font-semibold text-charcoal">
                   {t("revenueOverview")}
                 </h3>
-                <p className="mt-0.5 text-[13.5px] text-muted">{t("revenueChartNote")}</p>
+                <p className="mt-0.5 text-[13.5px] text-muted">
+                  {t("revenueChartNote")}
+                </p>
               </div>
               <div className="text-end">
                 <p className="text-[24px] font-semibold leading-none tracking-[-0.02em] text-charcoal">
@@ -239,14 +357,14 @@ export default function AdminDashboardPage() {
                 </p>
                 <p className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-semibold text-[#4f6b3a]">
                   <ArrowUpRight className="size-3.5" />
-                  11.2% {t("vsLastMonth")}
+                  {periodLabels[0] ?? "—"} – {periodLabels.at(-1) ?? "—"}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-4 text-[12.5px] text-muted">
               <span className="inline-flex items-center gap-1.5">
                 <span className="size-2 rounded-full bg-terracotta" />
-                {t("commissionRevenue")}
+                {t("commissionRevenue")} + {t("serviceFee")}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="size-2 rounded-full bg-cream-300" />
@@ -257,14 +375,19 @@ export default function AdminDashboardPage() {
                 {t("updatedJustNow")}
               </span>
             </div>
-            <AreaChart data={revenue} labels={gridLabels} height={216} className="mt-1" />
+            <AreaChart
+              data={revenueSeries}
+              labels={periodLabels}
+              height={216}
+              className="mt-1"
+            />
           </div>
         </AdminCard>
 
         <AdminCard className="lg:col-span-4">
           <SectionHead
             title={t("topCuisines")}
-            subtitle={t("ordersThisMonth", { count: "4,020" })}
+            subtitle={t("ordersThisMonth", { count: cuisineOrders })}
             action={
               <Link
                 href="/admin/orders"
@@ -277,14 +400,20 @@ export default function AdminDashboardPage() {
           <div className="p-4 pt-3 md:p-5 md:pt-4">
             <div className="relative mx-auto mb-4 grid size-[136px] place-items-center">
               <svg viewBox="0 0 120 120" className="absolute inset-0 size-full -rotate-90">
-                {topCuisines.map((cuisine, index) => {
+                {cuisines.map((cuisine, index) => {
                   const radius = 46;
                   const circumference = 2 * Math.PI * radius;
-                  const before = topCuisines
+                  const before = cuisines
                     .slice(0, index)
                     .reduce((sum, item) => sum + item.share, 0);
                   const dash = (cuisine.share / 100) * circumference;
-                  const colors = ["#c65d3a", "#697653", "#d9a441", "#b98a68", "#ded1bd"];
+                  const colors = [
+                    "#c65d3a",
+                    "#697653",
+                    "#d9a441",
+                    "#b98a68",
+                    "#ded1bd",
+                  ];
                   return (
                     <circle
                       key={cuisine.name}
@@ -292,7 +421,7 @@ export default function AdminDashboardPage() {
                       cy="60"
                       r={radius}
                       fill="none"
-                      stroke={colors[index]}
+                      stroke={colors[index % colors.length]}
                       strokeWidth="11"
                       strokeDasharray={`${Math.max(0, dash - 2)} ${circumference}`}
                       strokeDashoffset={-(before / 100) * circumference}
@@ -302,31 +431,50 @@ export default function AdminDashboardPage() {
                 })}
               </svg>
               <div className="text-center">
-                <p className="text-[22px] font-semibold leading-none text-charcoal">4.0k</p>
+                <p className="text-[22px] font-semibold leading-none text-charcoal">
+                  {cuisineOrders.toLocaleString(lang)}
+                </p>
                 <p className="mt-1 text-[11.5px] uppercase tracking-[0.12em] text-muted-soft">
                   {t("orders")}
                 </p>
               </div>
             </div>
-            <div className="space-y-2">
-              {topCuisines.map((cuisine, index) => (
-                <div key={cuisine.name} className="flex items-center gap-2 text-[13.5px]">
-                  <span
-                    className="size-2 rounded-full"
-                    style={{
-                      background: ["#c65d3a", "#697653", "#d9a441", "#b98a68", "#ded1bd"][index],
-                    }}
-                  />
-                  <span className="flex-1 font-medium text-charcoal">{cuisine.name}</span>
-                  <span className="tabular-nums text-muted">
-                    {cuisine.orders.toLocaleString("nl-NL")}
-                  </span>
-                  <span className="w-8 text-end font-semibold tabular-nums text-charcoal">
-                    {cuisine.share}%
-                  </span>
-                </div>
-              ))}
-            </div>
+            {cuisines.length === 0 ? (
+              <p className="py-4 text-center text-[13px] text-muted">
+                No cuisine data for this period.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {cuisines.map((cuisine, index) => (
+                  <div
+                    key={cuisine.name}
+                    className="flex items-center gap-2 text-[13.5px]"
+                  >
+                    <span
+                      className="size-2 rounded-full"
+                      style={{
+                        background: [
+                          "#c65d3a",
+                          "#697653",
+                          "#d9a441",
+                          "#b98a68",
+                          "#ded1bd",
+                        ][index % 5],
+                      }}
+                    />
+                    <span className="flex-1 font-medium text-charcoal">
+                      {cuisine.name}
+                    </span>
+                    <span className="tabular-nums text-muted">
+                      {cuisine.orders.toLocaleString(lang)}
+                    </span>
+                    <span className="w-9 text-end font-semibold tabular-nums text-charcoal">
+                      {cuisine.share}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </AdminCard>
       </div>
@@ -347,8 +495,8 @@ export default function AdminDashboardPage() {
             }
           />
           <AdminTable className="mt-3">
-            <thead>
-              <tr>
+            <TableHeader>
+              <TableRow>
                 <Th>{t("orderId")}</Th>
                 <Th>{t("customerCol")}</Th>
                 <Th className="hidden md:table-cell">{t("cookCol")}</Th>
@@ -356,20 +504,16 @@ export default function AdminDashboardPage() {
                 <Th>{t("statusCol")}</Th>
                 <Th className="hidden lg:table-cell">{t("pickupCol")}</Th>
                 <Th className="text-end">{t("actionCol")}</Th>
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {recentOrders.map((order) => (
-                <tr key={order.code} className="group transition hover:bg-cream/40">
+                <TableRow key={order.id} className="group">
                   <Td className="font-semibold">{order.code}</Td>
                   <Td>
                     <div className="flex items-center gap-2">
                       <span className="grid size-6 shrink-0 place-items-center rounded-full bg-cream-100 text-[11px] font-bold text-charcoal">
-                        {String(order.customer || "C")
-                          .split(" ")
-                          .map((part: string) => part[0])
-                          .slice(0, 2)
-                          .join("")}
+                        {initialsOf(order.customer)}
                       </span>
                       <span className="truncate">{order.customer}</span>
                     </div>
@@ -386,15 +530,15 @@ export default function AdminDashboardPage() {
                   </Td>
                   <Td className="text-end">
                     <Link
-                      href="/admin/orders"
+                      href={`/admin/orders?q=${encodeURIComponent(order.code)}`}
                       className="rounded-lg px-2 py-1 text-[13px] font-semibold text-terracotta opacity-0 transition hover:bg-terracotta-50 group-hover:opacity-100"
                     >
                       {t("viewDetails")}
                     </Link>
                   </Td>
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
+            </TableBody>
           </AdminTable>
         </AdminCard>
 
@@ -412,8 +556,12 @@ export default function AdminDashboardPage() {
             {queue.length === 0 ? (
               <div className="rounded-xl border border-dashed border-line-strong bg-cream/50 px-4 py-8 text-center">
                 <ShieldCheck className="mx-auto size-6 text-olive" />
-                <p className="mt-2 text-[14.5px] font-semibold text-charcoal">{t("allCaughtUp")}</p>
-                <p className="mt-0.5 text-[13px] text-muted">{t("pendingReviewNote")}</p>
+                <p className="mt-2 text-[14.5px] font-semibold text-charcoal">
+                  {t("allCaughtUp")}
+                </p>
+                <p className="mt-0.5 text-[13px] text-muted">
+                  {t("pendingReviewNote")}
+                </p>
               </div>
             ) : (
               queue.map((applicant) => (
@@ -429,7 +577,8 @@ export default function AdminDashboardPage() {
                       {applicant.name}
                     </p>
                     <p className="mt-0.5 truncate text-[12px] text-muted">
-                      {applicant.cuisine} · {applicant.city} · {applicant.submitted}
+                      {applicant.cuisine} · {applicant.city} ·{" "}
+                      {applicant.submitted}
                     </p>
                   </div>
                   <button
@@ -461,10 +610,13 @@ export default function AdminDashboardPage() {
                 {t("payoutsDue")}
               </p>
               <p className="mt-2 text-[26px] font-semibold leading-none text-charcoal">
-                {formatPrice(payoutsDue, lang)}
+                {formatPrice(
+                  (kpis?.pendingTransfersCents ?? 0) / 100,
+                  lang,
+                )}
               </p>
               <p className="mt-1.5 text-[13px] text-muted">
-                {pendingCount} {t("cooksLabel").toLowerCase()} · {t("payoutSchedule")}
+                {kpis?.pendingVerifications ?? 0} {t("pending").toLowerCase()}
               </p>
             </div>
             <span className="grid size-9 place-items-center rounded-xl bg-olive-50 text-olive">
@@ -487,7 +639,7 @@ export default function AdminDashboardPage() {
                 {t("openDisputes")}
               </p>
               <p className="mt-2 text-[26px] font-semibold leading-none text-charcoal">
-                {kpis.disputes ?? disputes.length}
+                {kpis?.disputes ?? 0}
               </p>
               <p className="mt-1.5 text-[13px] text-muted">
                 {formatPrice(
@@ -503,7 +655,10 @@ export default function AdminDashboardPage() {
           </div>
           <div className="mt-3 space-y-1">
             {disputes.slice(0, 2).map((dispute) => (
-              <div key={dispute.id} className="flex items-center justify-between gap-2 text-[12.5px]">
+              <div
+                key={dispute.id}
+                className="flex items-center justify-between gap-2 text-[12.5px]"
+              >
                 <span className="truncate text-muted">
                   {dispute.code} · {dispute.reason}
                 </span>
@@ -528,7 +683,7 @@ export default function AdminDashboardPage() {
               </p>
               <p className="mt-2 inline-flex items-center gap-1.5 text-[19px] font-semibold leading-none text-[#4f6b3a]">
                 <span className="size-2 rounded-full bg-[#7d9a5c]" />
-                {t("allSystemsOk")}
+                {overview ? t("allSystemsOk") : "Loading…"}
               </p>
             </div>
             <span className="grid size-9 place-items-center rounded-xl bg-cream-100 text-charcoal">
@@ -537,14 +692,28 @@ export default function AdminDashboardPage() {
           </div>
           <div className="mt-4 space-y-2 text-[13px]">
             {[
-              { label: t("uptime"), value: "99.98%" },
-              { label: t("failedPayments"), value: "0%" },
-              { label: t("ordersPerHour"), value: String(kpis.ordersToday ?? 0) },
-              { label: t("avgOrder"), value: formatPrice(kpis.avgOrder ?? 0, lang) },
+              {
+                label: t("refundRate"),
+                value: `${kpis?.refundRate ?? 0}%`,
+              },
+              {
+                label: "Orders / hour (today)",
+                value: String(kpis?.ordersToday ?? 0),
+              },
+              {
+                label: t("avgOrder"),
+                value: formatPrice(kpis?.avgOrder ?? 0, lang),
+              },
+              {
+                label: "Range",
+                value: overview?.range ?? days + "d",
+              },
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between">
                 <span className="text-muted">{row.label}</span>
-                <span className="font-semibold tabular-nums text-charcoal">{row.value}</span>
+                <span className="font-semibold tabular-nums text-charcoal">
+                  {row.value}
+                </span>
               </div>
             ))}
           </div>
@@ -566,50 +735,51 @@ export default function AdminDashboardPage() {
             }
           />
           <AdminTable className="mt-3">
-            <thead>
-              <tr>
+            <TableHeader>
+              <TableRow>
                 <Th>{t("cookCol")}</Th>
                 <Th className="hidden sm:table-cell">{t("city")}</Th>
-                <Th>{t("salesCol")}</Th>
+                <Th>{t("orders")}</Th>
                 <Th>{t("ratingCol")}</Th>
                 <Th className="hidden md:table-cell">{t("verificationCol")}</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...cooks]
-                .sort((a, b) => b.rating - a.rating)
-                .map((cook) => (
-                  <tr key={cook.id} className="transition hover:bg-cream/40">
-                    <Td>
-                      <div className="flex items-center gap-2.5">
-                        <Avatar src={cook.avatar} alt={cook.name} size={28} />
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold">{cook.name}</p>
-                          <p className="truncate text-[12px] text-muted">
-                            {cook.specialties[lang]}
-                          </p>
-                        </div>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(overview?.topCooks ?? []).map((cook: OverviewCook) => (
+                <TableRow key={cook.id}>
+                  <Td>
+                    <div className="flex items-center gap-2.5">
+                      <Avatar src={cook.avatar ?? ""} alt={cook.name} size={28} />
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{cook.name}</p>
+                        <p className="truncate text-[12px] text-muted">
+                          {cook.city}
+                        </p>
                       </div>
-                    </Td>
-                    <Td className="hidden text-muted sm:table-cell">{cook.city}</Td>
-                    <Td>
-                      <MoneyText value={Math.round(cook.orders * 18.4)} compact />
-                    </Td>
-                    <Td>
-                      <span className="inline-flex items-center gap-1 font-semibold text-charcoal">
-                        ★ {cook.rating.toFixed(1)}
-                      </span>
-                      <span className="ms-1 text-[12px] text-muted">({cook.reviewCount})</span>
-                    </Td>
-                    <Td className="hidden md:table-cell">
-                      <span className="inline-flex items-center gap-1 text-[13px] font-medium text-[#4f6b3a]">
-                        <ShieldCheck className="size-3.5" />
-                        {t("verified")}
-                      </span>
-                    </Td>
-                  </tr>
-                ))}
-            </tbody>
+                    </div>
+                  </Td>
+                  <Td className="hidden text-muted sm:table-cell">{cook.city}</Td>
+                  <Td className="font-semibold tabular-nums">
+                    {cook.ordersCount.toLocaleString(lang)}
+                  </Td>
+                  <Td>
+                    <span className="inline-flex items-center gap-1 font-semibold text-charcoal">
+                      ★ {(cook.rating ?? 0).toFixed(1)}
+                    </span>
+                  </Td>
+                  <Td className="hidden md:table-cell">
+                    <StatusPill status={cook.status} />
+                  </Td>
+                </TableRow>
+              ))}
+              {(overview?.topCooks ?? []).length === 0 ? (
+                <TableRow>
+                  <Td colSpan={5} className="text-center text-muted">
+                    No cook data for this period.
+                  </Td>
+                </TableRow>
+              ) : null}
+            </TableBody>
           </AdminTable>
         </AdminCard>
 
@@ -617,24 +787,21 @@ export default function AdminDashboardPage() {
           <SectionHead
             title={t("weeklyOrders")}
             subtitle={t("ordersChartNote")}
-            action={<StatusPill status={"live"} />}
+            action={<StatusPill status="live" />}
           />
           <div className="p-4 pt-4 md:p-5">
             <div className="mb-3 flex items-end gap-2">
-              <p className="text-[26px] font-semibold leading-none text-charcoal">1,284</p>
+              <p className="text-[26px] font-semibold leading-none text-charcoal">
+                {weeklyTotal.toLocaleString(lang)}
+              </p>
               <span className="mb-0.5 inline-flex items-center gap-0.5 text-[12.5px] font-semibold text-[#4f6b3a]">
-                <TrendingUp className="size-3" /> +8.1%
+                <TrendingUp className="size-3" />
+                {weekLabels[0] ?? "—"} – {weekLabels.at(-1) ?? "—"}
               </span>
             </div>
             <BarChart
-              data={[148, 176, 152, 196, 214, 246, 152].map((value, index) =>
-                index === 6 ? Math.round(value * 0.6) : value,
-              )}
-              labels={weekdayLabels.map((day) =>
-                lang === "ar"
-                  ? ["إث", "ثل", "أر", "خم", "جم", "سب", "أح"][weekdayLabels.indexOf(day)]
-                  : day,
-              )}
+              data={weeklyOrders}
+              labels={weekLabels.map((label) => label.split(" ")[0])}
               formatValue={(value) => `${value} ${t("orders")}`}
             />
             <div className="mt-4 flex items-center justify-between rounded-xl bg-cream/60 p-3 text-[13px]">
@@ -642,7 +809,9 @@ export default function AdminDashboardPage() {
                 <UtensilsCrossed className="size-3.5" />
                 {t("liveKitchens")}
               </span>
-              <span className="font-semibold text-charcoal">184</span>
+              <span className="font-semibold text-charcoal">
+                {kpis?.activeCooks ?? 0}
+              </span>
             </div>
           </div>
         </AdminCard>
@@ -655,7 +824,7 @@ export default function AdminDashboardPage() {
         </span>
         <span className="hidden items-center gap-1.5 md:inline-flex">
           <Users className="size-3.5" />
-          {t("activeCustomers")}: {(kpis.activeCustomers ?? 0).toLocaleString("nl-NL")}
+          {t("activeCustomers")}: {(kpis?.activeCustomers ?? 0).toLocaleString(lang)}
         </span>
       </div>
 
@@ -663,16 +832,8 @@ export default function AdminDashboardPage() {
         applicant={selected}
         open={Boolean(selected)}
         onClose={() => setSelected(null)}
-        onApprove={(applicant) => {
-          approveVerification.mutate({ id: applicant.id });
-          setSelected(null);
-          toast(t("approvedToast"), { description: applicant.name });
-        }}
-        onReject={(applicant) => {
-          requestChanges.mutate({ id: applicant.id });
-          setSelected(null);
-          toast(t("rejectedToast"), { description: applicant.name, variant: "info" });
-        }}
+        onApprove={(applicant, reviewerNote) => void approve(applicant, reviewerNote)}
+        onReject={(applicant, reviewerNote) => void reject(applicant, reviewerNote)}
       />
     </div>
   );
