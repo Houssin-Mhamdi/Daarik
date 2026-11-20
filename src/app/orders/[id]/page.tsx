@@ -500,6 +500,14 @@ export default function OrderDetailPage() {
                     {formatPrice(serviceFee, lang)}
                   </span>
                 </div>
+                {order.meetFee ? (
+                  <div className="flex justify-between text-muted">
+                    <span>{t("meetFeeCheckout")}</span>
+                    <span className="font-medium text-charcoal">
+                      {formatPrice(order.meetFee, lang)}
+                    </span>
+                  </div>
+                ) : null}
                 {isCancelled && order.refunded ? (
                   <div className="flex justify-between text-olive-600">
                     <span>{t("reimbursement")}</span>

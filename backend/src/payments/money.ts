@@ -16,11 +16,14 @@ export interface PricingSettings {
   commissionFixedCents: number;
   commissionBase: string;
   minOrderCents?: number;
+  /** Pass-through amount chosen by the cook for "meet at a location" orders. */
+  meetFeeCents?: number;
 }
 
 export interface OrderMoney {
   subtotalCents: number;
   serviceFeeCents: number;
+  meetFeeCents: number;
   commissionCents: number;
   cookNetCents: number;
   totalCents: number;
@@ -29,9 +32,9 @@ export interface OrderMoney {
 /**
  * Single source of truth for order pricing.
  *
- * The commission is computed on the food subtotal (default) so that Daarik's
- * own service fee is never commissioned. `Math.round` on non-negative values
- * is half-up, which is what Dutch invoicing expects.
+ * The commission is computed on the food subtotal (default) so that neither
+ * Daarik's service fee nor the cook's pass-through meet fee is commissioned.
+ * `Math.round` on non-negative values is half-up, as Dutch invoicing expects.
  */
 export function computeOrderMoney(
   subtotalCents: number,
@@ -39,6 +42,7 @@ export function computeOrderMoney(
 ): OrderMoney {
   const subtotal = Math.max(0, Math.round(subtotalCents));
   const serviceFeeCents = Math.max(0, Math.round(settings.serviceFeeCents));
+  const meetFeeCents = Math.max(0, Math.round(settings.meetFeeCents ?? 0));
 
   const base =
     settings.commissionBase === "TOTAL" ? subtotal + serviceFeeCents : subtotal;
@@ -54,9 +58,11 @@ export function computeOrderMoney(
   return {
     subtotalCents: subtotal,
     serviceFeeCents,
+    meetFeeCents,
     commissionCents,
-    cookNetCents: subtotal - commissionCents,
-    totalCents: subtotal + serviceFeeCents,
+    // The meet fee is a pass-through: the cook receives every cent of it.
+    cookNetCents: subtotal - commissionCents + meetFeeCents,
+    totalCents: subtotal + serviceFeeCents + meetFeeCents,
   };
 }
 

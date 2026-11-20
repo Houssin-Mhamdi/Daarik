@@ -65,7 +65,15 @@ export type Cook = {
   cuisineIds: CuisineId[];
   categories: string[];
   pickupMethods: string[];
-  meetingPoints: { id: string; name: string; address: string }[];
+  meetingPoints: {
+    id: string;
+    name: string;
+    address: string;
+    lat?: number;
+    lng?: number;
+  }[];
+  /** Pass-through fee for "meet at a chosen location", in cents. */
+  meetFeeCents?: number;
   rating: number;
   reviewCount: number;
   verified: boolean;
@@ -148,8 +156,11 @@ export type CustomerOrder = {
   paymentStatus?: string;
   pickup: string;
   pickupTime: string;
+  pickupMethod?: string;
+  pickupPoint?: { id: string; name?: string; address?: string } | null;
   subtotal?: number;
   serviceFee?: number;
+  meetFee?: number;
   total?: number;
   placed: Localized;
   note?: Localized;

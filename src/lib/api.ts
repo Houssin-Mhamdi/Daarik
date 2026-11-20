@@ -836,6 +836,16 @@ export const darnaApi = {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    /** Owner pricing: commission override and/or pass-through meet fee. */
+    updateCookPricing: (body: {
+      ids: string[];
+      commissionRate?: number | null;
+      meetFeeCents?: number;
+    }) =>
+      apiRequest<unknown>("/admin/cooks/pricing", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
     removeDish: (id: string) =>
       apiRequest<unknown>(`/admin/dishes/${encodeURIComponent(id)}`, {
         method: "DELETE",

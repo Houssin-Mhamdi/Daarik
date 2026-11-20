@@ -42,6 +42,30 @@ export class BulkCookStatusDto {
   status!: CookStatus;
 }
 
+/**
+ * Owner pricing controls. `commissionRate: null` restores the platform default;
+ * an omitted field is left untouched. Changes apply to new orders only because
+ * every order snapshots its commission and meet fee at creation time.
+ */
+export class UpdateCookPricingDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  ids!: string[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  commissionRate?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  meetFeeCents?: number;
+}
+
 /** Bulk moderation accepts dish ids AND public dish slugs from the admin UI. */
 export class BulkDishStatusDto {
   @IsArray()

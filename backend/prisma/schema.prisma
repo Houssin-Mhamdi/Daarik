@@ -222,6 +222,12 @@ model CookProfile {
   pickupMethods  String[]  @default(["home"])
   /// Meeting points the cook offers (for "meet" method). JSON array of { id, name, address, lat, lng }.
   meetingPoints  Json?
+  /// Pass-through fee added once per order when the customer chooses "meet".
+  /// The cook keeps 100% of it; Daarik never commissions this amount.
+  meetFeeCents   Int      @default(0)
+  /// Per-cook commission override (null = platform default). New orders only:
+  /// every order snapshots the commission it was created with.
+  commissionRateOverride Float?
   availableSlots String[]  @default(["17:00", "17:30", "18:00", "18:30"])
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -395,6 +401,8 @@ model Order {
   /// All money is stored as integer euro cents. Never Float.
   subtotalCents    Int
   serviceFeeCents  Int           @default(150)
+  /// Snapshot of the cook's pass-through meet fee at purchase time.
+  meetFeeCents     Int           @default(0)
   commissionCents  Int
   cookNetCents     Int
   totalCents       Int

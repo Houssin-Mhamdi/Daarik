@@ -90,6 +90,9 @@ export type AdminCookRecord = {
   rating: number;
   ordersCount: number;
   createdAt: string;
+  meetFeeCents?: number;
+  /** null = platform default (15%). */
+  commissionRateOverride?: number | null;
   kitchenOpen?: boolean;
   maxPortionsPerDay?: number;
   availableDays?: string[];
@@ -174,6 +177,9 @@ export type AdminOrderRecord = {
   amount: number;
   subtotal?: number;
   serviceFee: number;
+  meetFee?: number;
+  pickupMethod?: string;
+  pickupPoint?: { id: string; name?: string; address?: string } | null;
   commission?: number;
   cookNet?: number;
   stripeFee?: number;
@@ -380,9 +386,11 @@ export function normalizeCook(value: unknown): Cook {
   categories: stringList(raw.categories),
   pickupMethods: stringList(raw.pickupMethods),
   meetingPoints: Array.isArray(raw.meetingPoints)
-    ? (raw.meetingPoints as { id: string; name: string; address: string }[])
-    : [], // eslint-disable-line @typescript-eslint/no-explicit-any
-    rating: numberValue(raw.rating),
+    ? (raw.meetingPoints as Cook["meetingPoints"])
+    : [],
+  meetFeeCents:
+    typeof raw.meetFeeCents === "number" ? Math.max(0, raw.meetFeeCents) : 0,
+  rating: numberValue(raw.rating),
     reviewCount: numberValue(raw.reviewCount),
     verified: raw.verified === true,
     languages: stringList(raw.languages),
@@ -1176,6 +1184,21 @@ export function useAdminBulkCookStatusMutation() {
     mutationFn: ({ ids, status }: { ids: string[]; status: string }) =>
       darnaApi.admin.bulkCookStatus({ ids, status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.adminCooks() }),
+  });
+}
+
+export function useAdminUpdateCookPricingMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      ids: string[];
+      commissionRate?: number | null;
+      meetFeeCents?: number;
+    }) => darnaApi.admin.updateCookPricing(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.adminCooks() });
+      qc.invalidateQueries({ queryKey: ["cooks"] });
+    },
   });
 }
 

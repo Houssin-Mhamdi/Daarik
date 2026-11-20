@@ -28,6 +28,7 @@ import {
   ReviewApplicationDto,
   UpdateAdminOrderStatusDto,
   UpdateCookComplianceDto,
+  UpdateCookPricingDto,
   UpdateCookStatusDto,
   UpdatePayoutStatusDto,
   UpdatePlatformSettingsDto,
@@ -311,6 +312,15 @@ export class AdminController {
     @AuditActor() actor: AdminAuditActor,
   ) {
     return this.adminService.bulkCookStatus(dto.ids, dto.status, actor);
+  }
+
+  /** Per-cook commission and meet fee; accepts database ids or public slugs. */
+  @Patch("cooks/pricing")
+  updateCookPricing(
+    @Body() dto: UpdateCookPricingDto,
+    @AuditActor() actor: AdminAuditActor,
+  ) {
+    return this.adminService.updateCookPricing(dto, actor);
   }
 
   @Post("dishes/bulk-status")

@@ -160,11 +160,20 @@ export default function CookProfilePage() {
     cook.pickupMethods?.length ? cook.pickupMethods : ["home"],
   );
   const [meetingPoints, setMeetingPoints] = useState<
-    { id: string; name: string; address: string }[]
+    { id: string; name: string; address: string; lat?: number; lng?: number }[]
   >(
     Array.isArray(cook.meetingPoints)
-      ? (cook.meetingPoints as { id: string; name: string; address: string }[])
+      ? (cook.meetingPoints as {
+          id: string;
+          name: string;
+          address: string;
+          lat?: number;
+          lng?: number;
+        }[])
       : [],
+  );
+  const [meetFeeEuros, setMeetFeeEuros] = useState(
+    ((cook.meetFeeCents ?? 0) / 100).toFixed(2),
   );
   const [mpPickerOpen, setMpPickerOpen] = useState(false);
 
@@ -243,6 +252,13 @@ export default function CookProfilePage() {
       setBio(activeCook.bio[lang] || "");
       setInstructions(activeCook.instructions[lang] || "");
       setCuisineIds(activeCook.cuisineIds);
+      setPickupMethods(
+        activeCook.pickupMethods?.length ? activeCook.pickupMethods : ["home"],
+      );
+      setMeetFeeEuros(((activeCook.meetFeeCents ?? 0) / 100).toFixed(2));
+      if (Array.isArray(activeCook.meetingPoints)) {
+        setMeetingPoints(activeCook.meetingPoints);
+      }
     });
     return () => {
       active = false;
@@ -260,6 +276,10 @@ export default function CookProfilePage() {
         cuisineIds,
         pickupMethods,
         meetingPoints,
+        meetFeeCents: Math.min(
+          100000,
+          Math.max(0, Math.round(Number(meetFeeEuros || 0) * 100)),
+        ),
       });
       toast(t("profileSaved"));
     } catch {
@@ -832,8 +852,29 @@ export default function CookProfilePage() {
               </div>
               {pickupMethods.includes("meet") ? (
                 <div className="mt-3 space-y-2">
+                  <label className="block rounded-xl border border-line bg-cream-50 px-3 py-2.5">
+                    <span className="block text-[13.5px] font-semibold text-charcoal">
+                      {t("meetFeeLabel")}
+                    </span>
+                    <span className="mt-0.5 block text-[12px] leading-relaxed text-muted">
+                      {t("meetFeeDesc")}
+                    </span>
+                    <span className="mt-2 flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="1000"
+                        step="0.50"
+                        value={meetFeeEuros}
+                        onChange={(event) => setMeetFeeEuros(event.target.value)}
+                        aria-label={t("meetFeeAmount")}
+                        className="h-9 w-28 rounded-lg border border-line bg-white px-2.5 text-[13.5px] outline-none focus:border-terracotta/50"
+                      />
+                      <span className="text-[13px] text-muted">EUR</span>
+                    </span>
+                  </label>
                   <p className="text-[12.5px] font-bold uppercase tracking-[0.1em] text-muted-soft">
-                    Meeting points
+                    {t("meetingPoints")}
                   </p>
                   {meetingPoints.map((mp, idx) => (
                     <div
@@ -868,7 +909,7 @@ export default function CookProfilePage() {
                     onCommit={(pt) => {
                       setMeetingPoints((prev) => [
                         ...prev,
-                        { id: `mp-${Date.now()}`, name: pt.name, address: pt.address },
+                        { id: `mp-${Date.now()}`, ...pt },
                       ]);
                     }}
                   />

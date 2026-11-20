@@ -564,6 +564,14 @@ export default function AdminOrdersPage() {
                     {formatPrice(selected.serviceFee, lang)}
                   </span>
                 </div>
+                {selected.meetFee ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted">{t("meetFeeCheckout")}</span>
+                    <span className="font-medium tabular-nums">
+                      {formatPrice(selected.meetFee, lang)}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between border-t border-line pt-1.5 text-[14.5px] font-semibold text-charcoal">
                   <span>{t("total")}</span>
                   <span>{formatPrice(selected.amount, lang)}</span>

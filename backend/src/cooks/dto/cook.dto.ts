@@ -1,3 +1,4 @@
+import { Type } from "class-transformer";
 import {
   IsArray,
   IsBoolean,
@@ -11,8 +12,35 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from "class-validator";
 import { NL_CITIES } from "../../common/nl-cities";
+
+export class MeetingPointDto {
+  @IsString()
+  @MaxLength(80)
+  id!: string;
+
+  @IsString()
+  @MaxLength(120)
+  name!: string;
+
+  @IsString()
+  @MaxLength(200)
+  address!: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng?: number;
+}
 
 export class ApplyCookDto {
   @IsString()
@@ -114,6 +142,24 @@ export class UpdateCookProfileDto {
   @IsOptional()
   @IsObject()
   bio?: Record<string, string>;
+
+  @IsOptional()
+  @IsArray()
+  @IsIn(["home", "meet", "courier"], { each: true })
+  pickupMethods?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MeetingPointDto)
+  meetingPoints?: MeetingPointDto[];
+
+  /** Euros are converted to cents once by the caller; the API accepts cents only. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100000)
+  meetFeeCents?: number;
 
   @IsOptional()
   @IsObject()

@@ -67,6 +67,7 @@ export type PlacedOrder = {
   items: OrderItem[];
   pickup: string;
   pickupTime: string;
+  meetFee?: number;
   total: number;
   email: string;
   payment: string;

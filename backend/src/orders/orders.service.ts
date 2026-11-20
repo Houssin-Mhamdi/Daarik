@@ -104,6 +104,27 @@ export class OrdersService {
       });
     }
 
+    // Pickup choices are validated against the cook's own configuration. Never
+    // trust a client-supplied fee or an arbitrary meeting point.
+    const pickupMethod = dto.pickupMethod ?? "home";
+    const allowedMethods =
+      Array.isArray(cook.pickupMethods) && cook.pickupMethods.length
+        ? cook.pickupMethods
+        : ["home"];
+    if (!allowedMethods.includes(pickupMethod)) {
+      throw new BadRequestException("This pickup option is not offered by the cook");
+    }
+    if (pickupMethod === "meet") {
+      const points = Array.isArray(cook.meetingPoints) ? cook.meetingPoints : [];
+      const pointId = (dto.pickupPoint as { id?: string } | undefined)?.id;
+      if (!pointId || !points.some((point: any) => point?.id === pointId)) {
+        throw new BadRequestException("Choose a valid meeting point");
+      }
+    }
+    if (pickupMethod === "courier" && !dto.deliveryAddress?.trim()) {
+      throw new BadRequestException("A delivery address is required for courier delivery");
+    }
+
     const settings =
       (await this.prisma.platformSetting.findUnique({
         where: { id: "singleton" },
@@ -117,9 +138,16 @@ export class OrdersService {
 
     const money = computeOrderMoney(subtotalCents, {
       serviceFeeCents: settings.serviceFeeCents,
-      commissionRate: settings.commissionRate,
+      // An admin override wins; null means the platform default (15%).
+      commissionRate:
+        typeof cook.commissionRateOverride === "number"
+          ? cook.commissionRateOverride
+          : settings.commissionRate,
       commissionFixedCents: settings.commissionFixedCents,
       commissionBase: settings.commissionBase,
+      // Once per order, and only when the customer actually chose to meet.
+      meetFeeCents:
+        pickupMethod === "meet" ? Math.max(0, Math.round(cook.meetFeeCents ?? 0)) : 0,
     });
 
     if (money.totalCents < settings.minOrderCents) {
@@ -151,11 +179,12 @@ export class OrdersService {
           status: OrderStatus.CONFIRMED,
           pickup: dto.pickup,
           pickupTime: dto.pickupTime,
-          pickupMethod: dto.pickupMethod ?? "home",
+          pickupMethod,
           pickupPoint: (dto.pickupPoint ?? undefined) as any,
-          deliveryAddress: dto.deliveryAddress ?? undefined,
+          deliveryAddress: dto.deliveryAddress || undefined,
           subtotalCents: money.subtotalCents,
           serviceFeeCents: money.serviceFeeCents,
+          meetFeeCents: money.meetFeeCents,
           commissionCents: money.commissionCents,
           cookNetCents: money.cookNetCents,
           totalCents: money.totalCents,
@@ -374,6 +403,9 @@ export class OrdersService {
       paymentStatus: o.paymentStatus,
       pickup: { nl: "Vandaag", en: "Today", ar: "اليوم" },
       pickupTime: o.pickupTime,
+      pickupMethod: o.pickupMethod,
+      pickupPoint: o.pickupPoint,
+      meetFee: toEuros(o.meetFeeCents ?? 0),
       total: toEuros(o.totalCents),
       note: o.note,
       phone: o.customerPhone,
@@ -463,8 +495,11 @@ export class OrdersService {
       paymentStatus: order.paymentStatus,
       pickup: order.pickup,
       pickupTime: order.pickupTime,
+      pickupMethod: order.pickupMethod,
+      pickupPoint: order.pickupPoint,
       subtotal: toEuros(order.subtotalCents),
       serviceFee: toEuros(order.serviceFeeCents),
+      meetFee: toEuros(order.meetFeeCents ?? 0),
       total: toEuros(order.totalCents),
       note: order.note,
       reviewed: order.reviewed,

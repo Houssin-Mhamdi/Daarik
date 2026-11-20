@@ -321,6 +321,14 @@ export default function OrderConfirmationPage() {
                   {formatPrice(serviceFee, lang)}
                 </span>
               </div>
+              {lastOrder?.meetFee ? (
+                <div className="flex justify-between text-muted">
+                  <span>{t("meetFeeCheckout")}</span>
+                  <span className="font-medium text-charcoal">
+                    {formatPrice(lastOrder.meetFee, lang)}
+                  </span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between border-t border-line pt-2.5 text-[16px]">
                 <span className="font-semibold text-charcoal">
                   {t("total")}

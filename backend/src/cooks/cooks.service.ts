@@ -529,8 +529,11 @@ export class CooksService {
       nvwaRegistered,
       payoutHoldDays,
       payoutDay,
+      // Owner-only setting: customers must never see a cook's commission rate.
+      commissionRateOverride,
       ...publicFields
     } = cook;
+    void commissionRateOverride;
 
     const approx = (v: unknown) =>
       typeof v === "number" ? Math.round(v * 100) / 100 : null;

@@ -3,7 +3,9 @@ import {
   IsArray,
   IsEmail,
   IsEnum,
+  IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -22,6 +24,35 @@ export class OrderItemInputDto {
   @Min(1)
   @Max(50)
   qty!: number;
+}
+
+/** The customer may only reference an existing point, never inject a new one. */
+export class PickupPointDto {
+  @IsString()
+  @MaxLength(80)
+  id!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  address?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng?: number;
 }
 
 export class CreateOrderDto {
@@ -55,11 +86,13 @@ export class CreateOrderDto {
   note?: string;
 
   @IsOptional()
-  @IsString()
+  @IsIn(["home", "meet", "courier"])
   pickupMethod?: string;
 
   @IsOptional()
-  pickupPoint?: Record<string, unknown>;
+  @ValidateNested()
+  @Type(() => PickupPointDto)
+  pickupPoint?: PickupPointDto;
 
   @IsOptional()
   @IsString()

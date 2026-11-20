@@ -41,12 +41,13 @@ import {
   useAdminCookWorkspaceQuery,
   useAdminCooksQuery,
   useAdminUpdateCookComplianceMutation,
+  useAdminUpdateCookPricingMutation,
   useAdminUpdateCookStatusMutation,
   useSyncAdminCookStripeMutation,
   type AdminCookRecord,
 } from "@/lib/queries";
 import { loc } from "@/lib/data";
-import { errorMessage } from "@/lib/utils";
+import { errorMessage, formatPrice } from "@/lib/utils";
 
 type Verification = "verified" | "pending" | "suspended";
 type Filter = "all" | Verification;
@@ -84,6 +85,8 @@ export default function AdminCooksPage() {
   const [suspendId, setSuspendId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [commissionInput, setCommissionInput] = useState("");
+  const [meetFeeInput, setMeetFeeInput] = useState("");
   const [compliance, setCompliance] = useState<ComplianceForm>({
     status: "PENDING",
     note: "",
@@ -104,6 +107,7 @@ export default function AdminCooksPage() {
   const bulkCookStatus = useAdminBulkCookStatusMutation();
   const updateCookStatus = useAdminUpdateCookStatusMutation();
   const updateCompliance = useAdminUpdateCookComplianceMutation();
+  const updatePricing = useAdminUpdateCookPricingMutation();
   const syncStripe = useSyncAdminCookStripeMutation();
 
   useEffect(() => {
@@ -139,6 +143,11 @@ export default function AdminCooksPage() {
         joined: cook.createdAt
           ? new Date(cook.createdAt).toLocaleDateString(lang)
           : "—",
+        commission:
+          typeof cook.commissionRateOverride === "number"
+            ? cook.commissionRateOverride
+            : null,
+        meetFee: (cook.meetFeeCents ?? 0) / 100,
         status: cook.status.toLowerCase() as Verification,
         avatar: cook.avatar ?? undefined,
         initials: initialsOf(cook.name),
@@ -196,6 +205,46 @@ export default function AdminCooksPage() {
       toast(t("savedSettingsToast"), {
         description: `${updated} ${t("cooks").toLowerCase()} ${status === "VERIFIED" ? "approved" : "suspended"}`,
       });
+    } catch (err) {
+      toast(errorMessage(err, t("loadError")), { variant: "error" });
+    }
+  };
+
+  const runPricing = async (resetCommission = false) => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+
+    const body: {
+      ids: string[];
+      commissionRate?: number | null;
+      meetFeeCents?: number;
+    } = { ids };
+    if (resetCommission) {
+      body.commissionRate = null;
+    } else if (commissionInput.trim()) {
+      const percent = Number(commissionInput.replace(",", "."));
+      if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+        toast(t("validationErrors"), { variant: "error" });
+        return;
+      }
+      body.commissionRate = percent / 100;
+    }
+    if (meetFeeInput.trim()) {
+      const euros = Number(meetFeeInput.replace(",", "."));
+      if (!Number.isFinite(euros) || euros < 0 || euros > 1000) {
+        toast(t("validationErrors"), { variant: "error" });
+        return;
+      }
+      body.meetFeeCents = Math.round(euros * 100);
+    }
+    if (Object.keys(body).length === 1) return;
+
+    try {
+      await updatePricing.mutateAsync(body);
+      toast(t("savedSettingsToast"));
+      setSelectedIds(new Set());
+      setCommissionInput("");
+      setMeetFeeInput("");
     } catch (err) {
       toast(errorMessage(err, t("loadError")), { variant: "error" });
     }
@@ -323,6 +372,45 @@ export default function AdminCooksPage() {
             >
               {t("suspendCook")}
             </Button>
+            <div className="ms-auto flex flex-wrap items-center gap-2 border-s border-line ps-2">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={commissionInput}
+                onChange={(event) => setCommissionInput(event.target.value)}
+                placeholder={t("commissionPlaceholder")}
+                aria-label={t("cookCommissionCol")}
+                className="h-8 w-24 rounded-lg border border-line bg-white px-2 text-[13px] outline-none focus:border-terracotta/50"
+              />
+              <input
+                type="number"
+                min="0"
+                max="1000"
+                step="0.5"
+                value={meetFeeInput}
+                onChange={(event) => setMeetFeeInput(event.target.value)}
+                placeholder={t("meetFeePlaceholder")}
+                aria-label={t("meetFeeLabel")}
+                className="h-8 w-24 rounded-lg border border-line bg-white px-2 text-[13px] outline-none focus:border-terracotta/50"
+              />
+              <Button
+                size="sm"
+                loading={updatePricing.isPending}
+                onClick={() => void runPricing()}
+              >
+                {t("applyPricing")}
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={updatePricing.isPending}
+                onClick={() => void runPricing(true)}
+              >
+                {t("resetCommission")}
+              </Button>
+            </div>
             <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
               {t("clearFiltersShort")}
             </Button>
@@ -376,6 +464,8 @@ export default function AdminCooksPage() {
                 <Th className="hidden lg:table-cell">{t("totalOrders")}</Th>
                 <Th className="hidden sm:table-cell">{t("ratingCol")}</Th>
                 <Th className="hidden xl:table-cell">{t("joined")}</Th>
+                <Th className="hidden lg:table-cell">{t("cookCommissionCol")}</Th>
+                <Th className="hidden xl:table-cell">{t("meetFeeLabel")}</Th>
                 <Th>{t("verificationCol")}</Th>
                 <Th className="text-end">{t("actionCol")}</Th>
               </TableRow>
@@ -431,6 +521,14 @@ export default function AdminCooksPage() {
                     )}
                   </Td>
                   <Td className="hidden text-muted xl:table-cell">{row.joined}</Td>
+                  <Td className="hidden tabular-nums lg:table-cell">
+                    {row.commission === null
+                      ? t("defaultCommission")
+                      : `${(row.commission * 100).toFixed(row.commission * 100 % 1 ? 1 : 0)}%`}
+                  </Td>
+                  <Td className="hidden tabular-nums xl:table-cell">
+                    {row.meetFee > 0 ? formatPrice(row.meetFee, lang) : "—"}
+                  </Td>
                   <Td>
                     <StatusPill status={row.status} />
                   </Td>
@@ -460,6 +558,9 @@ export default function AdminCooksPage() {
 
       <p className="mt-3 px-1 text-[12.5px] text-muted-soft">
         {t("cookVerificationNote")}
+      </p>
+      <p className="mt-1 px-1 text-[12.5px] text-muted-soft">
+        {t("pricingNote")}
       </p>
 
       <Sheet

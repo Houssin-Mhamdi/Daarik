@@ -111,7 +111,11 @@ export default function CheckoutPage() {
     (sum, item) => sum + (item.dish?.price ?? 0) * item.line.qty,
     0,
   );
-  const total = subtotal + serviceFee;
+  // The backend re-computes this from the cook's saved setting; this is only
+  // the customer-facing estimate shown before checkout.
+  const meetFee =
+    pickupMethod === "meet" ? (cook?.meetFeeCents ?? 0) / 100 : 0;
+  const total = subtotal + serviceFee + meetFee;
   const option = pickupOptions.find((item) => item.id === pickup);
 
   const availablePickups = lines.length
@@ -161,6 +165,14 @@ export default function CheckoutPage() {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
         next.email = t("invalidEmail");
       if (phone.replace(/\D/g, "").length < 9) next.phone = t("invalidPhone");
+    }
+    if (step === 1) {
+      if (pickupMethod === "meet" && !meetingPoint) {
+        next.meetingPoint = t("requiredField");
+      }
+      if (pickupMethod === "courier" && !deliveryAddress.trim()) {
+        next.deliveryAddress = t("requiredField");
+      }
     }
     if (step === 2) {
       if (!terms) next.terms = t("requiredField");
@@ -330,6 +342,14 @@ export default function CheckoutPage() {
             {formatPrice(serviceFee, lang)}
           </span>
         </div>
+        {meetFee > 0 ? (
+          <div className="flex justify-between">
+            <span className="text-muted">{t("meetFeeCheckout")}</span>
+            <span className="font-medium text-charcoal">
+              {formatPrice(meetFee, lang)}
+            </span>
+          </div>
+        ) : null}
         <div className="flex justify-between border-t border-line pt-2.5 text-[16px]">
           <span className="font-semibold text-charcoal">{t("total")}</span>
           <span className="font-semibold text-terracotta">
@@ -553,10 +573,14 @@ export default function CheckoutPage() {
                         }`}
                       >
                         {m === "home"
-                          ? "Pickup at cook"
+                          ? t("pickupAtCook")
                           : m === "meet"
-                            ? "Meet at location"
-                            : "Courier delivery"}
+                            ? `${t("meetAtLocation")}${
+                                (cook?.meetFeeCents ?? 0) > 0
+                                  ? ` +${formatPrice((cook?.meetFeeCents ?? 0) / 100, lang)}`
+                                  : ""
+                              }`
+                            : t("courierDelivery")}
                       </button>
                     ))}
                   </div>
@@ -567,7 +591,7 @@ export default function CheckoutPage() {
                       onChange={(e) => setMeetingPoint(e.target.value)}
                       className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[14px]"
                     >
-                      <option value="">Select meeting point</option>
+                      <option value="">{t("selectMeetingPoint")}</option>
                       {cook.meetingPoints.map((mp) => (
                         <option key={mp.id} value={mp.id}>
                           {mp.name} — {mp.address}
@@ -882,6 +906,14 @@ export default function CheckoutPage() {
                         {formatPrice(serviceFee, lang)}
                       </span>
                     </div>
+                    {meetFee > 0 ? (
+                      <div className="flex justify-between">
+                        <span className="text-muted">{t("meetFeeCheckout")}</span>
+                        <span className="font-medium text-charcoal">
+                          {formatPrice(meetFee, lang)}
+                        </span>
+                      </div>
+                    ) : null}
                     <div className="flex justify-between border-t border-line pt-2 text-[15.5px]">
                       <span className="font-semibold text-charcoal">
                         {t("total")}

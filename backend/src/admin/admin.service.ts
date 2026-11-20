@@ -29,6 +29,7 @@ import {
   ReviewApplicationDto,
   UpdateAdminOrderStatusDto,
   UpdateCookComplianceDto,
+  UpdateCookPricingDto,
   UpdateCookStatusDto,
   UpdatePayoutStatusDto,
   UpdatePlatformSettingsDto,
@@ -389,6 +390,9 @@ export class AdminService {
       amount: toEuros(o.totalCents),
       subtotal: toEuros(o.subtotalCents),
       serviceFee: toEuros(o.serviceFeeCents),
+      meetFee: toEuros(o.meetFeeCents ?? 0),
+      pickupMethod: o.pickupMethod,
+      pickupPoint: o.pickupPoint,
       commission: toEuros(o.commissionCents),
       cookNet: toEuros(o.cookNetCents),
       refunded: toEuros(o.refundedCents),
@@ -758,6 +762,11 @@ export class AdminService {
       verified: cook.verified,
       rating: cook.rating,
       ordersCount: cook.ordersCount,
+      meetFeeCents: cook.meetFeeCents ?? 0,
+      commissionRateOverride:
+        typeof cook.commissionRateOverride === "number"
+          ? cook.commissionRateOverride
+          : null,
       kitchenOpen: cook.kitchenOpen,
       maxPortionsPerDay: cook.maxPortionsPerDay,
       availableDays: cook.availableDays,
@@ -1446,6 +1455,58 @@ export class AdminService {
       },
     });
     return { updated, failed };
+  }
+
+  /**
+   * Owner-level pricing controls. The commission override is stored on the
+   * cook and read only when a *new* order snapshots its money, so historical
+   * orders and payouts can never be silently rewritten.
+   */
+  async updateCookPricing(
+    dto: UpdateCookPricingDto,
+    actor?: AdminAuditActor,
+  ): Promise<{ updated: number; failed: string[] }> {
+    const data: { commissionRateOverride?: number | null; meetFeeCents?: number } = {};
+    if (dto.commissionRate !== undefined) data.commissionRateOverride = dto.commissionRate;
+    if (dto.meetFeeCents !== undefined) data.meetFeeCents = dto.meetFeeCents;
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException("No pricing change provided");
+    }
+
+    const cooks = await this.prisma.cookProfile.findMany({
+      where: { OR: [{ id: { in: dto.ids } }, { slug: { in: dto.ids } }] },
+      select: { id: true, slug: true },
+    });
+    const cookIds = cooks.map((cook) => cook.id);
+    const result = cookIds.length
+      ? await this.prisma.cookProfile.updateMany({
+          where: { id: { in: cookIds } },
+          data,
+        })
+      : { count: 0 };
+
+    const matched = new Set<string>(dto.ids.filter((id) => cookIds.includes(id)));
+    for (const cook of cooks) {
+      matched.add(cook.id);
+      matched.add(cook.slug);
+    }
+    const failed = dto.ids.filter((id) => !matched.has(id));
+
+    await this.writeAudit({
+      actor,
+      action: "cook.update_pricing",
+      entity: "CookProfile",
+      entityId: "bulk",
+      metadata: {
+        requested: dto.ids.length,
+        updated: result.count,
+        failedCount: failed.length,
+        ...data,
+      },
+    });
+
+    return { updated: result.count, failed };
   }
 
   /** The admin table exposes dish slugs, so match ids and slugs. */
